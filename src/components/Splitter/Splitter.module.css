@@ -1,0 +1,22 @@
+.splitter {
+  flex: none;
+  width: 5px;
+  margin: 0 -2px;
+  z-index: 10;
+  cursor: col-resize;
+  position: relative;
+  touch-action: none;
+}
+
+.splitter::after {
+  content: '';
+  position: absolute;
+  inset: 0 2px;
+  background: var(--border);
+}
+
+.splitter:hover::after,
+.splitter:active::after {
+  inset: 0 1px;
+  background: var(--accent);
+}

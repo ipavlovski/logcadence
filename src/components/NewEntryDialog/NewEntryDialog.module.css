@@ -1,0 +1,46 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.form label,
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form label > span,
+.field > span {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.form input,
+.note,
+.box {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+  outline: none;
+}
+
+.form input:focus,
+.note:focus,
+.box:focus-within {
+  border-color: var(--accent);
+}
+
+.box input {
+  border: none;
+  padding: 0;
+}
+
+.note {
+  resize: none;
+  min-height: 60px;
+}

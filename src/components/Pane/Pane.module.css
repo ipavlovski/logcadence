@@ -1,0 +1,143 @@
+.pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  background: var(--bg);
+}
+
+.pane[data-pane='tags'],
+.pane[data-pane='canvas'] {
+  background: color-mix(in srgb, var(--bg) 80%, var(--bg-2));
+}
+
+.tabBar {
+  display: flex;
+  align-items: stretch;
+  height: var(--tabbar-h);
+  flex: none;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.paneLabel {
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  border-bottom: 2px solid transparent;
+}
+
+.focused .paneLabel {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 0 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 200px;
+  height: 28px;
+  padding: 0 6px 0 10px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+  flex: none;
+}
+
+.tab:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--bg) 50%, transparent);
+}
+
+.active {
+  background: var(--bg);
+  border-color: var(--border);
+  color: var(--text);
+  margin-bottom: -1px;
+  height: 29px;
+}
+
+.tabLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pin {
+  color: var(--accent);
+  width: 16px;
+  text-align: center;
+}
+
+.close {
+  border: none;
+  background: none;
+  color: var(--text-faint);
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border-radius: 3px;
+  line-height: 1;
+}
+
+.close:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.findBar {
+  display: flex;
+  gap: 4px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-2);
+}
+
+.findBar input {
+  flex: 1;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: var(--radius);
+  padding: 3px 8px;
+  outline: none;
+  font-size: 12.5px;
+}
+
+.findBar input:focus {
+  border-color: var(--accent);
+}
+
+.findBar button {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}

@@ -1,0 +1,108 @@
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #2b313c;
+  --bg-2: #242932;
+  --surface: #323946;
+  --surface-2: #3a4250;
+  --border: #404857;
+  --text: #e3e7ee;
+  --text-muted: #8c96a8;
+  --text-faint: #636d7e;
+  --accent: #88c0d0;
+  --accent-text: #1d2128;
+  --date: #8fbcbb;
+  --tag: #7fb4ad;
+  --danger: #e08a74;
+  --selection: rgb(136 192 208 / 0.16);
+  --flash: rgb(235 203 139 / 0.28);
+  --code-bg: #20252d;
+  --mark: rgb(235 203 139 / 0.35);
+  --shadow: 0 8px 32px rgb(0 0 0 / 0.45);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #f7f7f4;
+  --bg-2: #ecece7;
+  --surface: #ffffff;
+  --surface-2: #f0f0eb;
+  --border: #dcdcd5;
+  --text: #20242b;
+  --text-muted: #687080;
+  --text-faint: #9aa0aa;
+  --accent: #2c7f91;
+  --accent-text: #ffffff;
+  --date: #2f7a78;
+  --tag: #2f7a78;
+  --danger: #c0502f;
+  --selection: rgb(44 127 145 / 0.12);
+  --flash: rgb(230 180 60 / 0.3);
+  --code-bg: #eeeee8;
+  --mark: rgb(230 180 60 / 0.4);
+  --shadow: 0 8px 32px rgb(0 0 0 / 0.15);
+}
+
+:root {
+  --font: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', Consolas, ui-monospace, monospace;
+  --radius: 6px;
+  --topbar-h: 40px;
+  --tabbar-h: 36px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+a {
+  color: var(--accent);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+::selection {
+  background: var(--selection);
+}
+
+mark {
+  background: var(--mark);
+  color: inherit;
+  border-radius: 2px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}

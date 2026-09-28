@@ -1,0 +1,26 @@
+.chip {
+  display: inline-block;
+  border: 1px solid color-mix(in srgb, var(--tag) 55%, transparent);
+  background: color-mix(in srgb, var(--tag) 8%, transparent);
+  color: var(--tag);
+  border-radius: 4px;
+  padding: 0 6px;
+  font-size: 12.5px;
+  line-height: 20px;
+  white-space: nowrap;
+  vertical-align: baseline;
+}
+
+.chip:hover {
+  background: color-mix(in srgb, var(--tag) 20%, transparent);
+}
+
+.primary {
+  border-color: var(--tag);
+  font-weight: 600;
+}
+
+.inline {
+  padding: 0 4px;
+  line-height: 18px;
+}

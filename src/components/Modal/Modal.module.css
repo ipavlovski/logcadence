@@ -1,0 +1,67 @@
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgb(0 0 0 / 0.4);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.top {
+  place-items: start center;
+  padding-top: 12vh;
+}
+
+.dialog {
+  width: min(460px, 100%);
+  max-height: 80vh;
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  padding: 18px 20px;
+}
+
+.wide {
+  width: min(640px, 100%);
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.title {
+  margin: 0 0 14px;
+  font-size: 15px;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.actions button {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  padding: 5px 14px;
+}
+
+.actions button[data-primary] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.actions button[data-danger] {
+  color: var(--danger);
+}
+
+.actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

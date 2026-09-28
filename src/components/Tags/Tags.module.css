@@ -1,0 +1,348 @@
+.view {
+  padding: 16px 16px 80px;
+  min-height: 100%;
+}
+
+.viewHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+  margin-bottom: 14px;
+}
+
+.viewTitle {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.crumb {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--text-muted);
+}
+
+.crumb:hover {
+  color: var(--accent);
+}
+
+.sep {
+  color: var(--text-faint);
+  margin: 0 1px;
+}
+
+.muted {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.error {
+  color: var(--danger);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+}
+
+.toolbar button,
+.selectionBar button {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 1px 8px;
+  font-size: 12px;
+}
+
+.toolbar button:hover:not(:disabled),
+.selectionBar button:hover {
+  border-color: var(--accent);
+}
+
+.toolbar button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.danger {
+  color: var(--danger);
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-right: 6px;
+  cursor: pointer;
+}
+
+.selectionBar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  margin: 0 -4px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 12px;
+}
+
+.selectionBar > span {
+  margin-right: auto;
+}
+
+/* Tag tree */
+
+.tree {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.treeRoot {
+  margin: 0 -4px;
+}
+
+.treeRow {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 28px;
+  border-radius: var(--radius);
+  padding-right: 6px;
+}
+
+.treeRow:hover {
+  background: var(--surface-2);
+}
+
+.dim {
+  opacity: 0.5;
+}
+
+.caret {
+  width: 18px;
+  flex: none;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  padding: 0;
+  height: 20px;
+}
+
+.caret:not(:disabled)::before {
+  content: '';
+  display: block;
+  width: 5px;
+  height: 5px;
+  margin: 0 auto;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 0.1s;
+}
+
+.caret[data-open]::before {
+  transform: rotate(45deg);
+}
+
+.caret:disabled {
+  cursor: default;
+}
+
+.treeName {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  border: none;
+  background: none;
+  padding: 2px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.treeName:hover {
+  color: var(--accent);
+}
+
+.count {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.archivedCount {
+  color: var(--text-faint);
+  margin-left: 3px;
+}
+
+.treeActions {
+  display: none;
+  gap: 1px;
+  margin-left: 4px;
+}
+
+.treeRow:hover .treeActions {
+  display: flex;
+}
+
+.treeActions button {
+  border: none;
+  background: none;
+  color: var(--text-faint);
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.treeActions button:hover {
+  color: var(--text);
+  background: var(--surface);
+}
+
+/* Tag view: one card per day */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+
+.stamp {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--date);
+  font-size: 15px;
+  margin-bottom: 6px;
+}
+
+.stamp:hover {
+  text-decoration: underline;
+}
+
+.entry {
+  border-radius: var(--radius);
+  padding: 6px 8px;
+  margin: 0 -8px;
+  cursor: default;
+  user-select: text;
+}
+
+.entry + .entry {
+  margin-top: 4px;
+}
+
+.entryHead {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.entryMain {
+  flex: 1;
+  min-width: 0;
+}
+
+.entryTitle {
+  font-weight: 600;
+}
+
+.entryTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  margin-top: 2px;
+}
+
+.thumb {
+  width: 56px;
+  height: 42px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  flex: none;
+}
+
+.nodeList {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0 0 0 12px;
+  border-left: 1px solid var(--border);
+}
+
+.node {
+  position: relative;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.node::before {
+  content: '';
+  position: absolute;
+  left: -15px;
+  top: 11px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+
+.selected {
+  background: var(--selection);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.archived {
+  opacity: 0.45;
+}
+
+/* Tag operation dialogs */
+
+.dialogText {
+  margin: 0 0 10px;
+  color: var(--text-muted);
+}
+
+.dialogText b {
+  color: var(--tag);
+}
+
+.dialogInput {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+  outline: none;
+}
+
+.dialogInput:focus-within,
+.dialogInput:focus {
+  border-color: var(--accent);
+}
+
+.hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}

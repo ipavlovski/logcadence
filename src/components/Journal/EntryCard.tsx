@@ -1,0 +1,155 @@
+import { memo, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
+import type { EntryDTO } from '../../../shared/types.ts'
+import { AutoTextarea } from '../AutoTextarea/AutoTextarea.tsx'
+import { mark } from '../Markdown/Markdown.tsx'
+import { TagInput } from '../TagInput/TagInput.tsx'
+import { useDayApi, type FocusTarget } from './dayContext.ts'
+import { NodeBlock } from './NodeBlock.tsx'
+import styles from './Journal.module.css'
+
+interface Props {
+  entry: EntryDTO
+  focus: FocusTarget | null
+  find: string
+  flashId: string | null
+}
+
+export const EntryCard = memo(function EntryCard({ entry, focus, find, flashId }: Props) {
+  const day = useDayApi()
+  const titleFocus = focus?.kind === 'title' && focus.entryId === entry.id ? focus : null
+  const isEmpty = !entry.title && !entry.tags.length && entry.nodes.every((n) => !n.content && !n.images.length)
+
+  return (
+    <article className={`${styles.entry} ${entry.archived ? styles.archived : ''} ${flashId === entry.id ? styles.flash : ''}`} data-reveal={entry.id}>
+      <header className={styles.entryHead}>
+        <span className={styles.bullet} />
+        <div className={styles.entryHeadMain}>
+          <EntryTitle entry={entry} focus={titleFocus} find={find} isEmpty={isEmpty} />
+          <TagInput
+            className={styles.entryTags}
+            value={entry.tags}
+            onChange={(tags) => day.updateEntry(entry.id, { tags })}
+            onFocus={() => day.touch(entry.id)}
+          />
+        </div>
+        <div className={styles.rowActions}>
+          <button title={entry.archived ? 'Unarchive entry' : 'Archive entry'} onClick={() => day.updateEntry(entry.id, { archived: !entry.archived })}>
+            {entry.archived ? '↺' : '▣'}
+          </button>
+          <button
+            title="Delete entry"
+            onClick={() =>
+              (isEmpty || confirm(`Delete "${entry.title || 'untitled entry'}" and its ${entry.nodes.length} node(s)?`)) && day.deleteEntry(entry.id)
+            }
+          >
+            ×
+          </button>
+        </div>
+      </header>
+      <div className={styles.nodes}>
+        {entry.nodes.map((n) => (
+          <NodeBlock key={n.id} node={n} editing={focus?.kind === 'node' && focus.nodeId === n.id ? focus : null} find={find} flash={flashId === n.id} />
+        ))}
+        <button
+          className={styles.addNode}
+          title="Add a node"
+          onClick={() => day.focusTo({ kind: 'node', nodeId: day.insertNode(entry.id, entry.nodes.at(-1)?.id ?? null, ''), caret: 'start' })}
+        >
+          +
+        </button>
+      </div>
+    </article>
+  )
+})
+
+function EntryTitle({
+  entry,
+  focus,
+  find,
+  isEmpty,
+}: {
+  entry: EntryDTO
+  focus: Extract<FocusTarget, { kind: 'title' }> | null
+  find: string
+  isEmpty: boolean
+}) {
+  const day = useDayApi()
+  const [draft, setDraft] = useState(entry.title)
+  const [editing, setEditing] = useState(false)
+  const ref = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    if (!editing) setDraft(entry.title)
+  }, [entry.title, editing])
+
+  useLayoutEffect(() => {
+    if (!focus) return
+    setEditing(true)
+  }, [focus])
+
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!editing || !el || !focus) return
+    el.focus()
+    const pos = focus.caret === 'start' ? 0 : el.value.length
+    el.setSelectionRange(pos, pos)
+  }, [editing, focus])
+
+  const commit = () => {
+    const title = draft.replace(/\s*\n\s*/g, ' ').trim()
+    if (title !== entry.title) day.updateEntry(entry.id, { title })
+  }
+
+  const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    const el = e.currentTarget
+    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault()
+      commit()
+      const first = entry.nodes[0]
+      day.focusTo({ kind: 'node', nodeId: first ? first.id : day.insertNode(entry.id, null, ''), caret: 'start' })
+    } else if (e.key === 'ArrowDown' && el.selectionStart === el.value.length) {
+      e.preventDefault()
+      day.navigate({ entryId: entry.id }, 1)
+    } else if (e.key === 'ArrowUp' && el.selectionStart === 0) {
+      e.preventDefault()
+      day.navigate({ entryId: entry.id }, -1)
+    } else if (e.key === 'Backspace' && !draft && isEmpty) {
+      // Backspace in an empty, untagged entry removes it.
+      e.preventDefault()
+      day.navigate({ entryId: entry.id }, -1)
+      day.deleteEntry(entry.id)
+    } else if (e.key === 'Escape') {
+      el.blur()
+    }
+  }
+
+  if (!editing)
+    return (
+      <div
+        className={`${styles.title} ${entry.title ? '' : styles.placeholder}`}
+        tabIndex={0}
+        onClick={() => day.focusTo({ kind: 'title', entryId: entry.id, caret: 'end' })}
+        onFocus={() => setEditing(true)}
+      >
+        {entry.title ? mark(entry.title, find) : 'Untitled entry'}
+      </div>
+    )
+
+  return (
+    <AutoTextarea
+      ref={ref}
+      className={`${styles.title} ${styles.titleInput}`}
+      value={draft}
+      placeholder="Untitled entry"
+      spellCheck={false}
+      autoFocus={!focus}
+      onChange={(e) => setDraft(e.target.value)}
+      onKeyDown={onKeyDown}
+      onFocus={() => day.touch(entry.id)}
+      onBlur={() => {
+        commit()
+        setEditing(false)
+      }}
+    />
+  )
+}
