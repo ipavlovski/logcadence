@@ -2,6 +2,7 @@ import { memo, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent 
 import type { EntryDTO } from '../../../shared/types.ts'
 import { AutoTextarea } from '../AutoTextarea/AutoTextarea.tsx'
 import { mark } from '../Markdown/Markdown.tsx'
+import { openChat, SOURCE_LABEL } from '../../state/ai.ts'
 import { TagInput } from '../TagInput/TagInput.tsx'
 import { useDayApi, type FocusTarget } from './dayContext.ts'
 import { NodeBlock } from './NodeBlock.tsx'
@@ -32,6 +33,15 @@ export const EntryCard = memo(function EntryCard({ entry, focus, find, flashId }
             onFocus={() => day.touch(entry.id)}
           />
         </div>
+        {entry.chat && (
+          <button
+            className={styles.chatLink}
+            title={`Open the ${SOURCE_LABEL[entry.chat.source]} transcript in the canvas AI tab (Ctrl+click: new tab)`}
+            onClick={(e) => openChat(entry.chat!.id, { newTab: e.ctrlKey || e.metaKey })}
+          >
+            transcript ↗
+          </button>
+        )}
         <div className={styles.rowActions}>
           <button title={entry.archived ? 'Unarchive entry' : 'Archive entry'} onClick={() => day.updateEntry(entry.id, { archived: !entry.archived })}>
             {entry.archived ? '↺' : '▣'}

@@ -1,8 +1,8 @@
 import { and, asc, eq, inArray, sql, type SQL } from 'drizzle-orm'
-import type { EntryDTO, ImageDTO, NodeDTO } from '../../shared/types.ts'
+import type { ChatSource, EntryDTO, ImageDTO, NodeDTO } from '../../shared/types.ts'
 import { cleanTags, isUnder } from '../../shared/tags.ts'
 import { db } from '../db/client.ts'
-import { entries, entryTags, images, nodes, tags } from '../db/content-schema.ts'
+import { chats, entries, entryTags, images, nodes, tags } from '../db/content-schema.ts'
 import { bad } from './validate.ts'
 
 type NodeRow = typeof nodes.$inferSelect
@@ -59,6 +59,14 @@ export function loadEntries(ids: string[]): EntryDTO[] {
   const nodeRows = db.select().from(nodes).where(inArray(nodes.entryId, ids)).orderBy(asc(nodes.position)).all()
   const imgs = imagesByNode(inArray(nodes.entryId, ids))
   const tagMap = tagsFor(ids)
+  const chatMap = new Map(
+    db
+      .select({ id: chats.id, source: chats.source, entryId: chats.entryId })
+      .from(chats)
+      .where(inArray(chats.entryId, ids))
+      .all()
+      .map((c) => [c.entryId!, { id: c.id, source: c.source as ChatSource }]),
+  )
 
   const nodesByEntry = new Map<string, NodeDTO[]>()
   for (const n of nodeRows) {
@@ -70,7 +78,7 @@ export function loadEntries(ids: string[]): EntryDTO[] {
   return ids.flatMap((id) => {
     const e = byId.get(id)
     if (!e) return []
-    return [{ ...e, tags: tagMap.get(id) ?? [], nodes: nodesByEntry.get(id) ?? [] }]
+    return [{ ...e, tags: tagMap.get(id) ?? [], nodes: nodesByEntry.get(id) ?? [], chat: chatMap.get(id) ?? null }]
   })
 }
 

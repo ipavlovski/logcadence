@@ -1,6 +1,6 @@
 import { Fragment, memo, type ReactNode } from 'react'
 import { isIsoDate } from '../../../shared/dates.ts'
-import { parseBlocks, type Inline } from '../../markdown.ts'
+import { parseBlocks, parseInline, type Inline } from '../../markdown.ts'
 import { openDate, openTag } from '../../state/panes.ts'
 import { TagChip } from '../TagChip/TagChip.tsx'
 import styles from './Markdown.module.css'
@@ -34,7 +34,18 @@ export const Markdown = memo(function Markdown({ source, highlight = '' }: Props
   )
 })
 
-function CodeBlock({ code, lang, highlight }: { code: string; lang: string; highlight: string }) {
+/** One line of inline markdown (code, bold, links, #tags, [[refs]]). */
+export function InlineText({ text, highlight = '' }: { text: string; highlight?: string }) {
+  return (
+    <>
+      {parseInline(text).map((part, k) => (
+        <InlinePart key={k} part={part} highlight={highlight} />
+      ))}
+    </>
+  )
+}
+
+export function CodeBlock({ code, lang, highlight }: { code: string; lang: string; highlight: string }) {
   const lines = code.split('\n')
   return (
     <div className={styles.code} data-lang={lang || undefined}>

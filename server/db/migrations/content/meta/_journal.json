@@ -8,6 +8,13 @@
       "when": 1790594886229,
       "tag": "0000_supreme_romulus",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1790789742827,
+      "tag": "0001_sudden_tusk",
+      "breakpoints": true
     }
   ]
 }

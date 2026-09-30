@@ -1,4 +1,5 @@
 import { index, integer, primaryKey, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import type { ChatMessage } from '../../shared/types.ts'
 
 // content.db: the notes. Entries belong to a journal day; nodes are an entry's children.
 
@@ -55,6 +56,31 @@ export const entryTags = sqliteTable(
     position: integer('position').notNull(),
   },
   (t) => [primaryKey({ columns: [t.entryId, t.tagId] }), index('entry_tags_tag_idx').on(t.tagId)],
+)
+
+// Imported AI chats. Each one owns a journal entry (one node per prompt); the full transcript
+// stays here for the AI canvas tab.
+export const chats = sqliteTable(
+  'chats',
+  {
+    id: text('id').primaryKey(), // `${source}:${externalId}`
+    source: text('source').notNull(),
+    externalId: text('external_id').notNull(),
+    // Null once the user deletes the entry; re-imports then leave the chat out of the journal.
+    entryId: text('entry_id').references(() => entries.id, { onDelete: 'set null' }),
+    title: text('title').notNull(),
+    startedAt: integer('started_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+    turns: integer('turns').notNull(),
+    messages: text('messages', { mode: 'json' }).$type<ChatMessage[]>().notNull(),
+    meta: text('meta', { mode: 'json' }).$type<Record<string, string>>().notNull(),
+    // Node created for each turn, so re-imports append new turns and refresh unedited ones.
+    nodeIds: text('node_ids', { mode: 'json' }).$type<string[]>().notNull(),
+    // Source file fingerprint (mtime:size); an unchanged file is not parsed again.
+    sourceStamp: text('source_stamp'),
+    importedAt: integer('imported_at').notNull(),
+  },
+  (t) => [index('chats_started_idx').on(t.startedAt), index('chats_entry_idx').on(t.entryId)],
 )
 
 export const images = sqliteTable(
