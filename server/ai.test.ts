@@ -171,7 +171,12 @@ beforeAll(async () => {
   writeClaudeExport()
   app = (await import('./app.ts')).app
 })
-afterAll(() => rmSync(root, { recursive: true, force: true }))
+// Databases closed first: Windows can't delete open database files.
+afterAll(async () => {
+  const { closeDbs } = await import('./db/client.ts')
+  closeDbs()
+  rmSync(root, { recursive: true, force: true })
+})
 
 // ── tests ─────────────────────────────────────────────────────────────────
 

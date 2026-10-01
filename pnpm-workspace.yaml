@@ -1,5 +1,5 @@
 allowBuilds:
   electron: true
   electron-winstaller: false
-  better-sqlite3: true
+  better-sqlite3: false # ships Node-API prebuilds; the implicit node-gyp build is never loaded
   esbuild: true

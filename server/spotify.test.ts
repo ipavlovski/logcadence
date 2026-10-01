@@ -71,8 +71,11 @@ beforeAll(async () => {
   vi.stubGlobal('fetch', fakeFetch)
   app = (await import('./app.ts')).app
 })
-afterAll(() => {
+// Databases closed first: Windows can't delete open database files.
+afterAll(async () => {
   vi.unstubAllGlobals()
+  const { closeDbs } = await import('./db/client.ts')
+  closeDbs()
   rmSync(root, { recursive: true, force: true })
 })
 beforeEach(() => {

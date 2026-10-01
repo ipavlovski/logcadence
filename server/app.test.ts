@@ -14,7 +14,12 @@ beforeAll(async () => {
   app = (await import('./app.ts')).app
   flush = (await import('./lib/journalFiles.ts')).flushJournalFiles
 })
-afterAll(() => rmSync(dataDir, { recursive: true, force: true }))
+// Databases closed first: Windows can't delete open database files.
+afterAll(async () => {
+  const { closeDbs } = await import('./db/client.ts')
+  closeDbs()
+  rmSync(dataDir, { recursive: true, force: true })
+})
 
 async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await app.request(url, {
