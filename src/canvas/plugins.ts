@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react'
 import { AiChats } from '../components/AiChats/AiChats.tsx'
+import { Shortcuts } from '../components/Shortcuts/Shortcuts.tsx'
 import { Threads } from '../components/Threads/Threads.tsx'
 
 // Canvas tabs are rendered by plugins: mini-apps that read journal data and render their own view.
@@ -20,7 +21,7 @@ export interface CanvasPlugin {
 
 export const PLUGINS: CanvasPlugin[] = [
   { type: 'map', title: 'Map', description: 'Classify a day of GPX data into homebase/place movements with timestamps.' },
-  { type: 'shortcuts', title: 'Shortcuts', description: 'Visualize hotkeys from shortcuts: entries on a keyboard, flag clashes.' },
+  { type: 'shortcuts', title: 'Shortcuts', description: 'An app’s hotkeys from its shortcuts:<app> entries on a keyboard; hold a modifier to see its layer, clashes flagged.', Component: Shortcuts },
   { type: 'spotify', title: 'Spotify', description: 'Playlists listened to today, track and like stats.' },
   { type: 'images', title: 'Images', description: 'Browse every image pasted into the journal.' },
   { type: 'threads', title: 'Threads', description: 'Project progress over time: one line per done:<project> tag, one circle per day.', Component: Threads },

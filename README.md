@@ -36,6 +36,8 @@ After changing a schema: `pnpm db:generate` (writes migrations for both database
 
 The canvas **AI** tab imports chats as journal entries: titled like the chat, tagged `ai:<source>`, dated the day the chat started, one node per prompt. These entries are read-only apart from their tags, and their `ai:<source>` tag stays locked as the primary tag; clicking a prompt shows it with its reply in the AI tab, and “transcript ↗” on the entry opens the whole chat. Opening the tab scans automatically; **Scan** forces it; export files can also be dropped on the tab.
 
+The canvas **Shortcuts** tab draws an app's hotkeys on a keyboard. They come from entries whose primary tag is `shortcuts:<app>` (e.g. `#shortcuts:illustrator`), one per line: `- ctrl+shift+s -> save as`. A line ending in `:` starts a section; `b -> brush + blob brush` puts the second action on Shift; `- [ ] …` marks a planned binding and `-> ?` a key whose action is still undecided; `[]` binds both brackets. Toggle Shift/Ctrl/Alt/Win, or hold the real keys, to see that layer; combos bound to two different actions are flagged as clashes.
+
 | source | where it comes from |
 | --- | --- |
 | Claude Code | `~/.claude/projects/*/*.jsonl` in the WSL home and every Windows profile under `/mnt/c/Users`: the VS Code extension, the CLI and the desktop app's Code tab (titles from the app's session metadata) |
@@ -57,7 +59,7 @@ server/
 src/
   state/         panes/tabs store, change bus, journal cursor, UI state
   components/    Journal, Tags, Canvas (frame only), Pane, Spotlight, dialogs
-  canvas/        canvas plugin registry (AI chats is built; the rest are placeholders)
+  canvas/        canvas plugin registry (AI chats, Threads and Shortcuts are built; the rest are placeholders)
   shortcuts.ts   every keyboard shortcut, used by the handler and the help overlay (press ?)
 ```
 
