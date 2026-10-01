@@ -1,5 +1,6 @@
-import { Fragment, useEffect, type MouseEvent } from 'react'
+import { Fragment, useEffect, useState, type MouseEvent } from 'react'
 import { shiftDate } from '../shared/dates.ts'
+import type { UpdateStatus } from '../shared/desktop.ts'
 import { newEntryWithDialog } from './actions.ts'
 import { Modal } from './components/Modal/Modal.tsx'
 import { NewEntryDialog } from './components/NewEntryDialog/NewEntryDialog.tsx'
@@ -66,6 +67,7 @@ export function App() {
       <TagOpDialog />
       <Help />
       <Toast />
+      <UpdatePrompt />
     </div>
   )
 }
@@ -119,6 +121,19 @@ function Help() {
       </section>
       <p className={styles.helpNote}>Browsers reserve Ctrl+W / Ctrl+N; use the Alt variants on the web. The desktop app gets the Ctrl ones.</p>
     </Modal>
+  )
+}
+
+/** Desktop app only: offers a restart once an update has downloaded (it also installs on quit). */
+function UpdatePrompt() {
+  const [status, setStatus] = useState<UpdateStatus | null>(null)
+  useEffect(() => window.desktop?.onUpdate(setStatus), [])
+  if (status?.state !== 'ready') return null
+  return (
+    <div className={styles.update} role="status">
+      Version {status.version} is ready.
+      <button onClick={() => window.desktop!.installUpdate()}>Restart to update</button>
+    </div>
   )
 }
 

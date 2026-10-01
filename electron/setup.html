@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'" />
+    <title>Logseq Rewrite</title>
+    <!-- First-run window (electron/main.ts → runSetup): pick, create or import a library. -->
+    <style>
+      :root {
+        --bg: #282c34;
+        --panel: #21252b;
+        --border: #3e4451;
+        --text: #abb2bf;
+        --muted: #7f848e;
+        --accent: #61afef;
+        --error: #e06c75;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 32px;
+        background: var(--bg);
+        color: var(--text);
+        font: 14px/1.5 system-ui, sans-serif;
+        user-select: none;
+      }
+      h1 {
+        margin: 0 0 4px;
+        font-size: 20px;
+        font-weight: 600;
+        color: #dcdfe4;
+      }
+      p {
+        margin: 0 0 24px;
+        color: var(--muted);
+      }
+      button {
+        display: block;
+        width: 100%;
+        margin-bottom: 12px;
+        padding: 14px 16px;
+        text-align: left;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--panel);
+        color: var(--text);
+        font: inherit;
+        cursor: pointer;
+      }
+      button:hover:not(:disabled) {
+        border-color: var(--accent);
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      button strong {
+        display: block;
+        color: #dcdfe4;
+      }
+      button span {
+        color: var(--muted);
+        font-size: 12.5px;
+      }
+      #status {
+        min-height: 40px;
+        margin-top: 8px;
+        font-size: 12.5px;
+      }
+      #status.error {
+        color: var(--error);
+      }
+      progress {
+        width: 100%;
+        height: 6px;
+        accent-color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Logseq Rewrite</h1>
+    <p>Choose where your library lives. It holds the databases, journals and media, so put it on a drive with room.</p>
+    <button id="open">
+      <strong>Open or create a library</strong>
+      <span>Pick an existing library folder, or an empty folder to start a new one.</span>
+    </button>
+    <button id="import">
+      <strong>Import from an export…</strong>
+      <span>Move your data over from the web app: pick its export zip, then an empty folder.</span>
+    </button>
+    <div id="status" role="status"></div>
+    <script>
+      const status = document.getElementById('status')
+      const buttons = [...document.querySelectorAll('button')]
+      const PHASES = { tables: 'Importing entries', assets: 'Copying media', gps: 'Copying GPS files' }
+
+      window.desktop.onProgress(({ phase, done, total }) => {
+        status.className = ''
+        status.innerHTML = ''
+        status.append(`${PHASES[phase]}… ${done.toLocaleString()} / ${total.toLocaleString()}`, document.createElement('br'))
+        const bar = document.createElement('progress')
+        bar.max = total
+        bar.value = done
+        status.append(bar)
+      })
+
+      async function run(action, busy) {
+        buttons.forEach((b) => (b.disabled = true))
+        status.className = ''
+        status.textContent = busy
+        const r = await action()
+        if (r.ok) status.textContent = 'Starting…'
+        else {
+          buttons.forEach((b) => (b.disabled = false))
+          status.textContent = r.error ?? ''
+          status.className = r.error ? 'error' : ''
+        }
+      }
+
+      document.getElementById('open').onclick = () => run(window.desktop.openLibrary, '')
+      document.getElementById('import').onclick = () => run(window.desktop.importLibrary, '')
+    </script>
+  </body>
+</html>

@@ -135,3 +135,28 @@
     display: none;
   }
 }
+
+.update {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 8px 8px 8px 14px;
+  box-shadow: var(--shadow);
+  font-size: 12.5px;
+}
+
+.update button {
+  border: 1px solid var(--accent);
+  background: none;
+  border-radius: var(--radius);
+  padding: 3px 10px;
+  color: var(--accent);
+}

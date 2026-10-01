@@ -12,6 +12,8 @@ pnpm seed      # optional: sample entries (only if the database is empty)
 pnpm dev       # API on :3002, web on http://localhost:5174
 pnpm test      # server API + parser tests
 pnpm build && pnpm start   # production: one server on :3002
+pnpm dev:electron          # desktop app with the renderer from Vite (restart it after electron/ or server changes)
+pnpm dist:win              # Windows installer into release/ (on Windows; see Desktop app)
 ```
 
 Data lives in `data/` (override with `LOGSEQ_DATA_DIR`):
@@ -31,6 +33,15 @@ After changing a schema: `pnpm db:generate` (writes migrations for both database
 - **Node**: an entry's children (markdown text + image gallery). Edits happen in memory and are pushed when editing ends.
 - **Tag**: a colon-separated path (`system:windows:powertoys`). Ancestors are implicit. Tags no entry uses are pruned.
 - **Archive**: entries and nodes can be archived. The tags pane hides archived items unless “archived” is on.
+
+## Desktop app
+
+The desktop app (Windows) is Electron around the same code: its main process runs the API server in-process on `127.0.0.1:3002` and the window shows the web app from it, so the renderer is the web build unchanged. 3002 is fixed because Spotify's redirect URI is registered for it, so the desktop app and `pnpm dev` can't run at the same time.
+
+- **Library**: on first run the app asks for a library folder (an existing one, an empty one for a new library, or an empty one to import an export into), remembered in `%APPDATA%/Logseq Rewrite/config.json`. File → Open or create library / Import an export into a new library switch to another (the app restarts). `LOGSEQ_DATA_DIR` overrides it.
+- **Desktop-only features** go through `window.desktop` (`electron/preload.ts`, typed in `shared/desktop.ts`); the renderer feature-detects it, so `src/` never imports Electron. Ctrl+W / Ctrl+N and the other browser-reserved shortcuts work here, since the menu leaves them alone.
+- **Build**: `scripts/build-electron.ts` bundles `electron/` with the server into `dist-electron/` (packages stay external: `dependencies` in package.json are exactly what the main process needs, renderer libraries are devDependencies). `electron-builder.yml` packages it with `dist/` and the migrations as resources. better-sqlite3's Node-API prebuilds load in both Node and Electron, so no native rebuild is needed. The NSIS installer has to be built on Windows (on Linux it needs Wine).
+- **Releases and updates**: pushing a `v<version>` tag that matches package.json runs `.github/workflows/release.yml`, which builds the installer on a Windows runner and publishes it as a GitHub Release of `ipavlovski/logseq-rewrite`. Installed apps check its releases 10 s after start and every 6 h (Help → Check for updates), download in the background, and offer a restart (or install on quit). The installer is unsigned, so Windows SmartScreen asks for "More info → Run anyway" on first install.
 
 ## Data export / import
 
@@ -63,7 +74,8 @@ Re-imports append new turns and refresh nodes and titles that still read as impo
 ## Layout
 
 ```
-shared/          domain types, tag paths, dates, ids (shared with future electron / react-native apps)
+electron/        desktop app: main process (runs the server), preload bridge, setup window, import worker, updater
+shared/          domain types, tag paths, dates, ids, desktop bridge types (shared with the electron / future react-native apps)
 server/
   db/            schemas + migrations for content.db and events.db
   lib/           queries, tag operations, event log, markdown mirror

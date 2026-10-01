@@ -1,4 +1,4 @@
-import { Suspense } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { pluginByType, PLUGINS } from '../../canvas/plugins.ts'
 import { openLoc, pluginKey } from '../../state/panes.ts'
 import styles from './Canvas.module.css'
@@ -22,14 +22,43 @@ export function CanvasDashboard() {
       <footer className={styles.data}>
         <h3>Data</h3>
         <p>An export holds the whole library (entries, chats, Spotify and GPS history, media) and can be imported into an empty library, e.g. the desktop app.</p>
+        <DataExport />
+      </footer>
+    </div>
+  )
+}
+
+const PHASES = { tables: 'Exporting entries', assets: 'Exporting media', gps: 'Exporting GPS files' }
+
+/** Browser: plain downloads. Desktop app: a save dialog, with progress (a full library is many GB). */
+function DataExport() {
+  const desktop = window.desktop
+  const [status, setStatus] = useState('')
+  useEffect(() => desktop?.onProgress((p) => setStatus(`${PHASES[p.phase]}… ${p.done.toLocaleString()} / ${p.total.toLocaleString()}`)), [desktop])
+
+  if (!desktop)
+    return (
+      <>
         <a href="/api/export" download>
           Export everything
         </a>
         <a href="/api/export?assets=0&gps=0" download>
           Export without media and GPS files
         </a>
-      </footer>
-    </div>
+      </>
+    )
+
+  const run = async (opts: { assets: boolean; gps: boolean }) => {
+    setStatus('')
+    const r = await desktop.exportData(opts)
+    setStatus(r.ok ? 'Export written.' : (r.error ?? ''))
+  }
+  return (
+    <>
+      <button onClick={() => run({ assets: true, gps: true })}>Export everything…</button>
+      <button onClick={() => run({ assets: false, gps: false })}>Export without media and GPS files…</button>
+      {status && <p className={styles.status}>{status}</p>}
+    </>
   )
 }
 

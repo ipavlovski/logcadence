@@ -15,5 +15,5 @@
     "noEmit": true,
     "types": ["node", "vite/client"]
   },
-  "include": ["src", "server", "scripts", "shared", "vite.config.ts", "drizzle.config.ts"]
+  "include": ["electron", "src", "server", "scripts", "shared", "vite.config.ts", "drizzle.config.ts"]
 }

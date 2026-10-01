@@ -1,10 +1,12 @@
+import { execFileSync } from 'node:child_process'
 import { existsSync, globSync, readdirSync, statSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import type { ChatSourceInfo } from '../../../shared/types.ts'
 
 // Where each AI app keeps its chats. Under WSL the Windows profiles (/mnt/c/Users/*) are
-// scanned too, since the desktop apps (Claude, Antigravity) and the browser live there.
+// scanned too, since the desktop apps (Claude, Antigravity) and the browser live there; on native
+// Windows (the desktop app) it is the other way round, and the homes of running WSL distros are added.
 // LOGSEQ_AI_HOMES (path-delimited) replaces the list of home directories.
 
 const NOT_USERS = new Set(['Public', 'Default', 'Default User', 'All Users', 'Administrator'])
@@ -16,13 +18,48 @@ export function homes(): string[] {
   const list = [os.homedir()]
   if (existsSync(WIN_USERS))
     for (const u of readdirSync(WIN_USERS, { withFileTypes: true })) if (u.isDirectory() && !NOT_USERS.has(u.name)) list.push(path.join(WIN_USERS, u.name))
+  list.push(...wslHomes())
   return [...new Set(list)]
 }
 
-const glob = (pattern: string) => globSync(pattern.split(path.sep).join('/'))
+/** \\wsl.localhost\<distro>\home\* of the running distros only, so a scan never boots WSL. */
+function wslHomes(): string[] {
+  if (process.platform !== 'win32') return []
+  let distros: string[]
+  try {
+    const out = execFileSync('wsl.exe', ['--list', '--running', '--quiet'], { encoding: 'utf16le', timeout: 3000, windowsHide: true })
+    distros = out
+      .split(/\r?\n/)
+      .map((d) => d.replaceAll('\0', '').trim())
+      .filter(Boolean)
+  } catch {
+    return [] // no WSL, or nothing running
+  }
+  return distros.flatMap((d) => {
+    const root = `\\\\wsl.localhost\\${d}\\home`
+    try {
+      return readdirSync(root, { withFileTypes: true })
+        .filter((u) => u.isDirectory())
+        .map((u) => path.join(root, u.name))
+    } catch {
+      return []
+    }
+  })
+}
+
+/** globSync, split at the first wildcard: it finds nothing under a UNC path (\\wsl.localhost\…) unless that is the cwd. */
+function glob(pattern: string): string[] {
+  const parts = pattern.split(path.sep)
+  const i = parts.findIndex((p) => /[*?[{]/.test(p))
+  if (i < 0) return existsSync(pattern) ? [pattern] : []
+  const cwd = parts.slice(0, i).join(path.sep) || path.sep
+  if (!existsSync(cwd)) return []
+  return globSync(parts.slice(i).join('/'), { cwd }).map((f) => path.join(cwd, f))
+}
 
 function originOf(file: string): string {
   if (/^\/mnt\/[a-z]\//.test(file)) return 'windows'
+  if (/^[\\/]{2}wsl(\.localhost|\$)[\\/]/i.test(file)) return 'wsl'
   if (process.env.WSL_DISTRO_NAME) return 'wsl'
   return process.platform
 }

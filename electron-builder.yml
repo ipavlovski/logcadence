@@ -1,0 +1,38 @@
+# Desktop installer (pnpm dist:win, or the release workflow on a v* tag). See electron/main.ts.
+appId: com.logseq-rewrite.app
+productName: Logseq Rewrite
+copyright: Copyright © 2026 IP
+
+directories:
+  output: release
+  buildResources: build
+
+# The main process bundle (scripts/build-electron.ts); package.json "dependencies" come along as node_modules.
+files:
+  - dist-electron/**
+  - "!dist-electron/**/*.map"
+  - package.json
+extraResources:
+  - from: dist
+    to: dist
+  - from: server/db/migrations
+    to: migrations
+asarUnpack:
+  - "**/node_modules/better-sqlite3/**"
+# better-sqlite3 ships Node-API prebuilds for every platform, which load in Electron as they are.
+npmRebuild: false
+
+win:
+  target: nsis
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: Logseq-Rewrite-Setup-${version}.${ext}
+
+# Auto-update source: electron-updater reads latest.yml from this public repo's GitHub Releases.
+publish:
+  provider: github
+  owner: ipavlovski
+  repo: logseq-rewrite
+  releaseType: release

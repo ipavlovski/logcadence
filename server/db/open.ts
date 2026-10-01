@@ -11,8 +11,9 @@ import * as eventsSchema from './events-schema.ts'
 // running one can be opened too (the data importer builds a fresh one next to it).
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
-// The desktop build ships the migrations as resources, outside the source tree.
-export const MIGRATIONS_DIR = process.env.LOGSEQ_MIGRATIONS_DIR ? path.resolve(process.env.LOGSEQ_MIGRATIONS_DIR) : path.join(ROOT, 'server/db/migrations')
+// The desktop build ships the migrations as resources, outside the source tree. Read when used, so the
+// desktop app can set it after this module has loaded.
+const migrationsDir = () => (process.env.LOGSEQ_MIGRATIONS_DIR ? path.resolve(process.env.LOGSEQ_MIGRATIONS_DIR) : path.join(ROOT, 'server/db/migrations'))
 
 function openSqlite(file: string) {
   const sqlite = new Database(file)
@@ -24,13 +25,13 @@ function openSqlite(file: string) {
 
 export function openContentDb(dbDir: string) {
   const db = drizzle(openSqlite(path.join(dbDir, 'content.db')), { schema: contentSchema })
-  migrate(db, { migrationsFolder: path.join(MIGRATIONS_DIR, 'content') })
+  migrate(db, { migrationsFolder: path.join(migrationsDir(), 'content') })
   return db
 }
 
 export function openEventsDb(dbDir: string) {
   const db = drizzle(openSqlite(path.join(dbDir, 'events.db')), { schema: eventsSchema })
-  migrate(db, { migrationsFolder: path.join(MIGRATIONS_DIR, 'events') })
+  migrate(db, { migrationsFolder: path.join(migrationsDir(), 'events') })
   return db
 }
 
@@ -39,6 +40,6 @@ export type EventsDb = ReturnType<typeof openEventsDb>
 
 /** Tag of the newest migration of a database ("content" | "events"): the schema version this build writes. */
 export function schemaTag(kind: 'content' | 'events'): string {
-  const journal = JSON.parse(readFileSync(path.join(MIGRATIONS_DIR, kind, 'meta', '_journal.json'), 'utf8')) as { entries: { tag: string }[] }
+  const journal = JSON.parse(readFileSync(path.join(migrationsDir(), kind, 'meta', '_journal.json'), 'utf8')) as { entries: { tag: string }[] }
   return journal.entries.at(-1)?.tag ?? ''
 }

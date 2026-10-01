@@ -1,0 +1,36 @@
+# Builds the Windows installer and publishes it as a GitHub Release, which the installed apps update from
+# (electron-builder.yml → publish). Release: bump "version" in package.json, commit, then
+#   git tag v<version> && git push --tags
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Tag matches package.json version
+        shell: bash
+        run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - run: pnpm build:electron
+      - name: Build installer and publish the release
+        run: pnpm exec electron-builder --win --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
