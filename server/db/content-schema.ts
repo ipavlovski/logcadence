@@ -138,3 +138,47 @@ export const spotifyContexts = sqliteTable('spotify_contexts', {
   imageUrl: text('image_url'),
   fetchedAt: integer('fetched_at').notNull(),
 })
+
+// GPS days for the canvas Map tab, classified into stays and movements (see server/lib/gps/classify.ts).
+
+// Places stayed at (≥ 5 min within 120 m), shared across days so they can be named once.
+export const gpsPlaces = sqliteTable('gps_places', {
+  id: text('id').primaryKey(),
+  lat: real('lat').notNull(),
+  lon: real('lon').notNull(),
+  name: text('name'),
+  createdAt: integer('created_at').notNull(),
+})
+
+export const gpsDays = sqliteTable('gps_days', {
+  date: text('date').primaryKey(), // YYYY-MM-DD
+  // Source file fingerprint (mtime:size); an unchanged file is not processed again.
+  sourceStamp: text('source_stamp').notNull(),
+  dayStart: integer('day_start').notNull(), // local midnight, epoch ms
+  homebaseId: text('homebase_id'),
+  // Set when the homebase was picked by hand (e.g. a hotel while travelling).
+  homebaseOverride: integer('homebase_override', { mode: 'boolean' }).notNull().default(false),
+  pointCount: integer('point_count').notNull(),
+  processedAt: integer('processed_at').notNull(),
+})
+
+// The day's timeline: rows tile the day (A, B, A->B, B->B, B->A, A->A, gap).
+export const gpsSegments = sqliteTable(
+  'gps_segments',
+  {
+    date: text('date')
+      .notNull()
+      .references(() => gpsDays.date, { onDelete: 'cascade' }),
+    idx: integer('idx').notNull(),
+    kind: text('kind').notNull(),
+    startAt: integer('start_at').notNull(),
+    endAt: integer('end_at').notNull(),
+    placeId: text('place_id'),
+    fromPlaceId: text('from_place_id'),
+    toPlaceId: text('to_place_id'),
+    distanceM: integer('distance_m').notNull(),
+    // Movements: simplified [lon, lat, seconds since day start].
+    path: text('path', { mode: 'json' }).$type<[number, number, number][]>().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.date, t.idx] })],
+)

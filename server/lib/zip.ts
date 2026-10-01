@@ -1,7 +1,7 @@
 import { closeSync, openSync, readSync, fstatSync } from 'node:fs'
 import { inflateRawSync } from 'node:zlib'
 
-// Minimal zip reader for chat exports (Claude's data export, Google Takeout). Reads the central
+// Minimal zip reader for chat exports (Claude data export, Google Takeout) and GPS archives. Reads the central
 // directory and only the members asked for, so multi-GB Takeout archives stay cheap to probe.
 
 export interface ZipMember {

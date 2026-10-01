@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { pluginByType, PLUGINS } from '../../canvas/plugins.ts'
 import { openLoc, pluginKey } from '../../state/panes.ts'
 import styles from './Canvas.module.css'
@@ -24,7 +25,12 @@ export function CanvasDashboard() {
 
 export function CanvasPluginTab({ type, tabKey }: { type: string; tabKey: string }) {
   const plugin = pluginByType(type)
-  if (plugin?.Component) return <plugin.Component tabKey={tabKey} />
+  if (plugin?.Component)
+    return (
+      <Suspense fallback={<div className={styles.frame} />}>
+        <plugin.Component tabKey={tabKey} />
+      </Suspense>
+    )
   return (
     <div className={styles.frame}>
       <div className={styles.placeholder}>

@@ -1,0 +1,218 @@
+.frame {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  font-size: 13px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 14px 18px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.actions button {
+  border: 1px solid var(--border);
+  background: none;
+  border-radius: var(--radius);
+  padding: 2px 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.actions button:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.muted {
+  color: var(--text-faint);
+}
+
+.empty {
+  padding: 18px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.empty code {
+  font-family: var(--font);
+  background: var(--code-bg);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.placeholder {
+  height: 360px;
+}
+
+/* ── day summary ── */
+
+.summary {
+  padding: 12px 18px 10px;
+}
+
+.bar {
+  display: flex;
+  gap: 2px;
+  height: 10px;
+}
+
+.bar span {
+  min-width: 2px;
+  background: var(--c);
+  border-radius: 2px;
+}
+
+.gapFill {
+  background: repeating-linear-gradient(135deg, var(--c) 0 2px, transparent 2px 5px) !important;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.legend b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.chip {
+  display: inline-block;
+  width: 14px;
+  height: 4px;
+  margin-right: 2px;
+  border-radius: 2px;
+  background: var(--c);
+  vertical-align: middle;
+}
+
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.gapChip {
+  height: 8px;
+  border-radius: 1px;
+  background: repeating-linear-gradient(135deg, var(--c) 0 2px, transparent 2px 4px);
+}
+
+.link {
+  border: none;
+  background: none;
+  color: var(--text-faint);
+  font-size: 11.5px;
+  padding: 0 4px;
+  border-radius: 4px;
+}
+
+.link:hover {
+  color: var(--accent);
+  background: var(--surface-2);
+}
+
+/* ── map ── */
+
+.map {
+  height: 380px;
+  min-height: 260px;
+  margin: 0 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+/* ── timetable ── */
+
+.table {
+  width: calc(100% - 36px);
+  margin: 12px 18px 18px;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-faint);
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.table td {
+  padding: 3px 6px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  white-space: nowrap;
+}
+
+.table td:nth-child(4) {
+  white-space: normal;
+  width: 100%;
+}
+
+.rowAction {
+  visibility: hidden;
+}
+
+.table tr:hover .rowAction {
+  visibility: visible;
+}
+
+.table tbody tr {
+  cursor: pointer;
+}
+
+.hovered {
+  background: var(--surface-2);
+}
+
+.selected {
+  background: var(--selection);
+}
+
+.gapRow {
+  color: var(--text-faint);
+  cursor: default !important;
+}
+
+.time {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.place {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--text);
+  border-bottom: 1px dashed var(--text-faint);
+}
+
+.place:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}

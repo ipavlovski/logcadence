@@ -203,3 +203,41 @@ export interface SpotifyResume {
   playedAt: number
   plays: number
 }
+
+// ── Map canvas tab (GPS) ────────────────────────────────────────────────────
+
+/** A = homebase, B = a place, X->Y = moving between them, A->A = a round trip from home, gap = no data. */
+export type GpsKind = 'A' | 'B' | 'A->B' | 'B->B' | 'B->A' | 'A->A' | 'gap'
+export const GPS_KINDS: GpsKind[] = ['A', 'B', 'A->B', 'B->B', 'B->A', 'A->A', 'gap']
+
+export interface GpsPlaceDTO {
+  id: string
+  lat: number
+  lon: number
+  name: string | null
+}
+
+export interface GpsSegmentDTO {
+  kind: GpsKind
+  start: number
+  end: number
+  placeId: string | null
+  fromPlaceId: string | null
+  toPlaceId: string | null
+  distanceM: number
+  /** Movements: simplified [lon, lat, seconds since day start]. */
+  path: [number, number, number][]
+}
+
+export interface GpsDayDTO {
+  date: string
+  dayStart: number
+  homebaseId: string | null
+  homebaseOverride: boolean
+  pointCount: number
+  segments: GpsSegmentDTO[]
+  /** Places referenced by the day's segments. */
+  places: GpsPlaceDTO[]
+  /** ms per kind; sums to the day's length. */
+  totals: Record<GpsKind, number>
+}

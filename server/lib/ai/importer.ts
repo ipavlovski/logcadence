@@ -17,7 +17,7 @@ import { isClaudeExport, parseClaudeExport } from './claudeExport.ts'
 import { desktopTitles, parseClaudeCode } from './claudeCode.ts'
 import { isGeminiActivity, parseGeminiActivity } from './geminiTakeout.ts'
 import { antigravityRoots, claudeCodeFiles, claudeDesktopSessionFiles, exportFiles } from './sources.ts'
-import { isZip, withZip, type ZipMember } from './zip.ts'
+import { isZip, withZip, type ZipMember } from '../zip.ts'
 
 // Imported chats become read-only journal entries: titled like the chat, tagged ai:<source>, dated
 // the day the chat started, one node per prompt. Replies stay out of the journal; the canvas AI tab

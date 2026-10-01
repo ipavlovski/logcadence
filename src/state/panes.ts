@@ -195,8 +195,11 @@ export function setWeights(weights: Partial<Record<PaneId, number>>) {
 }
 
 /** Date shown by the journal pane's active tab. */
-export function activeJournalDate(): string {
-  const loc = parseKey(panesStore.get().panes.journal.active)
+export const activeJournalDate = (): string => journalDateOf(panesStore.get())
+
+/** Store selector: the date shown by the journal pane's active tab (today on the pinned Today tab). */
+export function journalDateOf(s: PanesState): string {
+  const loc = parseKey(s.panes.journal.active)
   return loc.kind === 'date' ? loc.date : today()
 }
 

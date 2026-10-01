@@ -3,6 +3,7 @@ import { serveStatic } from '@hono/node-server/serve-static'
 import path from 'node:path'
 import { app } from './app.ts'
 import { ROOT } from './db/client.ts'
+import { scanGps } from './lib/gps/scan.ts'
 import { flushJournalFiles } from './lib/journalFiles.ts'
 import { isConnected } from './lib/spotify/auth.ts'
 import { sync as syncSpotify } from './lib/spotify/spotify.ts'
@@ -26,6 +27,12 @@ const spotifyTick = () => {
 }
 setInterval(spotifyTick, SPOTIFY_SYNC_MS).unref()
 spotifyTick()
+
+// GPS days dropped into data/gps/ while the server was off.
+scanGps().then(
+  (r) => r.processed && console.log(`gps: ${r.processed} day(s) classified`),
+  (err: Error) => console.warn(`gps scan: ${err.message}`),
+)
 
 const port = Number(process.env.PORT ?? 3002)
 // Bound to 127.0.0.1 explicitly: Spotify's login redirect must use that address, and WSL only
