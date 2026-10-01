@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react'
 import { AiChats } from '../components/AiChats/AiChats.tsx'
+import { Threads } from '../components/Threads/Threads.tsx'
 
 // Canvas tabs are rendered by plugins: mini-apps that read journal data and render their own view.
 // This registry is the extension point; plugins without a Component show a placeholder.
@@ -22,7 +23,7 @@ export const PLUGINS: CanvasPlugin[] = [
   { type: 'shortcuts', title: 'Shortcuts', description: 'Visualize hotkeys from shortcuts: entries on a keyboard, flag clashes.' },
   { type: 'spotify', title: 'Spotify', description: 'Playlists listened to today, track and like stats.' },
   { type: 'images', title: 'Images', description: 'Browse every image pasted into the journal.' },
-  { type: 'threads', title: 'Threads', description: 'Vertical project timelines with heatmaps.' },
+  { type: 'threads', title: 'Threads', description: 'Project progress over time: one line per done:<project> tag, one circle per day.', Component: Threads },
   { type: 'ai-prompts', title: 'AI', description: 'Chats imported from Claude, Claude Code, Gemini and Antigravity, with full transcripts.', Component: AiChats },
 ]
 

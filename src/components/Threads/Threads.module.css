@@ -1,0 +1,237 @@
+.frame {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  font-size: 13px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 14px 18px 10px;
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+
+.header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.scale {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.scale button {
+  border: none;
+  border-radius: 0;
+  background: none;
+  padding: 2px 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.scale button + button {
+  border-left: 1px solid var(--border);
+}
+
+.scale .on {
+  background: var(--selection);
+  color: var(--text);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.project {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid color-mix(in srgb, var(--c) 55%, transparent);
+  background: color-mix(in srgb, var(--c) 10%, transparent);
+  color: var(--c);
+  border-radius: 4px;
+  padding: 0 6px;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.project.off {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+
+.swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--c);
+  flex: none;
+}
+
+.scroller {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 24px 18px 40px;
+}
+
+.muted {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.error {
+  color: var(--danger);
+}
+
+.timeline {
+  position: relative;
+}
+
+.date {
+  position: absolute;
+  left: 0;
+  display: flex;
+  align-items: center;
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--date);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.date:hover {
+  text-decoration: underline;
+}
+
+.idle {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.today {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Lines fade out towards the top of the viewport; --fade-y/--fade-h track the visible area. */
+.lines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 65%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 65%);
+  -webkit-mask-size: 100% var(--fade-h, 100%);
+  mask-size: 100% var(--fade-h, 100%);
+  -webkit-mask-position: 0 var(--fade-y, 0px);
+  mask-position: 0 var(--fade-y, 0px);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+.line {
+  position: absolute;
+  width: 2px;
+  border-radius: 1px;
+}
+
+.dot {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  padding: 0;
+  border: 2px solid var(--c);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--bg) 80%, var(--bg-2));
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.dot:hover,
+.hot {
+  transform: scale(1.18);
+  background: color-mix(in srgb, var(--c) 25%, var(--bg));
+}
+
+.popover {
+  position: fixed;
+  z-index: 50;
+  width: 340px;
+  max-width: calc(100vw - 16px);
+  max-height: min(60vh, 440px);
+  overflow-y: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--c);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.popHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.popHead .muted {
+  margin-left: auto;
+}
+
+.done {
+  border-radius: var(--radius);
+  padding: 6px 8px;
+  margin: 0 -8px;
+  cursor: pointer;
+}
+
+.done:hover {
+  background: var(--selection);
+}
+
+.done + .done {
+  border-top: 1px solid var(--border);
+}
+
+.doneHead {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.doneTitle {
+  flex: 1;
+  font-weight: 600;
+}
+
+.thumb {
+  width: 56px;
+  height: 42px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  flex: none;
+}
+
+.nodes {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  color: var(--text-muted);
+}
+
+.nodes li:hover {
+  color: var(--text);
+}
