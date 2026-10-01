@@ -1,0 +1,39 @@
+{
+  "projectId": "3b5eb432-afc0-4ccb-aafe-49e6269a157a",
+  "shape": "package",
+  "pkg": "logseq-rewrite",
+  "globalName": "LogseqUI",
+  "tsconfig": "tsconfig.json",
+  "componentSrcMap": {
+    "AutoTextarea": "src/components/AutoTextarea/AutoTextarea.tsx",
+    "Heatmap": "src/components/Heatmap/Heatmap.tsx",
+    "ImageGallery": "src/components/ImageGallery/ImageGallery.tsx",
+    "Markdown": "src/components/Markdown/Markdown.tsx",
+    "InlineText": "src/components/Markdown/Markdown.tsx",
+    "CodeBlock": "src/components/Markdown/Markdown.tsx",
+    "Modal": "src/components/Modal/Modal.tsx",
+    "ModalActions": "src/components/Modal/Modal.tsx",
+    "TagChip": "src/components/TagChip/TagChip.tsx",
+    "TagInput": "src/components/TagInput/TagInput.tsx"
+  },
+  "docsDir": ".design-sync/docs",
+  "dtsPropsFor": {
+    "AutoTextarea": "value?: string; onChange?: (e: React.ChangeEvent<HTMLTextAreaElement>) => void; placeholder?: string; rows?: number; className?: string; style?: React.CSSProperties; autoFocus?: boolean; disabled?: boolean; onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void; ref?: React.Ref<HTMLTextAreaElement>; /** plus every other native <textarea> attribute */",
+    "Heatmap": "title: string; /** ISO date (YYYY-MM-DD) -> count; missing days are 0 */ counts: Map<string, number>; /** Last day shown (usually today), ISO date */ end: string; /** Formats a count for readout/tooltips, e.g. \"12 songs played\" */ describe: (count: number) => string; /** Hue family of the ramp */ tone: \"green\" | \"pink\"; /** Highlighted day, ISO date */ selected?: string | null; onSelect?: (date: string) => void;",
+    "ImageGallery": "images: { id: string; url: string; mime: string }[]; /** Image shown large; falls back to the first */ activeId: string | null; onActivate?: (id: string) => void; /** Enables the remove button and Delete key */ onDelete?: (id: string) => void; /** Enables drag-to-swap thumbnails; called with the new id order */ onReorder?: (ids: string[]) => void; compact?: boolean;",
+    "Markdown": "/** Note markdown: paragraphs, ```fenced code```, `code`, **bold**, *italic*, [links](url), bare URLs, #tags, [[refs]] */ source: string; /** Find query to wrap in <mark> */ highlight?: string;",
+    "InlineText": "/** One line of note markdown */ text: string; highlight?: string;",
+    "CodeBlock": "code: string; /** Set as data-lang; pass \"\" for none */ lang: string; /** Find query to mark; pass \"\" for none */ highlight: string;",
+    "Modal": "title?: string; /** Escape or a scrim click */ onClose: () => void; children: React.ReactNode; /** Pinned near the top, 640px wide, no padding */ spotlight?: boolean;",
+    "ModalActions": "/** Plain <button>s; data-primary / data-danger mark the main or destructive action */ children: React.ReactNode;",
+    "TagChip": "/** Tag path without #, \"/\" separates levels */ tag: string; /** Bold, solid border (an entry’s first tag) */ primary?: boolean; /** Tighter, for running text */ inline?: boolean;",
+    "TagInput": "value: string[]; onChange: (tags: string[]) => void; placeholder?: string; autoFocus?: boolean; /** One tag only */ single?: boolean; /** Enter on an empty input */ onSubmit?: () => void; onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void; onFocus?: () => void; className?: string; /** Primary tag that cannot be removed or demoted */ locked?: string;"
+  },
+  "overrides": {
+    "Modal": {
+      "cardMode": "single",
+      "primaryStory": "Form"
+    }
+  },
+  "readmeHeader": ".design-sync/conventions.md"
+}
