@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { formatJournalDate, today } from '../../../shared/dates.ts'
 import { pluginByType } from '../../canvas/plugins.ts'
-import { activateTab, closeTab, parseKey, PRIMARY, setFocus, panesStore, type PaneId } from '../../state/panes.ts'
+import { activateTab, closeTab, parseKey, PRIMARY, setFocus, setPaneOpen, panesStore, type PaneId } from '../../state/panes.ts'
 import { useStore } from '../../state/store.ts'
 import { setFind, uiStore } from '../../state/ui.ts'
 import { CanvasDashboard, CanvasPluginTab } from '../Canvas/Canvas.tsx'
@@ -34,7 +34,32 @@ export function Pane({ id }: { id: PaneId }) {
   const pane = useStore(panesStore, (s) => s.panes[id])
   const focused = useStore(panesStore, (s) => s.focus === id)
   const find = useStore(uiStore, (s) => s.find[id])
+  const open = useStore(panesStore, (s) => s.open[id])
   const primary = PRIMARY[id]
+
+  if (!open)
+    return (
+      <section className={`${styles.pane} ${styles.minimized}`} data-pane={id} aria-label={`${PANE_LABEL[id]} (minimized)`}>
+        <div className={styles.vTabs} role="tablist" aria-orientation="vertical">
+          {pane.tabs.map((key) => (
+            <button
+              key={key}
+              role="tab"
+              aria-selected={key === pane.active}
+              className={`${styles.vTab} ${key === primary ? styles.vPinned : ''} ${key === pane.active ? styles.vActive : ''}`}
+              title={`${tabLabel(key)} · click to restore the pane`}
+              onClick={() => {
+                activateTab(id, key)
+                setPaneOpen(id, true)
+                setFocus(id)
+              }}
+            >
+              {tabLabel(key)}
+            </button>
+          ))}
+        </div>
+      </section>
+    )
 
   return (
     <section

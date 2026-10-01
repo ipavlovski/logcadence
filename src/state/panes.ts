@@ -54,6 +54,7 @@ interface PanesState {
   panes: Record<PaneId, PaneState>
   /** Pane that receives pane-scoped shortcuts (ctrl+w, ctrl+f, delete…). */
   focus: PaneId
+  /** False while a side pane is minimized to its tab bar; the journal is always open. */
   open: Record<PaneId, boolean>
   /** Flex-grow weights of the visible panes. */
   weights: Record<PaneId, number>
@@ -96,8 +97,7 @@ function revive(stored: unknown): PanesState {
       hIndex: Math.min(Math.max(0, p.hIndex ?? 0), Math.max(0, history.length - 1)),
     }
   }
-  const open = { ...initial.open, ...s.open }
-  if (!PANES.some((id) => open[id])) open.journal = true
+  const open = { ...initial.open, ...s.open, journal: true }
   return { panes, focus: s.focus && PANES.includes(s.focus) ? s.focus : 'journal', open, weights: { ...initial.weights, ...s.weights } }
 }
 
@@ -179,12 +179,15 @@ export function goHistory(pane: PaneId, dir: 1 | -1) {
   })
 }
 
-export function togglePane(pane: PaneId) {
-  panesStore.set((s) => {
-    const open = { ...s.open, [pane]: !s.open[pane] }
-    if (!PANES.some((id) => open[id])) return s
-    return { ...s, open, focus: open[s.focus] ? s.focus : PANES.find((id) => open[id])! }
-  })
+/** Minimizes a side pane to its tab bar or restores it, optionally with new weights in the same update. */
+export function setPaneOpen(pane: PaneId, isOpen: boolean, weights: Partial<Record<PaneId, number>> = {}) {
+  if (pane === 'journal' && !isOpen) return
+  panesStore.set((s) => ({
+    ...s,
+    open: { ...s.open, [pane]: isOpen },
+    weights: { ...s.weights, ...weights },
+    focus: !isOpen && s.focus === pane ? 'journal' : s.focus,
+  }))
 }
 
 export function setWeights(weights: Partial<Record<PaneId, number>>) {

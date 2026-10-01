@@ -115,6 +115,64 @@
   color: var(--text);
 }
 
+/* Minimized side pane: its tabs stacked vertically in a bar. */
+.pane.minimized {
+  background: var(--bg-2);
+}
+
+.vTabs {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  height: 100%;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.vTab {
+  writing-mode: vertical-rl;
+  flex: none;
+  max-height: 220px;
+  padding: 10px 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-left: 2px solid transparent;
+}
+
+/* The left (canvas) bar reads bottom-up, facing the journal. */
+[data-pane='canvas'] .vTab {
+  writing-mode: sideways-lr;
+  border-left: none;
+  border-right: 2px solid transparent;
+}
+
+.vTab:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--bg) 50%, transparent);
+}
+
+.vActive {
+  color: var(--text);
+  background: var(--bg);
+  border-color: var(--accent);
+}
+
+.vPinned {
+  padding: 12px 0;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+}
+
 .findBar {
   display: flex;
   gap: 4px;

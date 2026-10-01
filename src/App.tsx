@@ -7,7 +7,7 @@ import { Splitter } from './components/Splitter/Splitter.tsx'
 import { Spotlight } from './components/Spotlight/Spotlight.tsx'
 import { TagOpDialog } from './components/Tags/TagOpDialog.tsx'
 import { BINDINGS, EDITOR_KEYS, formatCombo, handleGlobalKey } from './shortcuts.ts'
-import { panesStore, PANES, togglePane } from './state/panes.ts'
+import { panesStore, PANES } from './state/panes.ts'
 import { useStore } from './state/store.ts'
 import { openSpotlight, prefsStore, setPref, toggleHelp, uiStore } from './state/ui.ts'
 import styles from './App.module.css'
@@ -16,7 +16,6 @@ export function App() {
   const open = useStore(panesStore, (s) => s.open)
   const weights = useStore(panesStore, (s) => s.weights)
   const theme = useStore(prefsStore, (s) => s.theme)
-  const visible = PANES.filter((id) => open[id])
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -31,13 +30,6 @@ export function App() {
     <div className={styles.app}>
       <header className={styles.topBar}>
         <span className={styles.brand}>logseq·rewrite</span>
-        <div className={styles.paneToggles}>
-          {PANES.map((id) => (
-            <button key={id} className={open[id] ? styles.on : ''} onClick={() => togglePane(id)} title={`Show/hide ${id} pane`}>
-              {id}
-            </button>
-          ))}
-        </div>
         <div className={styles.actions}>
           <button onClick={() => openSpotlight('search')} title="Search everything (Ctrl+Shift+F)">
             search
@@ -57,10 +49,11 @@ export function App() {
         </div>
       </header>
       <main className={styles.panes}>
-        {visible.map((id, i) => (
+        {PANES.map((id, i) => (
           <Fragment key={id}>
-            {i > 0 && <Splitter left={visible[i - 1]!} right={id} />}
-            <div className={styles.paneSlot} style={{ flexGrow: weights[id] }}>
+            {i > 0 && <Splitter left={PANES[i - 1]!} right={id} />}
+            {/* A minimized side pane is just its tab bar; drag its splitter out or click a tab to restore it. */}
+            <div className={open[id] ? styles.paneSlot : styles.paneBar} data-slot={id} style={open[id] ? { flexGrow: weights[id] } : undefined}>
               <Pane id={id} />
             </div>
           </Fragment>

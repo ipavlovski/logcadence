@@ -22,13 +22,9 @@
   letter-spacing: 0.02em;
 }
 
-.paneToggles,
 .actions {
   display: flex;
   gap: 4px;
-}
-
-.actions {
   margin-left: auto;
 }
 
@@ -46,16 +42,6 @@
   border-color: var(--accent);
 }
 
-.paneToggles button {
-  opacity: 0.55;
-}
-
-.paneToggles button.on {
-  opacity: 1;
-  color: var(--text);
-  background: var(--surface);
-}
-
 .panes {
   flex: 1;
   min-height: 0;
@@ -64,7 +50,17 @@
 
 .paneSlot {
   flex-basis: 0;
+  min-width: 200px;
+  min-height: 0;
+}
+
+.paneSlot[data-slot='journal'] {
   min-width: 240px;
+}
+
+.paneBar {
+  flex: none;
+  width: var(--tabbar-h);
   min-height: 0;
 }
 
