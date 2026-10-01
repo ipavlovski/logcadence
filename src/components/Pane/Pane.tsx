@@ -20,11 +20,11 @@ function tabLabel(key: string): string {
     case 'plugin':
       return pluginByType(loc.type)?.title ?? loc.type
     case 'today':
-      return `Today · ${formatJournalDate(today()).replace(/, \d+$/, '')}`
+      return 'Today'
     case 'date':
       return formatJournalDate(loc.date)
     case 'tree':
-      return 'Tag tree'
+      return 'Tagtree'
     case 'tag':
       return `#${loc.tag}`
   }
@@ -34,6 +34,7 @@ export function Pane({ id }: { id: PaneId }) {
   const pane = useStore(panesStore, (s) => s.panes[id])
   const focused = useStore(panesStore, (s) => s.focus === id)
   const find = useStore(uiStore, (s) => s.find[id])
+  const primary = PRIMARY[id]
 
   return (
     <section
@@ -44,40 +45,41 @@ export function Pane({ id }: { id: PaneId }) {
       aria-label={PANE_LABEL[id]}
     >
       <div className={styles.tabBar} role="tablist">
-        <span className={styles.paneLabel}>{PANE_LABEL[id]}</span>
+        <div
+          role="tab"
+          aria-selected={primary === pane.active}
+          className={`${styles.pinned} ${primary === pane.active ? styles.pinnedActive : ''}`}
+          onClick={() => activateTab(id, primary)}
+          title={primary === 'today' ? `Today · ${formatJournalDate(today())}` : tabLabel(primary)}
+        >
+          {tabLabel(primary)}
+        </div>
         <div className={styles.tabs}>
-          {pane.tabs.map((key) => {
-            const primary = key === PRIMARY[id]
-            return (
+          {pane.tabs
+            .filter((key) => key !== primary)
+            .map((key) => (
               <div
                 key={key}
                 role="tab"
                 aria-selected={key === pane.active}
                 className={`${styles.tab} ${key === pane.active ? styles.active : ''}`}
                 onClick={() => activateTab(id, key)}
-                onAuxClick={(e) => e.button === 1 && !primary && closeTab(id, key)}
+                onAuxClick={(e) => e.button === 1 && closeTab(id, key)}
                 title={tabLabel(key)}
               >
                 <span className={styles.tabLabel}>{tabLabel(key)}</span>
-                {primary ? (
-                  <span className={styles.pin} title="Primary tab">
-                    •
-                  </span>
-                ) : (
-                  <button
-                    className={styles.close}
-                    aria-label="Close tab"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      closeTab(id, key)
-                    }}
-                  >
-                    ×
-                  </button>
-                )}
+                <button
+                  className={styles.close}
+                  aria-label="Close tab"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    closeTab(id, key)
+                  }}
+                >
+                  ×
+                </button>
               </div>
-            )
-          })}
+            ))}
         </div>
       </div>
       {find !== undefined && <FindBar pane={id} query={find} />}
