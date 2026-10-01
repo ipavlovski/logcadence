@@ -32,6 +32,7 @@ export const BINDINGS: Binding[] = [
   { keys: ['mod+shift+n', 'alt+shift+n'], label: 'New entry…', group: 'Journal', run: () => newEntryWithDialog(), inInputs: true },
   { keys: ['delete'], label: 'Archive / unarchive selection', group: 'Tags', pane: 'tags', run: () => runCommand('tags.archive') },
   { keys: ['shift+delete'], label: 'Delete selection', group: 'Tags', pane: 'tags', run: () => runCommand('tags.delete') },
+  { keys: ['mod+/'], label: 'Keyboard shortcuts', group: 'General', run: () => toggleHelp(), inInputs: true },
   { keys: ['shift+?'], label: 'Keyboard shortcuts', group: 'General', run: () => toggleHelp() },
 ]
 

@@ -51,7 +51,7 @@ export function App() {
           <button onClick={() => setPref('theme', theme === 'dark' ? 'light' : 'dark')} title="Toggle theme">
             {theme === 'dark' ? '☾' : '☀'}
           </button>
-          <button onClick={() => toggleHelp(true)} title="Keyboard shortcuts (?)">
+          <button onClick={() => toggleHelp(true)} title="Keyboard shortcuts (Ctrl+/)">
             ?
           </button>
         </div>
@@ -84,11 +84,11 @@ function Help() {
       {groups.map((g) => (
         <section key={g} className={styles.helpGroup}>
           <h3>{g}</h3>
-          {BINDINGS.filter((b) => b.group === g).map((b) => (
-            <div key={b.label} className={styles.helpRow}>
-              <span>{b.label}</span>
+          {[...new Set(BINDINGS.filter((b) => b.group === g).map((b) => b.label))].map((label) => (
+            <div key={label} className={styles.helpRow}>
+              <span>{label}</span>
               <span>
-                {b.keys.map((k) => (
+                {BINDINGS.filter((b) => b.label === label).flatMap((b) => b.keys).map((k) => (
                   <kbd key={k}>{formatCombo(k)}</kbd>
                 ))}
               </span>
