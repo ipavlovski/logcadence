@@ -28,4 +28,6 @@ setInterval(spotifyTick, SPOTIFY_SYNC_MS).unref()
 spotifyTick()
 
 const port = Number(process.env.PORT ?? 3002)
-serve({ fetch: app.fetch, port }, () => console.log(`API listening on http://localhost:${port}`))
+// Bound to 127.0.0.1 explicitly: Spotify's login redirect must use that address, and WSL only
+// forwards a Linux 127.0.0.1 listener to Windows' 127.0.0.1 (an IPv6 "::" one becomes [::1] only).
+serve({ fetch: app.fetch, port, hostname: '127.0.0.1' }, () => console.log(`API listening on http://127.0.0.1:${port}`))
