@@ -28,26 +28,6 @@
   margin-top: 4px;
 }
 
-.dayNav {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.dayNav button,
-.dayNav input {
-  border: 1px solid var(--border);
-  background: var(--surface);
-  border-radius: var(--radius);
-  padding: 2px 8px;
-  font-size: 12px;
-  height: 26px;
-}
-
-.dayNav input {
-  color-scheme: inherit;
-}
-
 .error {
   color: var(--danger);
 }

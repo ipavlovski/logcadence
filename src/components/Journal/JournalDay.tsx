@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { formatJournalDate, shiftDate, today, weekday } from '../../../shared/dates.ts'
+import { formatJournalDate, today, weekday } from '../../../shared/dates.ts'
 import type { EntryDTO } from '../../../shared/types.ts'
 import { createEntry } from '../../actions.ts'
 import { matches } from '../../markdown.ts'
 import { journalStore, requestReveal, setCursor } from '../../state/journal.ts'
-import { openDate } from '../../state/panes.ts'
 import { useStore } from '../../state/store.ts'
 import { DayContext, type DayApi, type FocusRequest, type FocusTarget } from './dayContext.ts'
 import { EntryCard } from './EntryCard.tsx'
@@ -121,7 +120,6 @@ export function JournalDay({ date, find }: Props) {
   const focusFor = (e: EntryDTO) =>
     focus && ((focus.kind === 'title' && focus.entryId === e.id) || (focus.kind === 'node' && e.nodes.some((n) => n.id === focus.nodeId))) ? focus : null
 
-  const nav = (e: React.MouseEvent, d: string) => openDate(d, { newTab: e.ctrlKey || e.metaKey })
   const isToday = date === today()
 
   return (
@@ -135,20 +133,6 @@ export function JournalDay({ date, find }: Props) {
               {isToday && ' · today'}
             </div>
           </div>
-          <nav className={styles.dayNav}>
-            <button title="Previous day (ctrl+click: new tab)" onClick={(e) => nav(e, shiftDate(date, -1))}>
-              ‹
-            </button>
-            <input type="date" value={date} onChange={(e) => e.target.value && openDate(e.target.value)} aria-label="Go to date" />
-            <button title="Next day (ctrl+click: new tab)" onClick={(e) => nav(e, shiftDate(date, 1))}>
-              ›
-            </button>
-            {!isToday && (
-              <button title="Today" onClick={(e) => nav(e, today())}>
-                today
-              </button>
-            )}
-          </nav>
         </header>
 
         {error && <p className={styles.error}>Could not load this day: {error}</p>}

@@ -28,6 +28,31 @@
   margin-left: auto;
 }
 
+.dayNav {
+  display: flex;
+  gap: 4px;
+  margin-right: 12px;
+}
+
+.dayNav input {
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text-muted);
+  border-radius: var(--radius);
+  padding: 2px 8px;
+  height: 26px;
+  font: inherit;
+  color-scheme: inherit;
+}
+
+.dayNav input:hover,
+.dayNav input:focus {
+  color: var(--text);
+  border-color: var(--accent);
+  outline: none;
+}
+
+
 .topBar button {
   border: 1px solid var(--border);
   background: none;

@@ -1,4 +1,5 @@
-import { Fragment, useEffect } from 'react'
+import { Fragment, useEffect, type MouseEvent } from 'react'
+import { shiftDate, today } from '../shared/dates.ts'
 import { newEntryWithDialog } from './actions.ts'
 import { Modal } from './components/Modal/Modal.tsx'
 import { NewEntryDialog } from './components/NewEntryDialog/NewEntryDialog.tsx'
@@ -7,7 +8,7 @@ import { Splitter } from './components/Splitter/Splitter.tsx'
 import { Spotlight } from './components/Spotlight/Spotlight.tsx'
 import { TagOpDialog } from './components/Tags/TagOpDialog.tsx'
 import { BINDINGS, EDITOR_KEYS, formatCombo, handleGlobalKey } from './shortcuts.ts'
-import { panesStore, PANES } from './state/panes.ts'
+import { openDate, panesStore, PANES, parseKey } from './state/panes.ts'
 import { useStore } from './state/store.ts'
 import { openSpotlight, prefsStore, setPref, toggleHelp, uiStore } from './state/ui.ts'
 import styles from './App.module.css'
@@ -31,6 +32,7 @@ export function App() {
       <header className={styles.topBar}>
         <span className={styles.brand}>logseq·rewrite</span>
         <div className={styles.actions}>
+          <DayNav />
           <button onClick={() => openSpotlight('search')} title="Search everything (Ctrl+Shift+F)">
             search
           </button>
@@ -65,6 +67,26 @@ export function App() {
       <Help />
       <Toast />
     </div>
+  )
+}
+
+/** Journal day picker: steps the journal pane's active day (ctrl+click opens a new tab). */
+function DayNav() {
+  const date = useStore(panesStore, (s) => {
+    const loc = parseKey(s.panes.journal.active)
+    return loc.kind === 'date' ? loc.date : today()
+  })
+  const nav = (e: MouseEvent, d: string) => openDate(d, { newTab: e.ctrlKey || e.metaKey })
+  return (
+    <nav className={styles.dayNav}>
+      <button title="Previous day (Ctrl+click: new tab)" onClick={(e) => nav(e, shiftDate(date, -1))}>
+        ‹
+      </button>
+      <input type="date" value={date} onChange={(e) => e.target.value && openDate(e.target.value)} aria-label="Journal date" />
+      <button title="Next day (Ctrl+click: new tab)" onClick={(e) => nav(e, shiftDate(date, 1))}>
+        ›
+      </button>
+    </nav>
   )
 }
 
