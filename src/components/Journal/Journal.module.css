@@ -82,7 +82,8 @@ kbd {
   background: var(--surface);
 }
 
-/* Outline structure: group (primary tag) > entry > nodes, with guide lines like an outliner. */
+/* Outline structure: entry > nodes, with guide lines like an outliner.
+   Entries sharing a primary tag sit together in a .group; groups are separated by a gap. */
 
 .bullet {
   flex: none;
@@ -100,52 +101,8 @@ kbd {
   background: var(--text-faint);
 }
 
-.group {
-  margin-bottom: 18px;
-}
-
-.groupHead {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.groupName {
-  border: none;
-  background: none;
-  padding: 0;
-  font-size: 15px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  color: var(--text);
-}
-
-button.groupName:hover {
-  color: var(--accent);
-}
-
-.groupAdd {
-  border: none;
-  background: none;
-  color: var(--text-faint);
-  opacity: 0;
-  padding: 0 6px;
-  font-size: 15px;
-}
-
-.groupHead:hover .groupAdd {
-  opacity: 1;
-}
-
-.groupAdd:hover {
-  color: var(--accent);
-}
-
-.groupBody {
-  margin-left: 8px;
-  padding-left: 12px;
-  border-left: 1px solid var(--border);
+.group + .group {
+  margin-top: 22px;
 }
 
 .entry {

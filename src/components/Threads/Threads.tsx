@@ -169,7 +169,7 @@ export function Threads(_: CanvasPluginProps) {
                     setHover({ project: p, date: d, rect: e.currentTarget.getBoundingClientRect() })
                   }}
                   onMouseLeave={closeSoon}
-                  onClick={(e) => openDate(d, { newTab: e.ctrlKey || e.metaKey, focus: true })}
+                  onClick={(e) => revealIn(list[0]!, undefined, e.ctrlKey || e.metaKey)}
                 />
               )),
             )}
@@ -184,8 +184,8 @@ export function Threads(_: CanvasPluginProps) {
   )
 }
 
-function revealIn(entry: EntryDTO, nodeId?: string) {
-  openDate(entry.date, { focus: true })
+function revealIn(entry: EntryDTO, nodeId?: string, newTab = false) {
+  openDate(entry.date, { newTab, focus: true })
   requestReveal({ date: entry.date, entryId: entry.id, nodeId, mode: 'flash' })
 }
 

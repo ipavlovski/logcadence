@@ -4,7 +4,7 @@ import type { EntryDTO } from '../../../shared/types.ts'
 import { createEntry } from '../../actions.ts'
 import { matches } from '../../markdown.ts'
 import { journalStore, requestReveal, setCursor } from '../../state/journal.ts'
-import { openDate, openTag } from '../../state/panes.ts'
+import { openDate } from '../../state/panes.ts'
 import { useStore } from '../../state/store.ts'
 import { DayContext, type DayApi, type FocusRequest, type FocusTarget } from './dayContext.ts'
 import { EntryCard } from './EntryCard.tsx'
@@ -16,7 +16,7 @@ interface Props {
   find: string
 }
 
-/** One journal day: entries grouped under their primary tag, each with its child nodes. */
+/** One journal day: entries clustered by primary tag (a gap between clusters), each with its child nodes. */
 export function JournalDay({ date, find }: Props) {
   const { entries, error, actions } = useDay(date)
   const [focus, setFocus] = useState<FocusTarget | null>(null)
@@ -161,28 +161,9 @@ export function JournalDay({ date, find }: Props) {
 
         {groups.map(([tag, list]) => (
           <section key={tag || '_untagged'} className={styles.group}>
-            <div className={styles.groupHead}>
-              <span className={styles.bullet} />
-              {tag ? (
-                <button className={styles.groupName} onClick={(e) => openTag(tag, { newTab: e.ctrlKey || e.metaKey })} title={`Open #${tag}`}>
-                  {tag}
-                </button>
-              ) : (
-                <span className={`${styles.groupName} ${styles.muted}`}>untagged</span>
-              )}
-              <button
-                className={styles.groupAdd}
-                title={tag ? `New entry tagged #${tag}` : 'New entry'}
-                onClick={() => createEntry({ date, tags: tag ? [tag] : [], afterEntryId: list.at(-1)!.id })}
-              >
-                +
-              </button>
-            </div>
-            <div className={styles.groupBody}>
-              {list.map((e) => (
-                <EntryCard key={e.id} entry={e} focus={focusFor(e)} find={q} flashId={flashId} />
-              ))}
-            </div>
+            {list.map((e) => (
+              <EntryCard key={e.id} entry={e} focus={focusFor(e)} find={q} flashId={flashId} />
+            ))}
           </section>
         ))}
 
