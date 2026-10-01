@@ -1,8 +1,8 @@
 {
   "projectId": "3b5eb432-afc0-4ccb-aafe-49e6269a157a",
   "shape": "package",
-  "pkg": "logseq-rewrite",
-  "globalName": "LogseqUI",
+  "pkg": "logcadence",
+  "globalName": "LogcadenceUI",
   "tsconfig": "tsconfig.json",
   "componentSrcMap": {
     "AutoTextarea": "src/components/AutoTextarea/AutoTextarea.tsx",

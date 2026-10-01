@@ -7,13 +7,13 @@ import type { ChatSourceInfo } from '../../../shared/types.ts'
 // Where each AI app keeps its chats. Under WSL the Windows profiles (/mnt/c/Users/*) are
 // scanned too, since the desktop apps (Claude, Antigravity) and the browser live there; on native
 // Windows (the desktop app) it is the other way round, and the homes of running WSL distros are added.
-// LOGSEQ_AI_HOMES (path-delimited) replaces the list of home directories.
+// LOGCADENCE_AI_HOMES (path-delimited) replaces the list of home directories.
 
 const NOT_USERS = new Set(['Public', 'Default', 'Default User', 'All Users', 'Administrator'])
 const WIN_USERS = '/mnt/c/Users'
 
 export function homes(): string[] {
-  const env = process.env.LOGSEQ_AI_HOMES
+  const env = process.env.LOGCADENCE_AI_HOMES
   if (env) return env.split(path.delimiter).filter(Boolean)
   const list = [os.homedir()]
   if (existsSync(WIN_USERS))

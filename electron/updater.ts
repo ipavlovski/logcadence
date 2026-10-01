@@ -23,7 +23,7 @@ export function initUpdater(send: (s: UpdateStatus) => void) {
   autoUpdater.on('update-downloaded', (i) => set({ state: 'ready', version: i.version }))
   autoUpdater.on('update-not-available', () => {
     set({ state: 'none' })
-    if (manual) void dialog.showMessageBox({ message: 'You have the latest version.', detail: `Logseq Rewrite ${app.getVersion()}` })
+    if (manual) void dialog.showMessageBox({ message: 'You have the latest version.', detail: `Logcadence ${app.getVersion()}` })
     manual = false
   })
   autoUpdater.on('error', (err) => {

@@ -5,9 +5,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { toIsoDate } from '../shared/dates.ts'
 import type { SpotifyDayCount, SpotifyPlay, SpotifyResume, SpotifyStatus } from '../shared/types.ts'
 
-const root = mkdtempSync(path.join(os.tmpdir(), 'logseq-spotify-'))
+const root = mkdtempSync(path.join(os.tmpdir(), 'logcadence-spotify-'))
 const dataDir = path.join(root, 'data')
-process.env.LOGSEQ_DATA_DIR = dataDir
+process.env.LOGCADENCE_DATA_DIR = dataDir
 const authFile = path.join(dataDir, 'spotify.json')
 let app: typeof import('./app.ts').app
 

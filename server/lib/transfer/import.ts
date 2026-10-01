@@ -5,7 +5,7 @@ import path from 'node:path'
 import type { SQLiteTable } from 'drizzle-orm/sqlite-core'
 import { openContentDb, openEventsDb } from '../../db/open.ts'
 import { withZip, type ZipMember } from '../zip.ts'
-import { CONTENT_TABLES, EVENTS_TABLES, FORMAT, FORMAT_VERSION, type FileSet, type Manifest, type Progress, type Settings } from './format.ts'
+import { CONTENT_TABLES, EVENTS_TABLES, FORMAT, FORMAT_VERSION, LEGACY_FORMATS, type FileSet, type Manifest, type Progress, type Settings } from './format.ts'
 
 export interface ImportOptions {
   /** The library folder to import into; it must be empty (no entries, events or assets). */
@@ -118,7 +118,7 @@ export function libraryNotEmpty(dataDir: string): string | null {
 function readManifest(member: ZipMember | undefined): Manifest {
   if (!member) throw new Error('not a data export (no manifest.json)')
   const m = JSON.parse(member.read().toString('utf8')) as Manifest
-  if (m.format !== FORMAT) throw new Error('not a data export (unknown format)')
+  if (m.format !== FORMAT && !LEGACY_FORMATS.includes(m.format)) throw new Error('not a data export (unknown format)')
   if (!(m.formatVersion >= 1)) throw new Error('invalid export: bad formatVersion')
   if (m.formatVersion > FORMAT_VERSION) throw new Error(`this export was made by a newer version (${m.appVersion}): update the app first`)
   return m

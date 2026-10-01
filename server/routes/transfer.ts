@@ -16,7 +16,7 @@ export const transferRoutes = new Hono()
     return new Response(Readable.toWeb(out) as ReadableStream, {
       headers: {
         'content-type': 'application/zip',
-        'content-disposition': `attachment; filename="logseq-rewrite-${today()}.zip"`,
+        'content-disposition': `attachment; filename="logcadence-${today()}.zip"`,
       },
     })
   })

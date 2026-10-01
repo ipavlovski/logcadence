@@ -1,6 +1,6 @@
 {
-  "name": "logseq-rewrite",
-  "productName": "Logseq Rewrite",
+  "name": "logcadence",
+  "productName": "Logcadence",
   "private": true,
   "version": "0.1.0",
   "description": "A journaling knowledge base: canvas, journal and tags panes",

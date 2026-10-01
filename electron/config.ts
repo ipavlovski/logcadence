@@ -29,4 +29,4 @@ export function configuredLibrary(): string | null {
   return p && existsSync(p) ? p : null
 }
 
-export const defaultLibraryPath = () => path.join(app.getPath('documents'), 'LogseqRewrite')
+export const defaultLibraryPath = () => path.join(app.getPath('documents'), 'Logcadence')

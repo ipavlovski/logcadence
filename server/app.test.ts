@@ -4,9 +4,9 @@ import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { EntryDTO, NodeDTO, TagInfo } from '../shared/types.ts'
 
-// The db client reads LOGSEQ_DATA_DIR at import time, so the app is imported after setting it.
-const dataDir = mkdtempSync(path.join(os.tmpdir(), 'logseq-rewrite-'))
-process.env.LOGSEQ_DATA_DIR = dataDir
+// The db client reads LOGCADENCE_DATA_DIR at import time, so the app is imported after setting it.
+const dataDir = mkdtempSync(path.join(os.tmpdir(), 'logcadence-'))
+process.env.LOGCADENCE_DATA_DIR = dataDir
 let app: typeof import('./app.ts').app
 let flush: () => void
 

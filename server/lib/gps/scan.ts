@@ -13,7 +13,7 @@ import { parseGpx } from './gpx.ts'
 // GPS files are dropped into data/gps/ (by hand for now, later by a Google Drive sync): one file per
 // day named YYYYMMDD(.zip|.gpx), as GPSLogger writes them. Each changed file is classified once.
 
-export const GPS_DIR = process.env.LOGSEQ_GPS_DIR ? path.resolve(process.env.LOGSEQ_GPS_DIR) : path.join(DATA_DIR, 'gps')
+export const GPS_DIR = process.env.LOGCADENCE_GPS_DIR ? path.resolve(process.env.LOGCADENCE_GPS_DIR) : path.join(DATA_DIR, 'gps')
 
 interface SourceFile {
   date: string

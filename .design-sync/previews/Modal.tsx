@@ -1,5 +1,5 @@
 import type React from 'react'
-import { Modal, ModalActions } from 'logseq-rewrite'
+import { Modal, ModalActions } from 'logcadence'
 
 // Modal's scrim is position: fixed; the transform makes this frame its containing block so the
 // open dialog renders inside the card on the app surface.

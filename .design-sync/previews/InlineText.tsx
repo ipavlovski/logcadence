@@ -1,5 +1,5 @@
 import type React from 'react'
-import { InlineText } from 'logseq-rewrite'
+import { InlineText } from 'logcadence'
 
 // The app's body paints --bg/--text; the card harness is white, so each story sits on the app surface.
 const Frame = ({ children, width = 480 }: { children: React.ReactNode; width?: number }) => (
@@ -10,7 +10,7 @@ export const EntryTitles = () => (
   <Frame>
     <ul style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 4 }}>
       <li><InlineText text="Trip planning for #travel/lisbon" /></li>
-      <li><InlineText text="**Ship** the map tab — see [[projects/logseq-rewrite]]" /></li>
+      <li><InlineText text="**Ship** the map tab — see [[projects/logcadence]]" /></li>
       <li><InlineText text="Read chapter 4 of *The Overstory* `p. 112`" /></li>
     </ul>
   </Frame>

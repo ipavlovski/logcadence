@@ -4,10 +4,10 @@ import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { EntryDTO } from '../shared/types.ts'
 
-// The db client reads LOGSEQ_DATA_DIR at import time, so the app is imported after setting it.
-const tmp = mkdtempSync(path.join(os.tmpdir(), 'logseq-transfer-'))
+// The db client reads LOGCADENCE_DATA_DIR at import time, so the app is imported after setting it.
+const tmp = mkdtempSync(path.join(os.tmpdir(), 'logcadence-transfer-'))
 const dataDir = path.join(tmp, 'source')
-process.env.LOGSEQ_DATA_DIR = dataDir
+process.env.LOGCADENCE_DATA_DIR = dataDir
 const zipFile = path.join(tmp, 'export.zip')
 
 type Client = typeof import('./db/client.ts')

@@ -1,4 +1,4 @@
-# design-sync notes — logseq-rewrite
+# design-sync notes — logcadence
 
 ## How this repo syncs
 - This is an app, not a DS package: there is no library build or `.d.ts` tree. `.design-sync/entry.ts` is the bundle entry (pass `--entry ./.design-sync/entry.ts`, `--node-modules ./node_modules`). It re-exports the synced components and imports `src/styles/global.css` + `.design-sync/fonts.css`, so all CSS rides through esbuild into `_ds_bundle.css` (no `cssEntry`).

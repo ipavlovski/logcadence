@@ -13,7 +13,7 @@ import * as eventsSchema from './events-schema.ts'
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 // The desktop build ships the migrations as resources, outside the source tree. Read when used, so the
 // desktop app can set it after this module has loaded.
-const migrationsDir = () => (process.env.LOGSEQ_MIGRATIONS_DIR ? path.resolve(process.env.LOGSEQ_MIGRATIONS_DIR) : path.join(ROOT, 'server/db/migrations'))
+const migrationsDir = () => (process.env.LOGCADENCE_MIGRATIONS_DIR ? path.resolve(process.env.LOGCADENCE_MIGRATIONS_DIR) : path.join(ROOT, 'server/db/migrations'))
 
 function openSqlite(file: string) {
   const sqlite = new Database(file)

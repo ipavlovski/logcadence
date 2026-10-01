@@ -1,5 +1,5 @@
 import React from 'react'
-import { AutoTextarea } from 'logseq-rewrite'
+import { AutoTextarea } from 'logcadence'
 
 // The app's body paints --bg/--text; the card harness is white, so each story sits on the app surface.
 const Frame = ({ children, width = 480 }: { children: React.ReactNode; width?: number }) => (

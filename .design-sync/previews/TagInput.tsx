@@ -1,5 +1,5 @@
 import React from 'react'
-import { TagInput } from 'logseq-rewrite'
+import { TagInput } from 'logcadence'
 
 // The app's body paints --bg/--text; the card harness is white, so each story sits on the app surface.
 const Frame = ({ children, width = 480 }: { children: React.ReactNode; width?: number }) => (
@@ -38,7 +38,7 @@ export const SinglePicker = () => (
 
 export const LockedSource = () => (
   <Frame>
-    <Controlled initial={['ai/claude', 'projects/logseq-rewrite']} locked="ai/claude" />
+    <Controlled initial={['ai/claude', 'projects/logcadence']} locked="ai/claude" />
   </Frame>
 )
 

@@ -1,5 +1,5 @@
 import type React from 'react'
-import { TagChip } from 'logseq-rewrite'
+import { TagChip } from 'logcadence'
 
 // The app's body paints --bg/--text; the card harness is white, so each story sits on the app surface.
 const Frame = ({ children, width }: { children: React.ReactNode; width?: number }) => (
@@ -10,7 +10,7 @@ export const Default = () => (
   <Frame>
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
       <TagChip tag="reading" />
-      <TagChip tag="projects/logseq-rewrite" />
+      <TagChip tag="projects/logcadence" />
       <TagChip tag="health/running" />
     </div>
   </Frame>

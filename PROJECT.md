@@ -1,4 +1,4 @@
-# LOGSEQ REWRITE
+# LOGCADENCE
 
 - purpose: knowledge base, similar to logse
 - 3-pane workflow journaling app: canvas/journal/tags

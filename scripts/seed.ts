@@ -57,8 +57,8 @@ const samples: { date: string; title: string; tags: string[]; nodes: string[]; a
   },
   {
     date: d(0),
-    title: 'Logseq rewrite: first run',
-    tags: ['dev', 'project:logseq-rewrite'],
+    title: 'Logcadence: first run',
+    tags: ['dev', 'project:logcadence'],
     nodes: [
       'Journal in the middle, tags on the right, canvas on the left.',
       'Try: Alt+N for a new entry at the cursor, Ctrl+K for tags, Ctrl+Shift+F to search.',

@@ -1,5 +1,5 @@
 import React from 'react'
-import { Heatmap } from 'logseq-rewrite'
+import { Heatmap } from 'logcadence'
 
 const Frame = ({ children }: { children: React.ReactNode }) => (
   <div style={{ background: 'var(--bg)', color: 'var(--text)', padding: 16, borderRadius: 8, width: 820 }}>{children}</div>

@@ -7,10 +7,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { ChatDTO, ChatSummary, EntryDTO, ImportReport, NodeDTO } from '../shared/types.ts'
 
 // A fake machine: one home with Claude Code, Antigravity and a Claude export in Downloads.
-const root = mkdtempSync(path.join(os.tmpdir(), 'logseq-ai-'))
+const root = mkdtempSync(path.join(os.tmpdir(), 'logcadence-ai-'))
 const home = path.join(root, 'home')
-process.env.LOGSEQ_DATA_DIR = path.join(root, 'data')
-process.env.LOGSEQ_AI_HOMES = home
+process.env.LOGCADENCE_DATA_DIR = path.join(root, 'data')
+process.env.LOGCADENCE_AI_HOMES = home
 let app: typeof import('./app.ts').app
 
 const T0 = Date.parse('2026-09-20T10:00:00Z')

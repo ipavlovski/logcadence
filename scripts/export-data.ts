@@ -1,4 +1,4 @@
-// Writes the library (data/, or LOGSEQ_DATA_DIR) as an export zip that the desktop app can import.
+// Writes the library (data/, or LOGCADENCE_DATA_DIR) as an export zip that the desktop app can import.
 // Usage: pnpm export:data [out.zip] [--no-assets] [--no-gps]
 // Safe while the server runs: the databases are read in one snapshot.
 
@@ -9,7 +9,7 @@ import { GPS_DIR } from '../server/lib/gps/scan.ts'
 import { exportTo } from '../server/lib/transfer/export.ts'
 
 const args = process.argv.slice(2)
-const out = args.find((a) => !a.startsWith('--')) ?? `logseq-rewrite-${today()}.zip`
+const out = args.find((a) => !a.startsWith('--')) ?? `logcadence-${today()}.zip`
 const started = Date.now()
 let last = ''
 

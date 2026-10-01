@@ -1,5 +1,5 @@
 import React from 'react'
-import { ImageGallery } from 'logseq-rewrite'
+import { ImageGallery } from 'logcadence'
 
 const Frame = ({ children }: { children: React.ReactNode }) => (
   <div style={{ background: 'var(--bg)', color: 'var(--text)', padding: 16, borderRadius: 8, width: 520 }}>{children}</div>

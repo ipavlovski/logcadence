@@ -1,6 +1,6 @@
-# Logseq Rewrite UI — conventions
+# Logcadence UI — conventions
 
-A dark-first, monospace, dense note-taking UI (journal, tags, canvas). Components come from `window.LogseqUI` (`AutoTextarea`, `CodeBlock`, `Heatmap`, `ImageGallery`, `InlineText`, `Markdown`, `Modal`, `ModalActions`, `TagChip`, `TagInput`). They are React components styled by CSS modules — there are **no utility classes and no style props**; you style your own layout with inline styles or your own CSS using the `var(--*)` tokens below.
+A dark-first, monospace, dense note-taking UI (journal, tags, canvas). Components come from `window.LogcadenceUI` (`AutoTextarea`, `CodeBlock`, `Heatmap`, `ImageGallery`, `InlineText`, `Markdown`, `Modal`, `ModalActions`, `TagChip`, `TagInput`). They are React components styled by CSS modules — there are **no utility classes and no style props**; you style your own layout with inline styles or your own CSS using the `var(--*)` tokens below.
 
 ## Setup
 
@@ -37,7 +37,7 @@ Type scale used throughout: 14px body, 12.5–13px for chips/code/meta, 11px upp
 ## Example
 
 ```tsx
-const { Modal, ModalActions, TagInput } = window.LogseqUI
+const { Modal, ModalActions, TagInput } = window.LogcadenceUI
 function NewEntry({ onClose }) {
   const [tags, setTags] = React.useState(['travel/lisbon'])
   return (

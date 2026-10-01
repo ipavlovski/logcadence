@@ -1,5 +1,5 @@
 // Imports an export zip (pnpm export:data, or Export in the app) into an empty library folder.
-// Usage: pnpm import:data <export.zip> [--data-dir <dir>]   (default: LOGSEQ_DATA_DIR, else data/)
+// Usage: pnpm import:data <export.zip> [--data-dir <dir>]   (default: LOGCADENCE_DATA_DIR, else data/)
 // Deliberately doesn't open the library's databases itself: the import replaces them.
 
 import path from 'node:path'
@@ -8,7 +8,7 @@ import { importFrom } from '../server/lib/transfer/import.ts'
 
 const args = process.argv.slice(2)
 const flag = args.indexOf('--data-dir')
-const dataDir = path.resolve(flag >= 0 ? args[flag + 1]! : (process.env.LOGSEQ_DATA_DIR ?? path.join(ROOT, 'data')))
+const dataDir = path.resolve(flag >= 0 ? args[flag + 1]! : (process.env.LOGCADENCE_DATA_DIR ?? path.join(ROOT, 'data')))
 const zip = args.find((a, i) => !a.startsWith('--') && i !== flag + 1)
 if (!zip) {
   console.error('Usage: pnpm import:data <export.zip> [--data-dir <dir>]')
@@ -20,7 +20,7 @@ let last = ''
 try {
   const { manifest, warnings } = importFrom(zip, {
     dataDir,
-    gpsDir: process.env.LOGSEQ_GPS_DIR,
+    gpsDir: process.env.LOGCADENCE_GPS_DIR,
     onProgress: ({ phase, done, total }) => {
       const line = `${phase} ${done}/${total}`
       if (line !== last) process.stdout.write(`\r${(last = line).padEnd(30)}`)

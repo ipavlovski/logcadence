@@ -6,8 +6,8 @@ import type { GpsDayDTO } from '../shared/types.ts'
 import { classifyDay, detectStays, simplify, totals, type Place } from './lib/gps/classify.ts'
 import { parseGpx, type GpsPoint } from './lib/gps/gpx.ts'
 
-const root = mkdtempSync(path.join(os.tmpdir(), 'logseq-gps-'))
-process.env.LOGSEQ_DATA_DIR = path.join(root, 'data')
+const root = mkdtempSync(path.join(os.tmpdir(), 'logcadence-gps-'))
+process.env.LOGCADENCE_DATA_DIR = path.join(root, 'data')
 const gpsDir = path.join(root, 'data', 'gps')
 let app: typeof import('./app.ts').app
 

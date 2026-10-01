@@ -19,7 +19,7 @@ const DEV_URL = process.env.ELECTRON_DEV_URL
 const APP_URL = DEV_URL ?? `http://127.0.0.1:${PORT}`
 const RESOURCES = app.isPackaged ? process.resourcesPath : app.getAppPath()
 // Read lazily by server/db/open.ts.
-process.env.LOGSEQ_MIGRATIONS_DIR = app.isPackaged ? path.join(RESOURCES, 'migrations') : path.join(RESOURCES, 'server/db/migrations')
+process.env.LOGCADENCE_MIGRATIONS_DIR = app.isPackaged ? path.join(RESOURCES, 'migrations') : path.join(RESOURCES, 'server/db/migrations')
 
 let server: RunningServer | undefined
 let win: BrowserWindow | undefined
@@ -37,9 +37,9 @@ else {
 
 async function main() {
   registerIpc()
-  const library = process.env.LOGSEQ_DATA_DIR ?? configuredLibrary() ?? (await runSetup())
+  const library = process.env.LOGCADENCE_DATA_DIR ?? configuredLibrary() ?? (await runSetup())
   if (!library) return app.quit()
-  process.env.LOGSEQ_DATA_DIR = library
+  process.env.LOGCADENCE_DATA_DIR = library
 
   // Imported only now: the server opens the library's databases when it loads.
   const { startServer } = await import('../server/start.ts')
@@ -111,7 +111,7 @@ function runSetup(): Promise<string | null> {
       resizable: false,
       backgroundColor: '#282c34',
       autoHideMenuBar: true,
-      title: 'Logseq Rewrite',
+      title: 'Logcadence',
       webPreferences: { preload: path.join(import.meta.dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false },
     })
     w.setMenu(null)
@@ -167,7 +167,7 @@ function relaunchInto(library: string) {
 async function exportData(opts: { assets?: boolean; gps?: boolean } = {}): Promise<ActionResult> {
   const r = await dialog.showSaveDialog(win!, {
     title: 'Export data',
-    defaultPath: path.join(app.getPath('documents'), `logseq-rewrite-${today()}.zip`),
+    defaultPath: path.join(app.getPath('documents'), `logcadence-${today()}.zip`),
     filters: [{ name: 'Data export', extensions: ['zip'] }],
   })
   if (r.canceled || !r.filePath) return { ok: false, cancelled: true }
@@ -235,6 +235,6 @@ app.on('window-all-closed', () => {
 })
 
 function fatal(err: Error) {
-  dialog.showErrorBox('Logseq Rewrite', err.message)
+  dialog.showErrorBox('Logcadence', err.message)
   app.exit(1)
 }

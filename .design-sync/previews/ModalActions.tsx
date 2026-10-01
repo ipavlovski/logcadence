@@ -1,5 +1,5 @@
 import type React from 'react'
-import { ModalActions } from 'logseq-rewrite'
+import { ModalActions } from 'logcadence'
 
 // ModalActions sits at the bottom of a Modal dialog; shown here on the dialog surface.
 const Dialog = ({ children }: { children: React.ReactNode }) => (

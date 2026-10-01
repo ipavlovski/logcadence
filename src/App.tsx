@@ -31,7 +31,7 @@ export function App() {
   return (
     <div className={styles.app}>
       <header className={styles.topBar}>
-        <span className={styles.brand}>logseq·rewrite</span>
+        <span className={styles.brand}>logcadence</span>
         <div className={styles.actions}>
           <DayNav />
           <button onClick={() => openSpotlight('search')} title="Search everything (Ctrl+Shift+F)">

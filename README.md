@@ -1,6 +1,6 @@
-# logseq-rewrite
+# logcadence
 
-A journaling knowledge base with three panes: **canvas | journal | tags**. See [PROJECT.md](PROJECT.md) for the product spec.
+Logcadence (a cadence of daily logs) is a journaling knowledge base with three panes: **canvas | journal | tags**. See [PROJECT.md](PROJECT.md) for the product spec.
 
 Stack: TypeScript, React + CSS modules (Vite), Hono, SQLite via drizzle (better-sqlite3).
 
@@ -16,7 +16,7 @@ pnpm dev:electron          # desktop app with the renderer from Vite (restart it
 pnpm dist:win              # Windows installer into release/ (on Windows; see Desktop app)
 ```
 
-Data lives in `data/` (override with `LOGSEQ_DATA_DIR`):
+Data lives in `data/` (override with `LOGCADENCE_DATA_DIR`):
 
 | path | contents |
 | --- | --- |
@@ -38,10 +38,10 @@ After changing a schema: `pnpm db:generate` (writes migrations for both database
 
 The desktop app (Windows) is Electron around the same code: its main process runs the API server in-process on `127.0.0.1:3002` and the window shows the web app from it, so the renderer is the web build unchanged. 3002 is fixed because Spotify's redirect URI is registered for it, so the desktop app and `pnpm dev` can't run at the same time.
 
-- **Library**: on first run the app asks for a library folder (an existing one, an empty one for a new library, or an empty one to import an export into), remembered in `%APPDATA%/Logseq Rewrite/config.json`. File → Open or create library / Import an export into a new library switch to another (the app restarts). `LOGSEQ_DATA_DIR` overrides it.
+- **Library**: on first run the app asks for a library folder (an existing one, an empty one for a new library, or an empty one to import an export into), remembered in `%APPDATA%/Logcadence/config.json`. File → Open or create library / Import an export into a new library switch to another (the app restarts). `LOGCADENCE_DATA_DIR` overrides it.
 - **Desktop-only features** go through `window.desktop` (`electron/preload.ts`, typed in `shared/desktop.ts`); the renderer feature-detects it, so `src/` never imports Electron. Ctrl+W / Ctrl+N and the other browser-reserved shortcuts work here, since the menu leaves them alone.
 - **Build**: `scripts/build-electron.ts` bundles `electron/` with the server into `dist-electron/` (packages stay external: `dependencies` in package.json are exactly what the main process needs, renderer libraries are devDependencies). `electron-builder.yml` packages it with `dist/` and the migrations as resources. better-sqlite3's Node-API prebuilds load in both Node and Electron, so no native rebuild is needed. The NSIS installer has to be built on Windows (on Linux it needs Wine).
-- **Releases and updates**: pushing a `v<version>` tag that matches package.json runs `.github/workflows/release.yml`, which builds the installer on a Windows runner and publishes it as a GitHub Release of `ipavlovski/logseq-rewrite`. Installed apps check its releases 10 s after start and every 6 h (Help → Check for updates), download in the background, and offer a restart (or install on quit). The installer is unsigned, so Windows SmartScreen asks for "More info → Run anyway" on first install.
+- **Releases and updates**: pushing a `v<version>` tag that matches package.json runs `.github/workflows/release.yml`, which builds the installer on a Windows runner and publishes it as a GitHub Release of `ipavlovski/logcadence`. Installed apps check its releases 10 s after start and every 6 h (Help → Check for updates), download in the background, and offer a restart (or install on quit). The installer is unsigned, so Windows SmartScreen asks for "More info → Run anyway" on first install.
 
 ## Data export / import
 
@@ -56,7 +56,7 @@ This is how data moves from the web app into the desktop app. The format (see `s
 
 The canvas **AI** tab imports chats as journal entries: titled like the chat, tagged `ai:<source>`, dated the day the chat started, one node per prompt. These entries are read-only apart from their tags, and their `ai:<source>` tag stays locked as the primary tag; clicking a prompt shows it with its reply in the AI tab, and “transcript ↗” on the entry opens the whole chat. Opening the tab scans automatically; **Scan** forces it; export files can also be dropped on the tab.
 
-The canvas **Map** tab turns a day of GPS into a timetable of stays and trips for the journal's active day. Drop GPSLogger files (`YYYYMMDD.zip` or `.gpx`) into `data/gps/` (git-ignored; `LOGSEQ_GPS_DIR` overrides): the server classifies new and changed files at startup and on **Scan**. Staying within 120 m for 5+ minutes is a place; the place slept at (around 03:00) is the homebase **A**, others are **B**; trips between them are **A→B**, **B→B**, **B→A**, or **A→A** for a round trip without a stop, and missing data shows as gaps. Rows tile the day, so the durations sum to 24 h. Places are shared across days and can be named by clicking them; a place can be made the day's homebase (a hotel while travelling). The map uses free OpenFreeMap tiles with deck.gl layers on MapLibre (kept on 5.x until deck.gl supports MapLibre 6).
+The canvas **Map** tab turns a day of GPS into a timetable of stays and trips for the journal's active day. Drop GPSLogger files (`YYYYMMDD.zip` or `.gpx`) into `data/gps/` (git-ignored; `LOGCADENCE_GPS_DIR` overrides): the server classifies new and changed files at startup and on **Scan**. Staying within 120 m for 5+ minutes is a place; the place slept at (around 03:00) is the homebase **A**, others are **B**; trips between them are **A→B**, **B→B**, **B→A**, or **A→A** for a round trip without a stop, and missing data shows as gaps. Rows tile the day, so the durations sum to 24 h. Places are shared across days and can be named by clicking them; a place can be made the day's homebase (a hotel while travelling). The map uses free OpenFreeMap tiles with deck.gl layers on MapLibre (kept on 5.x until deck.gl supports MapLibre 6).
 
 The canvas **Spotify** tab tracks listening through the Spotify Web API. Setup: create an app at [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) (Web API), add the Redirect URI `http://127.0.0.1:3002/api/spotify/callback`, paste its Client ID in the tab (or set `SPOTIFY_CLIENT_ID`) and connect; the login and tokens are kept in `data/spotify.json`. While the server runs it syncs every 3 minutes: every song played (Spotify counts a play after ~30s) with the playlist or album it came from, and liked songs by the day they were liked. Spotify only keeps the last 50 plays, so plays from long stretches with the server off are lost. The tab shows what is playing, heatmaps of songs played and liked per day, each day's plays grouped by playlist, and **Continue from yesterday**, which starts a playlist at the last track heard on the previous listening day (Premium only).
 
@@ -69,7 +69,7 @@ The canvas **Shortcuts** tab draws an app's hotkeys on a keyboard. They come fro
 | Claude (claude.ai) | the data export (Settings → Privacy → Export data), picked up from Downloads (`data-*.zip`, `conversations*.zip`) |
 | Gemini | Google Takeout → My Activity → Gemini Apps, **JSON** format (`takeout-*.zip` in Downloads). Takeout has no conversations or titles, so prompts are grouped by 30-minute gaps and titled after the first prompt |
 
-Re-imports append new turns and refresh nodes and titles that still read as imported; anything edited by hand is left alone, and a deleted entry is not recreated. `LOGSEQ_AI_HOMES` (path-delimited) overrides the home directories that are scanned.
+Re-imports append new turns and refresh nodes and titles that still read as imported; anything edited by hand is left alone, and a deleted entry is not recreated. `LOGCADENCE_AI_HOMES` (path-delimited) overrides the home directories that are scanned.
 
 ## Layout
 

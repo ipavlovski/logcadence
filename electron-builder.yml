@@ -1,6 +1,6 @@
 # Desktop installer (pnpm dist:win, or the release workflow on a v* tag). See electron/main.ts.
-appId: com.logseq-rewrite.app
-productName: Logseq Rewrite
+appId: com.logcadence.app
+productName: Logcadence
 copyright: Copyright © 2026 IP
 
 directories:
@@ -28,11 +28,11 @@ nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
-  artifactName: Logseq-Rewrite-Setup-${version}.${ext}
+  artifactName: Logcadence-Setup-${version}.${ext}
 
 # Auto-update source: electron-updater reads latest.yml from this public repo's GitHub Releases.
 publish:
   provider: github
   owner: ipavlovski
-  repo: logseq-rewrite
+  repo: logcadence
   releaseType: release

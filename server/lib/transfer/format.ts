@@ -12,7 +12,9 @@ import type { ContentDb, EventsDb } from '../../db/open.ts'
 //
 // The journal markdown mirror is left out: it is derived from the database and rebuilt on start.
 
-export const FORMAT = 'logseq-rewrite-export'
+export const FORMAT = 'logcadence-export'
+// Exports written before the rename to logcadence.
+export const LEGACY_FORMATS = ['logseq-rewrite-export']
 // Bumped only when existing rows change meaning; new optional columns don't need it. An importer upgrades
 // rows from older versions (see upgradeRow in import.ts) and refuses newer ones.
 export const FORMAT_VERSION = 1
