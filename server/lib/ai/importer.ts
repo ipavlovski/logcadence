@@ -2,8 +2,9 @@ import { randomUUID } from 'node:crypto'
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { desc, eq, inArray, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, like, sql } from 'drizzle-orm'
 import { toIsoDate } from '../../../shared/dates.ts'
+import { chatTag } from '../../../shared/tags.ts'
 import type { ChatDTO, ChatMessage, ChatSource, ChatSummary, ImportCounts, ImportReport } from '../../../shared/types.ts'
 import { db } from '../../db/client.ts'
 import { chats, entries, nodes } from '../../db/content-schema.ts'
@@ -18,13 +19,11 @@ import { isGeminiActivity, parseGeminiActivity } from './geminiTakeout.ts'
 import { antigravityRoots, claudeCodeFiles, claudeDesktopSessionFiles, exportFiles } from './sources.ts'
 import { isZip, withZip, type ZipMember } from './zip.ts'
 
-// Imported chats become journal entries: titled like the chat, tagged ai:<source>, dated the
-// day the chat started, one node per prompt (the prompt plus a preview of the reply).
+// Imported chats become read-only journal entries: titled like the chat, tagged ai:<source>, dated
+// the day the chat started, one node per prompt. Replies stay out of the journal; the canvas AI tab
+// shows the transcript.
 
 const PROMPT_MAX = 600
-const PREVIEW_MAX = 280
-
-export const chatTag = (source: ChatSource) => `ai:${source}`
 
 interface Turn {
   prompt: ChatMessage
@@ -50,22 +49,27 @@ function clipMarkdown(text: string, max: number): string {
   return fences % 2 ? `${cut.trimEnd()}\n\`\`\`\n…` : `${cut.trimEnd()}…`
 }
 
-function preview(md: string): string {
-  const flat = md
-    .replace(/```[\s\S]*?(```|$)/g, ' [code] ')
-    .replace(/^\s*(\|?\s*:?-{3,}:?\s*)+\|?\s*$/gm, '') // rules and table separators
-    .replace(/^\s{0,3}(#+|[-*+]|\d+\.|>)\s+/gm, '')
-    .replace(/\*\*/g, '')
-  return oneLine(flat, PREVIEW_MAX)
-}
+/** A node for one turn: just the prompt. */
+export const turnContent = (t: Turn): string => clipMarkdown(t.prompt.text, PROMPT_MAX)
 
-/** A node for one turn. The last reply text is the most useful preview: agents end with a summary. */
-export function turnContent(t: Turn): string {
-  const prompt = clipMarkdown(t.prompt.text, PROMPT_MAX)
-  const reply = t.replies.findLast((m) => m.text)?.text
-  const tools = t.replies.reduce((n, m) => n + (m.tools?.length ?? 0), 0)
-  const tail = reply ? preview(reply) : tools ? `(${tools} tool call${tools === 1 ? '' : 's'})` : ''
-  return tail ? `${prompt}\n\n→ ${tail}` : prompt
+/** Earlier imports appended a "→ reply preview" line to each prompt node; drop it. */
+export function stripReplyPreviews() {
+  const stale = db
+    .select({ id: nodes.id, entryId: nodes.entryId, content: nodes.content })
+    .from(nodes)
+    .where(and(inArray(nodes.entryId, db.select({ id: chats.entryId }).from(chats)), like(nodes.content, '%\n\n→ %')))
+    .all()
+  const now = Date.now()
+  const dates = new Set<string>()
+  for (const n of stale) {
+    const content = n.content.replace(/\n\n→ [^\n]*$/, '')
+    if (content === n.content) continue
+    db.update(nodes).set({ content, updatedAt: now }).where(eq(nodes.id, n.id)).run()
+    logEvent('node', n.id, 'edit', { content })
+    const date = db.select({ date: entries.date }).from(entries).where(eq(entries.id, n.entryId)).get()?.date
+    if (date) dates.add(date)
+  }
+  if (dates.size) touchDates(...dates)
 }
 
 const titleOf = (p: ParsedChat, turns: Turn[]) => oneLine(p.title || turns[0]!.prompt.text, 120)
@@ -113,8 +117,8 @@ export function upsertChat(p: ParsedChat, stamp: string | null = null): Outcome 
     return 'unchanged'
   }
 
-  // Refresh the entry, but never over the user's edits: only a title or node that still reads
-  // exactly as the previous import wrote it is rewritten. New turns are appended.
+  // Refresh the entry, but never over edits made before chat entries became read-only: only a title
+  // or node that still reads exactly as the previous import wrote it is rewritten. New turns are appended.
   const entry = existing.entryId ? db.select().from(entries).where(eq(entries.id, existing.entryId)).get() : undefined
   const oldContents = toTurns(existing.messages).map(turnContent)
   const nodeIds = [...existing.nodeIds]

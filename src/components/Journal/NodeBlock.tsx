@@ -1,8 +1,9 @@
-import { memo, useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from 'react'
-import type { NodeDTO } from '../../../shared/types.ts'
+import { memo, useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type MouseEvent } from 'react'
+import type { EntryDTO, NodeDTO } from '../../../shared/types.ts'
 import { AutoTextarea } from '../AutoTextarea/AutoTextarea.tsx'
 import { ImageGallery } from '../ImageGallery/ImageGallery.tsx'
 import { Markdown } from '../Markdown/Markdown.tsx'
+import { openChat, SOURCE_LABEL } from '../../state/ai.ts'
 import { useDayApi, type FocusTarget } from './dayContext.ts'
 import styles from './Journal.module.css'
 
@@ -73,6 +74,41 @@ export const NodeBlock = memo(function NodeBlock({ node, editing, find, flash }:
         <button title="Delete node" onClick={() => day.deleteNode(node.id)}>
           ×
         </button>
+      </div>
+    </div>
+  )
+})
+
+/** A read-only prompt of an imported AI chat; clicking it shows the prompt and its reply in the canvas AI tab. */
+export const PromptNode = memo(function PromptNode({
+  node,
+  chat,
+  find,
+  flash,
+}: {
+  node: NodeDTO
+  chat: NonNullable<EntryDTO['chat']>
+  find: string
+  flash: boolean
+}) {
+  const turn = chat.nodeIds.indexOf(node.id)
+  const open = (e: MouseEvent) => {
+    if (turn < 0 || (e.target as HTMLElement).closest('a')) return
+    if (window.getSelection()?.toString()) return // let the user select text
+    openChat(chat.id, { turn, newTab: e.ctrlKey || e.metaKey })
+  }
+  return (
+    <div className={`${styles.node} ${node.archived ? styles.archived : ''} ${flash ? styles.flash : ''}`} data-reveal={node.id}>
+      <span className={styles.bullet} />
+      <div className={styles.nodeBody}>
+        <div
+          className={`${styles.nodeView} ${styles.readOnly} ${turn >= 0 ? styles.prompt : ''}`}
+          title={turn >= 0 ? `Show this prompt and the reply in the ${SOURCE_LABEL[chat.source]} transcript (Ctrl+click: new tab)` : undefined}
+          onClick={open}
+        >
+          {node.content ? <Markdown source={node.content} highlight={find} /> : <span className={styles.placeholder}>…</span>}
+        </div>
+        {node.images.length > 0 && <ImageGallery images={node.images} activeId={node.activeImageId} />}
       </div>
     </div>
   )

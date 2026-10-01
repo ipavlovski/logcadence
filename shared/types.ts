@@ -31,8 +31,11 @@ export interface EntryDTO {
   /** Tag paths; the first one is the primary tag that groups the entry in the journal. */
   tags: string[]
   nodes: NodeDTO[]
-  /** Set when the entry was imported from an AI chat; the full transcript lives in the AI canvas tab. */
-  chat: { id: string; source: ChatSource } | null
+  /**
+   * Set when the entry was imported from an AI chat. Such entries are read-only in the journal; the full
+   * transcript lives in the AI canvas tab. `nodeIds[i]` is the node for the chat's i-th prompt.
+   */
+  chat: { id: string; source: ChatSource; nodeIds: string[] } | null
   createdAt: number
   updatedAt: number
 }

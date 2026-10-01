@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { ancestors, buildTagTree, type TagTreeNode } from '../../../shared/tags.ts'
+import { ancestors, buildTagTree, holdsChatTag, type TagTreeNode } from '../../../shared/tags.ts'
 import { openTag } from '../../state/panes.ts'
 import { useStore } from '../../state/store.ts'
 import { useAllTags } from '../../state/tags.ts'
@@ -50,17 +50,20 @@ export function TagTree({ find }: { find: string }) {
                 {n.totalActive}
                 {showArchived && n.totalArchived > 0 && <span className={styles.archivedCount}>+{n.totalArchived}</span>}
               </span>
-              <span className={styles.treeActions}>
-                <button title="Rename" onClick={() => startTagOp({ op: 'rename', tag: n.path })}>
-                  ✎
-                </button>
-                <button title="Merge into…" onClick={() => startTagOp({ op: 'merge', tag: n.path })}>
-                  ⇥
-                </button>
-                <button title="Delete" onClick={() => startTagOp({ op: 'delete', tag: n.path })}>
-                  ×
-                </button>
-              </span>
+              {/* AI chat source tags (and their parents) are locked. */}
+              {!holdsChatTag(n.path) && (
+                <span className={styles.treeActions}>
+                  <button title="Rename" onClick={() => startTagOp({ op: 'rename', tag: n.path })}>
+                    ✎
+                  </button>
+                  <button title="Merge into…" onClick={() => startTagOp({ op: 'merge', tag: n.path })}>
+                    ⇥
+                  </button>
+                  <button title="Delete" onClick={() => startTagOp({ op: 'delete', tag: n.path })}>
+                    ×
+                  </button>
+                </span>
+              )}
             </div>
             {open && n.children.length > 0 && <ul className={styles.tree}>{renderNodes(n.children, depth + 1)}</ul>}
           </li>

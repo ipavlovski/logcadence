@@ -16,10 +16,13 @@ interface Props {
   onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void
   onFocus?: () => void
   className?: string
+  /** Primary tag that cannot be removed or demoted (the source tag of an imported AI chat). */
+  locked?: string
 }
 
 /** Tag chips + an input with autocomplete. The first chip is the primary tag. */
-export function TagInput({ value, onChange, placeholder = 'add tag…', autoFocus, single, onSubmit, onKeyDown, onFocus, className }: Props) {
+export function TagInput({ value, onChange: setTags, placeholder = 'add tag…', autoFocus, single, onSubmit, onKeyDown, onFocus, className, locked }: Props) {
+  const onChange = (tags: string[]) => setTags(locked ? [locked, ...tags.filter((t) => t !== locked)] : tags)
   const [text, setText] = useState('')
   const [open, setOpen] = useState(false)
   // Highlighted suggestion; -1 = none (Enter takes the typed text).
@@ -50,6 +53,13 @@ export function TagInput({ value, onChange, placeholder = 'add tag…', autoFocu
   const remove = (t: string) => onChange(value.filter((x) => x !== t))
   const makePrimary = (t: string) => onChange([t, ...value.filter((x) => x !== t)])
 
+  const chipTitle = (t: string, i: number) => {
+    if (single) return t
+    if (t === locked) return 'Source of the imported chat · locked · click to open'
+    if (i === 0) return 'Primary tag · click to open'
+    return locked ? 'Click to open' : 'Click to open · ★ makes it primary'
+  }
+
   const keyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     onKeyDown?.(e)
     if (e.defaultPrevented) return
@@ -69,7 +79,7 @@ export function TagInput({ value, onChange, placeholder = 'add tag…', autoFocu
     } else if ((e.key === 'Tab' && text.trim()) || e.key === ',') {
       e.preventDefault()
       add(e.key === 'Tab' && top ? top : text)
-    } else if (e.key === 'Backspace' && !text && value.length) {
+    } else if (e.key === 'Backspace' && !text && value.length && value.at(-1) !== locked) {
       remove(value[value.length - 1]!)
     } else if (e.key === 'Escape') {
       setOpen(false)
@@ -80,10 +90,10 @@ export function TagInput({ value, onChange, placeholder = 'add tag…', autoFocu
   return (
     <div className={`${styles.wrap} ${className ?? ''}`} onClick={() => inputRef.current?.focus()}>
       {value.map((t, i) => (
-        <span key={t} className={`${styles.chip} ${i === 0 && !single ? styles.primary : ''}`}>
+        <span key={t} className={`${styles.chip} ${i === 0 && !single ? styles.primary : ''} ${t === locked ? styles.locked : ''}`}>
           <button
             className={styles.chipLabel}
-            title={single ? t : i === 0 ? 'Primary tag · click to open' : 'Click to open · ★ makes it primary'}
+            title={chipTitle(t, i)}
             onClick={(e) => {
               e.stopPropagation()
               openTag(t, { newTab: e.ctrlKey || e.metaKey })
@@ -91,14 +101,16 @@ export function TagInput({ value, onChange, placeholder = 'add tag…', autoFocu
           >
             #{t}
           </button>
-          {i > 0 && (
+          {i > 0 && !locked && (
             <button className={styles.chipBtn} title="Make primary" onClick={(e) => (e.stopPropagation(), makePrimary(t))}>
               ★
             </button>
           )}
-          <button className={styles.chipBtn} title="Remove" onClick={(e) => (e.stopPropagation(), remove(t))}>
-            ×
-          </button>
+          {t !== locked && (
+            <button className={styles.chipBtn} title="Remove" onClick={(e) => (e.stopPropagation(), remove(t))}>
+              ×
+            </button>
+          )}
         </span>
       ))}
       {(!single || !value.length) && (

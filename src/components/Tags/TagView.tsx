@@ -1,6 +1,6 @@
 import { useMemo, useState, type MouseEvent } from 'react'
 import { formatJournalDate } from '../../../shared/dates.ts'
-import { ancestors, tagName } from '../../../shared/tags.ts'
+import { ancestors, holdsChatTag, tagName } from '../../../shared/tags.ts'
 import type { EntryDTO } from '../../../shared/types.ts'
 import { api, unwrap } from '../../api.ts'
 import { useFetch } from '../../hooks/useFetch.ts'
@@ -135,18 +135,26 @@ export function TagView({ tag, find }: { tag: string; find: string }) {
           <label className={styles.toggle} title="Include entries of sub-tags">
             <input type="checkbox" checked={includeSub} onChange={(e) => setPref('includeSubtags', e.target.checked)} /> sub-tags
           </label>
-          <button onClick={() => startTagOp({ op: 'rename', tag })}>rename</button>
-          <button onClick={() => startTagOp({ op: 'merge', tag })}>merge</button>
-          <button
-            disabled={!entryIdsSelected.length}
-            title={entryIdsSelected.length ? 'Move selected entries into a sub-tag' : 'Select entries first (click / shift+click)'}
-            onClick={() => startTagOp({ op: 'branch', tag, entryIds: entryIdsSelected })}
-          >
-            branch
-          </button>
-          <button className={styles.danger} onClick={() => startTagOp({ op: 'delete', tag })}>
-            delete
-          </button>
+          {holdsChatTag(tag) ? (
+            <span className={styles.muted} title="Source tag of imported AI chats">
+              🔒︎ locked
+            </span>
+          ) : (
+            <>
+              <button onClick={() => startTagOp({ op: 'rename', tag })}>rename</button>
+              <button onClick={() => startTagOp({ op: 'merge', tag })}>merge</button>
+              <button
+                disabled={!entryIdsSelected.length}
+                title={entryIdsSelected.length ? 'Move selected entries into a sub-tag' : 'Select entries first (click / shift+click)'}
+                onClick={() => startTagOp({ op: 'branch', tag, entryIds: entryIdsSelected })}
+              >
+                branch
+              </button>
+              <button className={styles.danger} onClick={() => startTagOp({ op: 'delete', tag })}>
+                delete
+              </button>
+            </>
+          )}
         </div>
       </header>
 

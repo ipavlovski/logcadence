@@ -1,3 +1,4 @@
+import { isChatTag } from '../shared/tags.ts'
 import { api, unwrap } from './api.ts'
 import { emitChange } from './state/bus.ts'
 import { journalStore, requestReveal } from './state/journal.ts'
@@ -29,17 +30,18 @@ export async function createEntry(opts: NewEntryDefaults & { title?: string; con
 
 /**
  * Defaults for a new entry, inherited from where the user is: the journal cursor's entry
- * (same day, same tags, placed right after it) or the tag open in the tags pane.
+ * (same day, same tags, placed right after it) or the tag open in the tags pane. AI chat source
+ * tags are not inherited: they belong to imported chats only.
  */
 export function newEntryDefaults(): NewEntryDefaults {
   const { focus, panes } = panesStore.get()
   const date = activeJournalDate()
   if (focus === 'tags') {
     const loc = parseKey(panes.tags.active)
-    return { date, tags: loc.kind === 'tag' ? [loc.tag] : [] }
+    return { date, tags: loc.kind === 'tag' && !isChatTag(loc.tag) ? [loc.tag] : [] }
   }
   const cursor = journalStore.get().cursor
-  if (cursor && cursor.date === date) return { date, tags: cursor.tags, afterEntryId: cursor.entryId }
+  if (cursor && cursor.date === date) return { date, tags: cursor.tags.filter((t) => !isChatTag(t)), afterEntryId: cursor.entryId }
   return { date, tags: [] }
 }
 

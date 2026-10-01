@@ -5,7 +5,7 @@ import { api, unwrap } from '../../api.ts'
 import type { CanvasPluginProps } from '../../canvas/plugins.ts'
 import { useFetch } from '../../hooks/useFetch.ts'
 import { matches } from '../../markdown.ts'
-import { aiStore, openChat, revealChatEntry, setChatSource, SOURCE_LABEL } from '../../state/ai.ts'
+import { aiStore, clearChatTurn, openChat, revealChatEntry, setChatSource, SOURCE_LABEL } from '../../state/ai.ts'
 import { emitChange, useRevision } from '../../state/bus.ts'
 import { useStore } from '../../state/store.ts'
 import { notify } from '../../state/ui.ts'
@@ -217,6 +217,22 @@ function ChatList() {
 function ChatView({ id }: { id: string }) {
   const rev = useRevision()
   const { data: chat, error } = useFetch<ChatDTO>(`${id}|${rev}`, (signal) => unwrap(api.ai.chats[':id'].$get({ param: { id } }, { init: { signal } })))
+  const turn = useStore(aiStore, (s) => s.turn)
+  const [flashTurn, setFlashTurn] = useState<number | null>(null)
+
+  // A prompt opened from the journal: scroll to it and highlight it briefly.
+  useEffect(() => {
+    if (turn === null || !chat) return
+    clearChatTurn()
+    document.querySelector(`[data-turn="${turn}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    setFlashTurn(turn)
+  }, [turn, chat])
+
+  useEffect(() => {
+    if (flashTurn === null) return
+    const t = setTimeout(() => setFlashTurn(null), 1800)
+    return () => clearTimeout(t)
+  }, [flashTurn])
 
   if (error)
     return (
@@ -230,6 +246,9 @@ function ChatView({ id }: { id: string }) {
   if (!chat) return <div className={styles.frame} />
 
   const meta = [chat.meta.cwd ?? chat.meta.workspace, chat.meta.branch, chat.meta.model, chat.meta.origin].filter(Boolean)
+  // Prompt index of each user message, matching the journal's one node per prompt.
+  let n = 0
+  const turnOf = chat.messages.map((m) => (m.role === 'user' ? n++ : undefined))
   return (
     <div className={styles.frame}>
       <button className={styles.back} onClick={() => openChat(null)}>
@@ -254,17 +273,17 @@ function ChatView({ id }: { id: string }) {
       </header>
       <div className={styles.messages}>
         {chat.messages.map((m, i) => (
-          <Message key={i} m={m} />
+          <Message key={i} m={m} turn={turnOf[i]} flash={flashTurn !== null && turnOf[i] === flashTurn} />
         ))}
       </div>
     </div>
   )
 }
 
-function Message({ m }: { m: ChatMessage }) {
+function Message({ m, turn, flash }: { m: ChatMessage; turn?: number; flash: boolean }) {
   if (m.role === 'user')
     return (
-      <div className={styles.user}>
+      <div className={`${styles.user} ${flash ? styles.flash : ''}`} data-turn={turn}>
         <ChatMarkdown source={m.text} />
       </div>
     )

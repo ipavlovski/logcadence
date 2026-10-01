@@ -80,7 +80,8 @@ export function JournalDay({ date, find }: Props) {
       focusTo,
       blurNode: (nodeId) => setFocus((f) => (f?.kind === 'node' && f.nodeId === nodeId ? null : f)),
       navigate(from, dir) {
-        const stops: FocusRequest[] = orderRef.current.flatMap((e) => [
+        // Read-only AI chat entries have nothing to edit, so the caret skips them.
+        const stops: FocusRequest[] = orderRef.current.filter((e) => !e.chat).flatMap((e) => [
           { kind: 'title' as const, entryId: e.id, caret: 'end' as const },
           ...e.nodes.map((n) => ({ kind: 'node' as const, nodeId: n.id, caret: 'end' as const })),
         ])

@@ -34,7 +34,7 @@ After changing a schema: `pnpm db:generate` (writes migrations for both database
 
 ## AI chats
 
-The canvas **AI** tab imports chats as journal entries: titled like the chat, tagged `ai:<source>`, dated the day the chat started, one node per prompt (the prompt plus a preview of the reply). The full transcript opens in the AI tab (“transcript ↗” on the entry). Opening the tab scans automatically; **Scan** forces it; export files can also be dropped on the tab.
+The canvas **AI** tab imports chats as journal entries: titled like the chat, tagged `ai:<source>`, dated the day the chat started, one node per prompt. These entries are read-only apart from their tags, and their `ai:<source>` tag stays locked as the primary tag; clicking a prompt shows it with its reply in the AI tab, and “transcript ↗” on the entry opens the whole chat. Opening the tab scans automatically; **Scan** forces it; export files can also be dropped on the tab.
 
 | source | where it comes from |
 | --- | --- |

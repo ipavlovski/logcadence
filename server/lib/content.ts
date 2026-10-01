@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, sql, type SQL } from 'drizzle-orm'
 import type { ChatSource, EntryDTO, ImageDTO, NodeDTO } from '../../shared/types.ts'
-import { cleanTags, isUnder } from '../../shared/tags.ts'
+import { chatTag, cleanTags, holdsChatTag, isChatTag, isUnder } from '../../shared/tags.ts'
 import { db } from '../db/client.ts'
 import { chats, entries, entryTags, images, nodes, tags } from '../db/content-schema.ts'
 import { bad } from './validate.ts'
@@ -61,11 +61,11 @@ export function loadEntries(ids: string[]): EntryDTO[] {
   const tagMap = tagsFor(ids)
   const chatMap = new Map(
     db
-      .select({ id: chats.id, source: chats.source, entryId: chats.entryId })
+      .select({ id: chats.id, source: chats.source, entryId: chats.entryId, nodeIds: chats.nodeIds })
       .from(chats)
       .where(inArray(chats.entryId, ids))
       .all()
-      .map((c) => [c.entryId!, { id: c.id, source: c.source as ChatSource }]),
+      .map((c) => [c.entryId!, { id: c.id, source: c.source as ChatSource, nodeIds: c.nodeIds }]),
   )
 
   const nodesByEntry = new Map<string, NodeDTO[]>()
@@ -120,7 +120,10 @@ export function ensureTag(path: string): number {
 
 /** Replaces an entry's tags; returns the stored (normalized) list. */
 export function setEntryTags(entryId: string, paths: string[]): string[] {
-  const clean = cleanTags(paths)
+  // An imported chat's source tag stays its primary tag.
+  const chat = db.select({ source: chats.source }).from(chats).where(eq(chats.entryId, entryId)).get()
+  const locked = chat && chatTag(chat.source as ChatSource)
+  const clean = cleanTags(locked ? [locked, ...paths.filter((p) => p !== locked)] : paths)
   db.delete(entryTags).where(eq(entryTags.entryId, entryId)).run()
   clean.forEach((p, position) =>
     db
@@ -160,6 +163,7 @@ function datesForTags(tagIds: number[]): string[] {
 export function moveTag(from: string, to: string): string[] {
   if (from === to) return []
   if (isUnder(to, from)) bad('cannot move a tag into its own subtree')
+  if (holdsChatTag(from)) bad(`${from} holds the source tags of imported AI chats and cannot be renamed`)
   const rows = db.select().from(tags).where(tagSubtree(from)).all()
   if (!rows.length) bad(`tag ${from} not found`)
   const affectedDates = datesForTags(rows.map((r) => r.id))
@@ -189,6 +193,7 @@ export function moveTag(from: string, to: string): string[] {
 
 /** Removes `path` and its subtree from every entry. */
 export function deleteTag(path: string): string[] {
+  if (holdsChatTag(path)) bad(`${path} holds the source tags of imported AI chats and cannot be deleted`)
   const ids = db
     .select({ id: tags.id })
     .from(tags)
@@ -202,6 +207,7 @@ export function deleteTag(path: string): string[] {
 
 /** Re-tags the given entries from `from` to `to` (e.g. into a new sub-tag), keeping tag order. */
 export function branchTag(from: string, to: string, entryIds: string[]): string[] {
+  if (isChatTag(from)) bad(`${from} is the source tag of imported AI chats and cannot be moved`)
   const src = db.select().from(tags).where(eq(tags.path, from)).get()
   if (!src || !entryIds.length) return []
   const targetId = ensureTag(to)

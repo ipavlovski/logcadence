@@ -1,4 +1,4 @@
-import type { TagInfo } from './types.ts'
+import { CHAT_SOURCES, type ChatSource, type TagInfo } from './types.ts'
 
 /** Tags are hierarchical paths: "system:windows:powertoys". */
 export const TAG_SEP = ':'
@@ -90,3 +90,11 @@ export function allTagPaths(infos: TagInfo[]): string[] {
   for (const t of infos) for (const p of [...ancestors(t.path), t.path]) set.add(p)
   return [...set].sort()
 }
+
+/** Source tag of an imported AI chat (ai:claude-code…): the locked primary tag of its journal entry. */
+export const chatTag = (source: ChatSource) => `ai:${source}`
+
+export const isChatTag = (path: string) => CHAT_SOURCES.some((s) => chatTag(s) === path)
+
+/** Whether a chat source tag is `root` or under it, so renaming or deleting `root` would strip it from chat entries. */
+export const holdsChatTag = (root: string) => CHAT_SOURCES.some((s) => isUnder(chatTag(s), root))

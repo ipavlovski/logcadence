@@ -4,12 +4,15 @@ import { HTTPException } from 'hono/http-exception'
 import { logger } from 'hono/logger'
 import path from 'node:path'
 import { ASSETS_DIR } from './db/client.ts'
+import { stripReplyPreviews } from './lib/ai/importer.ts'
 import { aiRoutes } from './routes/ai.ts'
 import { entryRoutes } from './routes/entries.ts'
 import { journalRoutes } from './routes/journal.ts'
 import { nodeRoutes } from './routes/nodes.ts'
 import { searchRoutes } from './routes/search.ts'
 import { tagRoutes } from './routes/tags.ts'
+
+stripReplyPreviews()
 
 export const app = new Hono()
 if (process.env.NODE_ENV !== 'test') app.use('/api/*', logger())

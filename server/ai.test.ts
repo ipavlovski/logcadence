@@ -190,18 +190,18 @@ describe('AI chat import', () => {
     ])
   })
 
-  it('makes one node per prompt: the prompt plus a preview of the reply', async () => {
+  it('makes one node per prompt, leaving the replies to the transcript', async () => {
     const [claude, ag, cc] = await chatList()
     const ccEntry = await entryOf(cc!)
     expect(ccEntry.title).toBe('Fix flaky test')
     expect(ccEntry.tags).toEqual(['ai:claude-code'])
-    expect(ccEntry.chat).toEqual({ id: cc!.id, source: 'claude-code' })
+    expect(ccEntry.chat).toEqual({ id: cc!.id, source: 'claude-code', nodeIds: ccEntry.nodes.map((n) => n.id) })
     // IDE context and paste wrappers stripped; interrupts, notifications and synthetic replies skipped.
-    expect(ccEntry.nodes.map((n) => n.content)).toEqual(['Fix the flaky test\n\n→ Done The race is fixed.'])
+    expect(ccEntry.nodes.map((n) => n.content)).toEqual(['Fix the flaky test'])
 
-    expect((await entryOf(ag!)).nodes.map((n) => n.content)).toEqual(['Build a small house\n\n→ Built the house with 4 walls.'])
+    expect((await entryOf(ag!)).nodes.map((n) => n.content)).toEqual(['Build a small house'])
     // The branch the user ended on, not the abandoned reply.
-    expect((await entryOf(claude!)).nodes[0]!.content).toBe('Design a 20s6p pack\n\n→ Here is a layout: | a | b | | 1 | 2 |')
+    expect((await entryOf(claude!)).nodes[0]!.content).toBe('Design a 20s6p pack')
   })
 
   it('keeps the full transcript with tool calls', async () => {
@@ -224,7 +224,7 @@ describe('AI chat import', () => {
     expect(report.claude).toMatchObject({ found: 1, unchanged: 1 })
   })
 
-  it('appends new turns without overwriting the user’s edits', async () => {
+  it('appends new turns without overwriting earlier edits', async () => {
     const cc = (await chatList()).find((c) => c.source === 'claude-code')!
     const entry = await entryOf(cc)
     await req('PATCH', `/api/entries/${entry.id}`, { title: 'My own title' })
@@ -241,8 +241,33 @@ describe('AI chat import', () => {
 
     const after = await entryOf(cc)
     expect(after.title).toBe('My own title')
-    expect(after.nodes.map((n) => n.content)).toEqual(['edited by me', 'Now add a regression test\n\n→ Added `race.test.ts`.'])
+    expect(after.nodes.map((n) => n.content)).toEqual(['edited by me', 'Now add a regression test'])
     expect((await chatList()).find((c) => c.id === cc.id)).toMatchObject({ turns: 2, title: 'Fix flaky test and add regression' })
+  })
+
+  it('strips reply previews left by earlier imports', async () => {
+    const cc = (await chatList()).find((c) => c.source === 'claude-code')!
+    const node = (await entryOf(cc)).nodes[1]!
+    await req('PATCH', `/api/nodes/${node.id}`, { content: 'Now add a regression test\n\n→ Added `race.test.ts`.' })
+    const { stripReplyPreviews } = await import('./lib/ai/importer.ts')
+    stripReplyPreviews()
+    expect((await entryOf(cc)).nodes[1]!.content).toBe('Now add a regression test')
+  })
+
+  it('takes extra tags but keeps the chat source tag as the locked primary', async () => {
+    const cc = (await chatList()).find((c) => c.source === 'claude-code')!
+    const entry = await entryOf(cc)
+    const patch = (tags: string[]) => req<EntryDTO>('PATCH', `/api/entries/${entry.id}`, { tags })
+    expect((await patch(['ai:claude-code', 'project:x'])).tags).toEqual(['ai:claude-code', 'project:x'])
+    expect((await patch(['project:x', 'ai:claude-code'])).tags).toEqual(['ai:claude-code', 'project:x'])
+    expect((await patch(['project:y'])).tags).toEqual(['ai:claude-code', 'project:y'])
+
+    const post = (url: string, body: object) => app.request(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+    expect((await post('/api/tags/rename', { from: 'ai:claude-code', to: 'ai:cc' })).status).toBe(400)
+    expect((await post('/api/tags/rename', { from: 'ai', to: 'assistants' })).status).toBe(400)
+    expect((await post('/api/tags/delete', { tag: 'ai:claude-code' })).status).toBe(400)
+    expect((await post('/api/tags/branch', { from: 'ai:claude-code', to: 'ai:claude-code:x', entryIds: [entry.id] })).status).toBe(400)
+    expect((await entryOf(cc)).tags).toEqual(['ai:claude-code', 'project:y'])
   })
 
   it('does not bring back an entry the user deleted', async () => {
