@@ -9,6 +9,8 @@
     "start": "NODE_ENV=production tsx server/index.ts",
     "db:generate": "drizzle-kit generate --config drizzle.content.config.ts && drizzle-kit generate --config drizzle.events.config.ts",
     "seed": "tsx scripts/seed.ts",
+    "export:data": "tsx scripts/export-data.ts",
+    "import:data": "tsx scripts/import-data.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

@@ -1,0 +1,81 @@
+import { serve } from '@hono/node-server'
+import { serveStatic } from '@hono/node-server/serve-static'
+import { readdirSync } from 'node:fs'
+import path from 'node:path'
+import { app } from './app.ts'
+import { closeDbs, db, JOURNALS_DIR } from './db/client.ts'
+import { entries } from './db/content-schema.ts'
+import { scanGps } from './lib/gps/scan.ts'
+import { flushJournalFiles, touchDates } from './lib/journalFiles.ts'
+import { isConnected } from './lib/spotify/auth.ts'
+import { sync as syncSpotify } from './lib/spotify/spotify.ts'
+
+// Starts the API (and, given staticDir, the built web app) plus the background jobs. Shared by the web
+// server (server/index.ts) and the desktop app, which runs it inside Electron's main process.
+
+// Spotify history: "recently played" holds only the last 50 plays, so sync well within that.
+const SPOTIFY_SYNC_MS = 3 * 60_000
+
+export interface StartOptions {
+  port: number
+  /** Built web app (vite's dist/) to serve next to the API. */
+  staticDir?: string
+}
+
+export interface RunningServer {
+  port: number
+  /** Writes pending journal files, stops the server and closes the databases. */
+  stop(): Promise<void>
+}
+
+export function startServer({ port, staticDir }: StartOptions): Promise<RunningServer> {
+  if (staticDir) {
+    const root = path.relative(process.cwd(), staticDir)
+    app.use('/*', serveStatic({ root }))
+    app.get('*', serveStatic({ path: path.join(root, 'index.html') }))
+  }
+
+  // The markdown mirror is derived from the database: rebuild it when it is missing (e.g. after a data import).
+  if (!readdirSync(JOURNALS_DIR).length) {
+    const dates = db.selectDistinct({ date: entries.date }).from(entries).all()
+    if (dates.length) touchDates(...dates.map((d) => d.date))
+  }
+
+  const spotifyTick = () => {
+    if (isConnected()) syncSpotify().catch((err: Error) => console.warn(`spotify sync: ${err.message}`))
+  }
+  const spotifyTimer = setInterval(spotifyTick, SPOTIFY_SYNC_MS)
+  spotifyTimer.unref()
+  spotifyTick()
+
+  // GPS days dropped into the gps folder while the app was off.
+  scanGps().then(
+    (r) => r.processed && console.log(`gps: ${r.processed} day(s) classified`),
+    (err: Error) => console.warn(`gps scan: ${err.message}`),
+  )
+
+  return new Promise((resolve, reject) => {
+    // Bound to 127.0.0.1 explicitly: Spotify's login redirect must use that address, and WSL only
+    // forwards a Linux 127.0.0.1 listener to Windows' 127.0.0.1 (an IPv6 "::" one becomes [::1] only).
+    const server = serve({ fetch: app.fetch, port, hostname: '127.0.0.1' }, () => {
+      console.log(`API listening on http://127.0.0.1:${port}`)
+      server.off('error', reject)
+      let stopped: Promise<void> | undefined
+      resolve({
+        port,
+        stop: () =>
+          (stopped ??= new Promise<void>((done) => {
+            clearInterval(spotifyTimer)
+            flushJournalFiles()
+            server.close(() => {
+              closeDbs()
+              done()
+            })
+            // Open keep-alive connections would hold close() back.
+            ;(server as { closeAllConnections?: () => void }).closeAllConnections?.()
+          })),
+      })
+    })
+    server.once('error', reject)
+  })
+}

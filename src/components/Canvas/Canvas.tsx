@@ -19,6 +19,16 @@ export function CanvasDashboard() {
           </button>
         ))}
       </div>
+      <footer className={styles.data}>
+        <h3>Data</h3>
+        <p>An export holds the whole library (entries, chats, Spotify and GPS history, media) and can be imported into an empty library, e.g. the desktop app.</p>
+        <a href="/api/export" download>
+          Export everything
+        </a>
+        <a href="/api/export?assets=0&gps=0" download>
+          Export without media and GPS files
+        </a>
+      </footer>
     </div>
   )
 }

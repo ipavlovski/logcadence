@@ -45,6 +45,28 @@
   font-size: 12px;
 }
 
+.data {
+  margin-top: 24px;
+  max-width: 560px;
+}
+
+.data h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+
+.data p {
+  margin: 0 0 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.data a {
+  margin-right: 16px;
+  color: var(--accent);
+  font-size: 12.5px;
+}
+
 .placeholder {
   border: 1px dashed var(--border);
   border-radius: 8px;

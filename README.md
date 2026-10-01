@@ -32,6 +32,15 @@ After changing a schema: `pnpm db:generate` (writes migrations for both database
 - **Tag**: a colon-separated path (`system:windows:powertoys`). Ancestors are implicit. Tags no entry uses are pruned.
 - **Archive**: entries and nodes can be archived. The tags pane hides archived items unless “archived” is on.
 
+## Data export / import
+
+An export is one zip holding the whole library: `manifest.json` (format version, schema version, row counts and checksums), one NDJSON file per table under `tables/`, the media under `assets/` and the raw GPS files under `gps/`. The Spotify Client ID comes along, its tokens don't (connect again after importing). The journal markdown mirror is left out; the server rebuilds it on start when `journals/` is empty. The zip uses zip64 throughout, so a multi-GB library is fine.
+
+- **Export**: "Export everything" on the canvas dashboard (streams `GET /api/export`; `?assets=0&gps=0` leaves media and GPS out), or `pnpm export:data [out.zip] [--no-assets] [--no-gps]`. Both are safe while the app runs.
+- **Import**: `pnpm import:data <export.zip> [--data-dir <dir>]`, into an **empty** library only (no entries, events or assets) and with the app not running on it. The databases and assets are built in `<dir>/.importing` and moved into place when complete, so a failed import changes nothing.
+
+This is how data moves from the web app into the desktop app. The format (see `server/lib/transfer/format.ts`) is plain JSON and media files, so later builds (mobile included) can read it; `formatVersion` only changes when existing rows change meaning.
+
 ## AI chats
 
 The canvas **AI** tab imports chats as journal entries: titled like the chat, tagged `ai:<source>`, dated the day the chat started, one node per prompt. These entries are read-only apart from their tags, and their `ai:<source>` tag stays locked as the primary tag; clicking a prompt shows it with its reply in the AI tab, and “transcript ↗” on the entry opens the whole chat. Opening the tab scans automatically; **Scan** forces it; export files can also be dropped on the tab.
