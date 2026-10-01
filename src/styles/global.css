@@ -1,24 +1,25 @@
 :root,
 :root[data-theme='dark'] {
+  /* One Dark (VS Code), with the backgrounds pushed a step darker. */
   color-scheme: dark;
-  --bg: #2b313c;
-  --bg-2: #242932;
-  --surface: #323946;
-  --surface-2: #3a4250;
-  --border: #404857;
-  --text: #e3e7ee;
-  --text-muted: #8c96a8;
-  --text-faint: #636d7e;
-  --accent: #88c0d0;
-  --accent-text: #1d2128;
-  --date: #8fbcbb;
-  --tag: #7fb4ad;
-  --danger: #e08a74;
-  --selection: rgb(136 192 208 / 0.16);
-  --flash: rgb(235 203 139 / 0.28);
-  --code-bg: #20252d;
-  --mark: rgb(235 203 139 / 0.35);
-  --shadow: 0 8px 32px rgb(0 0 0 / 0.45);
+  --bg: #1e2127;
+  --bg-2: #191c21;
+  --surface: #252930;
+  --surface-2: #2c313a;
+  --border: #31363f;
+  --text: #c8ccd4;
+  --text-muted: #7f848e;
+  --text-faint: #5c6370;
+  --accent: #61afef;
+  --accent-text: #1e2127;
+  --date: #d19a66;
+  --tag: #c678dd;
+  --danger: #e06c75;
+  --selection: rgb(97 175 239 / 0.14);
+  --flash: rgb(229 192 123 / 0.22);
+  --code-bg: #16181d;
+  --mark: rgb(229 192 123 / 0.3);
+  --shadow: 0 10px 36px rgb(0 0 0 / 0.55);
 }
 
 :root[data-theme='light'] {
@@ -44,7 +45,10 @@
 }
 
 :root {
-  --font: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', Consolas, ui-monospace, monospace;
+  /* Geometric mono for UI chrome, tags, dates and code; a reading serif for what you write. */
+  --font-mono: 'DM Mono', ui-monospace, 'Cascadia Code', Consolas, monospace;
+  --font-serif: 'Newsreader Variable', 'Iowan Old Style', Georgia, serif;
+  --font: var(--font-mono);
   --radius: 6px;
   --topbar-h: 40px;
   --tabbar-h: 36px;
@@ -67,6 +71,8 @@ body {
   font-family: var(--font);
   font-size: 14px;
   line-height: 1.55;
+  /* DM Mono stops at 500: render heavier mono weights as 500 rather than faux bold. */
+  font-synthesis-weight: none;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
 }

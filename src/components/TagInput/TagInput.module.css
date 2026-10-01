@@ -8,6 +8,7 @@
 }
 
 .chip {
+  font-family: var(--font-mono);
   display: inline-flex;
   align-items: center;
   border: 1px solid color-mix(in srgb, var(--tag) 55%, transparent);

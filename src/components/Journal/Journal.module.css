@@ -15,9 +15,10 @@
 
 .dayTitle {
   margin: 0;
-  font-size: 38px;
-  line-height: 1.15;
-  font-weight: 600;
+  font-family: var(--font-serif);
+  font-size: 42px;
+  line-height: 1.1;
+  font-weight: 500;
   color: var(--date);
   letter-spacing: -0.01em;
 }
@@ -62,24 +63,8 @@ kbd {
   background: var(--surface);
 }
 
-/* Outline structure: entry > nodes, with guide lines like an outliner.
+/* Outline structure: entry > nodes (no bullets; nodes sit behind a faint indent rule).
    Entries sharing a primary tag sit together in a .group; groups are separated by a gap. */
-
-.bullet {
-  flex: none;
-  width: 18px;
-  height: 24px;
-  display: grid;
-  place-items: center;
-}
-
-.bullet::before {
-  content: '';
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--text-faint);
-}
 
 .group + .group {
   margin-top: 22px;
@@ -106,10 +91,11 @@ kbd {
 .title {
   display: block;
   width: 100%;
-  font-size: 16px;
+  font-family: var(--font-serif);
+  font-size: 19px;
   font-weight: 600;
-  line-height: 24px;
-  min-height: 24px;
+  line-height: 28px;
+  min-height: 28px;
   cursor: text;
   overflow-wrap: anywhere;
 }
@@ -134,8 +120,8 @@ kbd {
 }
 
 .nodes {
-  margin-left: 8px;
-  padding-left: 12px;
+  margin: 2px 0 0 2px;
+  padding-left: 14px;
   border-left: 1px solid var(--border);
 }
 
@@ -187,7 +173,9 @@ kbd {
   background: var(--surface);
   box-shadow: 0 0 0 4px var(--surface);
   border-radius: 2px;
-  line-height: 22px;
+  font-family: var(--font-serif);
+  font-size: 15.5px;
+  line-height: 1.5;
   min-height: 24px;
 }
 

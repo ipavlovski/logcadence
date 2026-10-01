@@ -26,7 +26,6 @@ export const EntryCard = memo(function EntryCard({ entry, focus, find, flashId }
   return (
     <article className={`${styles.entry} ${entry.archived ? styles.archived : ''} ${flashId === entry.id ? styles.flash : ''}`} data-reveal={entry.id}>
       <header className={styles.entryHead}>
-        <span className={styles.bullet} />
         <div className={styles.entryHeadMain}>
           {chat ? (
             <div className={`${styles.title} ${styles.readOnly}`}>{mark(entry.title, find)}</div>

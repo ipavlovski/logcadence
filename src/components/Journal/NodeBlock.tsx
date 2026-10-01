@@ -42,7 +42,6 @@ export const NodeBlock = memo(function NodeBlock({ node, editing, find, flash }:
       onDragLeave={() => setDragOver(false)}
       onDrop={onDrop}
     >
-      <span className={styles.bullet} />
       <div className={styles.nodeBody}>
         {editing ? (
           <NodeEditor node={node} target={editing} />
@@ -100,7 +99,6 @@ export const PromptNode = memo(function PromptNode({
   }
   return (
     <div className={`${styles.node} ${node.archived ? styles.archived : ''} ${flash ? styles.flash : ''}`} data-reveal={node.id}>
-      <span className={styles.bullet} />
       <div className={styles.nodeBody}>
         <div
           className={`${styles.nodeView} ${styles.readOnly} ${turn >= 0 ? styles.prompt : ''}`}

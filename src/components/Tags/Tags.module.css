@@ -263,6 +263,8 @@
 }
 
 .entryTitle {
+  font-family: var(--font-serif);
+  font-size: 16.5px;
   font-weight: 600;
 }
 
@@ -295,16 +297,6 @@
   border-radius: 4px;
 }
 
-.node::before {
-  content: '';
-  position: absolute;
-  left: -15px;
-  top: 11px;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--text-faint);
-}
 
 .selected {
   background: var(--selection);
