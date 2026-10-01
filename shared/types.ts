@@ -150,3 +150,56 @@ export interface SelectionBody {
   entryIds?: string[]
   nodeIds?: string[]
 }
+
+// ── Spotify canvas tab ──────────────────────────────────────────────────────
+
+export interface SpotifyStatus {
+  /** A Client ID is set (SPOTIFY_CLIENT_ID or saved from the tab). */
+  configured: boolean
+  connected: boolean
+  /** Must be registered as a Redirect URI in the Spotify app's settings. */
+  redirectUri: string
+  lastSync: number | null
+  error: string | null
+}
+
+export interface SpotifyContext {
+  uri: string
+  type: string
+  name: string
+}
+
+export interface SpotifyPlay {
+  playedAt: number
+  trackId: string
+  trackName: string
+  artists: string
+  album: string
+  imageUrl: string | null
+  durationMs: number
+  context: SpotifyContext | null
+}
+
+export interface SpotifyNowPlaying {
+  isPlaying: boolean
+  progressMs: number
+  device: string | null
+  track: Omit<SpotifyPlay, 'playedAt' | 'context'> | null
+  context: SpotifyContext | null
+}
+
+export interface SpotifyDayCount {
+  date: string
+  count: number
+}
+
+/** Where a day's listening stopped in one playlist/album: what "continue" resumes. */
+export interface SpotifyResume {
+  date: string
+  context: SpotifyContext
+  trackUri: string
+  trackName: string
+  artists: string
+  playedAt: number
+  plays: number
+}

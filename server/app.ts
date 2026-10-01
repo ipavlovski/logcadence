@@ -10,6 +10,7 @@ import { entryRoutes } from './routes/entries.ts'
 import { journalRoutes } from './routes/journal.ts'
 import { nodeRoutes } from './routes/nodes.ts'
 import { searchRoutes } from './routes/search.ts'
+import { spotifyRoutes } from './routes/spotify.ts'
 import { tagRoutes } from './routes/tags.ts'
 
 stripReplyPreviews()
@@ -23,7 +24,7 @@ app.onError((err, c) => {
   return c.json({ error: 'internal error' }, 500)
 })
 
-const routes = app.route('/api', journalRoutes).route('/api', entryRoutes).route('/api', nodeRoutes).route('/api', tagRoutes).route('/api', searchRoutes).route('/api', aiRoutes)
+const routes = app.route('/api', journalRoutes).route('/api', entryRoutes).route('/api', nodeRoutes).route('/api', tagRoutes).route('/api', searchRoutes).route('/api', aiRoutes).route('/api', spotifyRoutes)
 export type AppType = typeof routes
 
 // Asset file names are server-generated uuids and never change, so cache them forever.

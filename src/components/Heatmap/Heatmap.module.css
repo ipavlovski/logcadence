@@ -1,0 +1,123 @@
+/* One hue per chart; levels mix it into the surface, so the ramp runs light → dark on light
+   surfaces and dark → bright on dark ones (each theme gets its own hue step). */
+.heatmap {
+  --hue: #3fb950;
+  --empty: color-mix(in srgb, var(--text-faint) 18%, var(--bg));
+  margin: 0;
+  min-width: 0;
+}
+
+.heatmap[data-tone='pink'] {
+  --hue: #f472b6;
+}
+
+:global(:root[data-theme='light']) .heatmap {
+  --hue: #1a7f37;
+  --empty: color-mix(in srgb, var(--text-faint) 22%, var(--bg));
+}
+
+:global(:root[data-theme='light']) .heatmap[data-tone='pink'] {
+  --hue: #bf3989;
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 6px;
+  font-size: 12.5px;
+}
+
+.total {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.plot {
+  overflow: hidden;
+}
+
+.plot svg {
+  display: block;
+}
+
+.axis {
+  fill: var(--text-faint);
+  font-size: 9.5px;
+  font-family: var(--font);
+}
+
+.cell {
+  fill: var(--empty);
+  cursor: pointer;
+}
+
+.cell[data-level='1'] {
+  fill: color-mix(in srgb, var(--hue) 30%, var(--empty));
+}
+.cell[data-level='2'] {
+  fill: color-mix(in srgb, var(--hue) 55%, var(--empty));
+}
+.cell[data-level='3'] {
+  fill: color-mix(in srgb, var(--hue) 78%, var(--empty));
+}
+.cell[data-level='4'] {
+  fill: var(--hue);
+}
+
+rect.cell:hover {
+  stroke: var(--text-muted);
+  stroke-width: 1;
+}
+
+rect.selected {
+  stroke: var(--text);
+  stroke-width: 1.5;
+}
+
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.readout {
+  color: var(--text-muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: none;
+}
+
+/* Legend swatches are HTML, so they use background instead of fill. */
+i.cell {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--empty);
+  cursor: default;
+}
+i.cell[data-level='1'] {
+  background: color-mix(in srgb, var(--hue) 30%, var(--empty));
+}
+i.cell[data-level='2'] {
+  background: color-mix(in srgb, var(--hue) 55%, var(--empty));
+}
+i.cell[data-level='3'] {
+  background: color-mix(in srgb, var(--hue) 78%, var(--empty));
+}
+i.cell[data-level='4'] {
+  background: var(--hue);
+}

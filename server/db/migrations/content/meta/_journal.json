@@ -15,6 +15,13 @@
       "when": 1790789742827,
       "tag": "0001_sudden_tusk",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1790822674104,
+      "tag": "0002_condemned_captain_america",
+      "breakpoints": true
     }
   ]
 }

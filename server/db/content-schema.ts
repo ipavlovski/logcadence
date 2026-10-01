@@ -97,3 +97,44 @@ export const images = sqliteTable(
   },
   (t) => [index('images_node_idx').on(t.nodeId, t.position)],
 )
+
+// Spotify listening history for the canvas Spotify tab, synced from the Web API.
+
+// One row per play (Spotify counts a play after ~30s), with the playlist/album it was played from.
+export const spotifyPlays = sqliteTable(
+  'spotify_plays',
+  {
+    playedAt: integer('played_at').primaryKey(), // epoch ms; one play per timestamp
+    date: text('date').notNull(), // local YYYY-MM-DD
+    trackId: text('track_id').notNull(),
+    trackName: text('track_name').notNull(),
+    artists: text('artists').notNull(),
+    album: text('album').notNull(),
+    imageUrl: text('image_url'),
+    durationMs: integer('duration_ms').notNull(),
+    contextType: text('context_type'), // playlist | album | artist | null (e.g. liked songs, search)
+    contextUri: text('context_uri'),
+  },
+  (t) => [index('spotify_plays_date_idx').on(t.date)],
+)
+
+// Liked songs with the day they were liked.
+export const spotifyLikes = sqliteTable(
+  'spotify_likes',
+  {
+    trackId: text('track_id').primaryKey(),
+    addedAt: integer('added_at').notNull(),
+    date: text('date').notNull(),
+    trackName: text('track_name').notNull(),
+    artists: text('artists').notNull(),
+  },
+  (t) => [index('spotify_likes_date_idx').on(t.date)],
+)
+
+// Names of the playlists/albums plays came from.
+export const spotifyContexts = sqliteTable('spotify_contexts', {
+  uri: text('uri').primaryKey(),
+  name: text('name').notNull(),
+  imageUrl: text('image_url'),
+  fetchedAt: integer('fetched_at').notNull(),
+})

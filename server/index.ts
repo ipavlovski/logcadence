@@ -4,6 +4,8 @@ import path from 'node:path'
 import { app } from './app.ts'
 import { ROOT } from './db/client.ts'
 import { flushJournalFiles } from './lib/journalFiles.ts'
+import { isConnected } from './lib/spotify/auth.ts'
+import { sync as syncSpotify } from './lib/spotify/spotify.ts'
 
 if (process.env.NODE_ENV === 'production') {
   const dist = path.relative(process.cwd(), path.join(ROOT, 'dist'))
@@ -16,6 +18,14 @@ for (const sig of ['SIGINT', 'SIGTERM'] as const)
     flushJournalFiles()
     process.exit(0)
   })
+
+// Spotify history: "recently played" holds only the last 50 plays, so sync well within that.
+const SPOTIFY_SYNC_MS = 3 * 60_000
+const spotifyTick = () => {
+  if (isConnected()) syncSpotify().catch((err: Error) => console.warn(`spotify sync: ${err.message}`))
+}
+setInterval(spotifyTick, SPOTIFY_SYNC_MS).unref()
+spotifyTick()
 
 const port = Number(process.env.PORT ?? 3002)
 serve({ fetch: app.fetch, port }, () => console.log(`API listening on http://localhost:${port}`))
