@@ -2,7 +2,8 @@
   margin-top: 6px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+  outline: none;
 }
 
 .largeWrap {
@@ -14,14 +15,14 @@
 .large {
   display: block;
   max-width: 100%;
-  max-height: 420px;
+  max-height: 600px;
   border-radius: var(--radius);
   border: 1px solid var(--border);
   cursor: zoom-in;
 }
 
 .compact .large {
-  max-height: 200px;
+  max-height: 320px;
 }
 
 .delete {
@@ -45,7 +46,7 @@
 .strip {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
 }
 
 .thumb {
@@ -55,8 +56,18 @@
   border-radius: 5px;
   background: none;
   overflow: hidden;
-  width: 64px;
-  height: 48px;
+  width: 112px;
+  height: 84px;
+  cursor: pointer;
+}
+
+.compact .thumb {
+  width: 80px;
+  height: 60px;
+}
+
+.thumb[draggable='true'] {
+  cursor: grab;
 }
 
 .thumb img {
@@ -70,13 +81,27 @@
   border-color: var(--accent);
 }
 
+/* Selected image while the gallery has keyboard focus: Delete removes it. */
+.gallery:focus-within .active {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.dragging {
+  opacity: 0.4;
+}
+
+.dropTarget {
+  border-color: var(--text);
+  border-style: dashed;
+}
+
 .badge {
   position: absolute;
   left: 0;
   bottom: 0;
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1;
-  padding: 2px 3px;
+  padding: 3px 4px;
   background: rgb(0 0 0 / 0.65);
   color: #fff;
   border-top-right-radius: 3px;

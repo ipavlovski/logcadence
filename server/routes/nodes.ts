@@ -10,7 +10,7 @@ import { entries, images, nodes } from '../db/content-schema.ts'
 import { imageUrl, loadNode } from '../lib/content.ts'
 import { logEvent } from '../lib/events.ts'
 import { touchDates } from '../lib/journalFiles.ts'
-import { bad, defined, notFound, num, obj, optBool, optNum, optStr, str } from '../lib/validate.ts'
+import { bad, defined, notFound, num, obj, optBool, optNum, optStr, optStrArr, str } from '../lib/validate.ts'
 
 const MAX_UPLOAD = 50 * 1024 * 1024
 
@@ -109,6 +109,24 @@ export const nodeRoutes = new Hono()
       return c.json({ image: { id, url: imageUrl(name), mime: file.type }, activeImageId: node.activeImageId ?? id }, 201)
     },
   )
+  // New gallery order (the first image is the node's thumbnail); `ids` must be all of the node's images.
+  .post(
+    '/nodes/:id/images/order',
+    validator('json', (v) => ({ ids: optStrArr(obj(v), 'ids') ?? [] })),
+    (c) => {
+      const nodeId = c.req.param('id')
+      const node = db.select().from(nodes).where(eq(nodes.id, nodeId)).get() ?? notFound('node')
+      const { ids } = c.req.valid('json')
+      const current = db.select({ id: images.id }).from(images).where(eq(images.nodeId, nodeId)).all().map((r) => r.id)
+      if (ids.length !== current.length || new Set(ids).size !== ids.length || !ids.every((id) => current.includes(id))) bad('ids must list each of the node’s images once')
+      db.transaction(() => ids.forEach((id, i) => db.update(images).set({ position: i + 1 }).where(eq(images.id, id)).run()))
+      logEvent('node', nodeId, 'edit', { imageOrder: ids })
+      touchDates(entryDate(node.entryId))
+      return c.json({ ok: true })
+    },
+  )
+  // Removes the image from its node. The file stays in assets/ so an undo can bring the image back
+  // (the event keeps the whole row); a separate cleanup removes files nothing references.
   .delete('/images/:id', (c) => {
     const id = c.req.param('id')
     const img = db.select().from(images).where(eq(images.id, id)).get() ?? notFound('image')
@@ -121,7 +139,7 @@ export const nodeRoutes = new Hono()
         db.update(nodes).set({ activeImageId }).where(eq(nodes.id, node.id)).run()
       }
     })
-    logEvent('image', id, 'delete', { nodeId: node.id })
+    logEvent('image', id, 'delete', { nodeId: node.id, file: img.file, mime: img.mime, position: img.position, createdAt: img.createdAt, wasActive: node.activeImageId === id })
     touchDates(entryDate(node.entryId))
     return c.json({ activeImageId })
   })

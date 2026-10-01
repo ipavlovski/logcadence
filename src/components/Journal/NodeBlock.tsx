@@ -64,6 +64,7 @@ export const NodeBlock = memo(function NodeBlock({ node, editing, find, flash }:
             activeId={node.activeImageId}
             onActivate={(id) => day.updateNode(node.id, { activeImageId: id })}
             onDelete={(id) => day.deleteImage(node.id, id)}
+            onReorder={(ids) => day.reorderImages(node.id, ids)}
           />
         )}
       </div>

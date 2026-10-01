@@ -110,3 +110,37 @@ describe('search', () => {
     expect(hits[0]!.snippet).toContain('Format-Table')
   })
 })
+
+describe('images', () => {
+  const upload = async (nodeId: string, name: string) => {
+    const form = new FormData()
+    form.append('file', new File([new Uint8Array([137, 80, 78, 71])], name, { type: 'image/png' }))
+    const res = await app.request(`/api/nodes/${nodeId}/images`, { method: 'POST', body: form })
+    return ((await res.json()) as { image: { id: string; url: string } }).image
+  }
+
+  it('reorders a gallery so any image can become the thumbnail', async () => {
+    const entry = await req<EntryDTO>('POST', '/api/entries', { date: '2026-09-25', title: 'gallery', nodes: [{ content: 'pics' }] })
+    const nodeId = entry.nodes[0]!.id
+    const [a, b, c] = [await upload(nodeId, 'a.png'), await upload(nodeId, 'b.png'), await upload(nodeId, 'c.png')]
+    await req('POST', `/api/nodes/${nodeId}/images/order`, { ids: [c!.id, b!.id, a!.id] })
+    expect((await day('2026-09-25'))[0]!.nodes[0]!.images.map((i) => i.id)).toEqual([c!.id, b!.id, a!.id])
+
+    const bad = await app.request(`/api/nodes/${nodeId}/images/order`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids: [c!.id, a!.id] }) })
+    expect(bad.status).toBe(400)
+  })
+
+  it('removes an image from its node but keeps the file for undo', async () => {
+    const node = (await day('2026-09-25'))[0]!.nodes[0]!
+    const img = node.images[0]!
+    const res = await req<{ activeImageId: string | null }>('DELETE', `/api/images/${img.id}`)
+    const after = (await day('2026-09-25'))[0]!.nodes[0]!
+    expect(after.images.map((i) => i.id)).not.toContain(img.id)
+    expect(res.activeImageId).toBe(after.activeImageId)
+    // The asset file is still there, and the event holds what an undo needs.
+    expect(readFileSync(path.join(dataDir, 'assets', img.url.split('/').at(-1)!))).toHaveLength(4)
+    const { events } = await req<{ events: { entity: string; op: string; payload: Record<string, unknown> }[] }>('GET', '/api/events?limit=1')
+    expect(events[0]).toMatchObject({ entity: 'image', op: 'delete', payload: { nodeId: node.id, mime: 'image/png' } })
+    expect(events[0]!.payload.file).toBeTruthy()
+  })
+})

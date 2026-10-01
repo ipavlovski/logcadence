@@ -16,6 +16,8 @@ export interface DayActions {
   deleteNode(id: string): void
   uploadImages(nodeId: string, files: File[]): void
   deleteImage(nodeId: string, imageId: string): void
+  /** New gallery order; the first image is the thumbnail. */
+  reorderImages(nodeId: string, ids: string[]): void
 }
 
 /**
@@ -121,6 +123,10 @@ export function useDay(date: string) {
           return { ...n, images, activeImageId: n.activeImageId === imageId ? (images[0]?.id ?? null) : n.activeImageId }
         })
         send(unwrap(api.images[':id'].$delete({ param: { id: imageId } })))
+      },
+      reorderImages(nodeId, ids) {
+        mapNode(nodeId, (n) => ({ ...n, images: ids.map((id) => n.images.find((i) => i.id === id)!).filter(Boolean) }))
+        send(unwrap(api.nodes[':id'].images.order.$post({ param: { id: nodeId }, json: { ids } })))
       },
     }
   }, [origin])
