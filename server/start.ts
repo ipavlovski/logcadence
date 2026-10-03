@@ -7,6 +7,7 @@ import { app } from './app.ts'
 import { closeDbs, db, JOURNALS_DIR } from './db/client.ts'
 import { entries } from './db/content-schema.ts'
 import { startRecorder, stopRecorder, type ActivityRecorder } from './lib/activity.ts'
+import { autoReady, importNew } from './lib/gps/drive.ts'
 import { scanGps } from './lib/gps/scan.ts'
 import { flushJournalFiles, touchDates } from './lib/journalFiles.ts'
 import { isConnected } from './lib/spotify/auth.ts'
@@ -17,6 +18,8 @@ import { sync as syncSpotify } from './lib/spotify/spotify.ts'
 
 // Spotify history: "recently played" holds only the last 50 plays, so sync well within that.
 const SPOTIFY_SYNC_MS = 3 * 60_000
+// GPS files from Google Drive: GPSLogger uploads on its own schedule, so every half hour is plenty.
+const GPS_DRIVE_SYNC_MS = 30 * 60_000
 
 export interface StartOptions {
   port: number
@@ -58,11 +61,22 @@ export function startServer({ port, staticDir, idleSeconds }: StartOptions): Pro
   spotifyTimer.unref()
   spotifyTick()
 
-  // GPS days dropped into the gps folder while the app was off.
-  scanGps().then(
-    (r) => r.processed && console.log(`gps: ${r.processed} day(s) classified`),
-    (err: Error) => console.warn(`gps scan: ${err.message}`),
-  )
+  // GPS days dropped into the gps folder while the app was off, then new ones from Google Drive.
+  const gpsDriveTick = () => {
+    if (autoReady())
+      importNew().then(
+        (r) => r.downloaded && console.log(`gps drive: ${r.downloaded} file(s) imported`),
+        (err: Error) => console.warn(`gps drive import: ${err.message}`),
+      )
+  }
+  scanGps()
+    .then(
+      (r) => r.processed && console.log(`gps: ${r.processed} day(s) classified`),
+      (err: Error) => console.warn(`gps scan: ${err.message}`),
+    )
+    .finally(gpsDriveTick)
+  const gpsDriveTimer = setInterval(gpsDriveTick, GPS_DRIVE_SYNC_MS)
+  gpsDriveTimer.unref()
 
   const activity = idleSeconds && startRecorder(db, idleSeconds)
 
@@ -79,6 +93,7 @@ export function startServer({ port, staticDir, idleSeconds }: StartOptions): Pro
         stop: () =>
           (stopped ??= new Promise<void>((done) => {
             clearInterval(spotifyTimer)
+            clearInterval(gpsDriveTimer)
             stopRecorder()
             flushJournalFiles()
             server.close(() => {

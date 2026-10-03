@@ -3,12 +3,13 @@ import { formatJournalDate } from '../../../shared/dates.ts'
 import type { GpsDayDTO, GpsKind } from '../../../shared/types.ts'
 import { api, unwrap } from '../../api.ts'
 import type { CanvasPluginProps } from '../../canvas/plugins.ts'
-import { useFetch } from '../../hooks/useFetch.ts'
+import { useFetch, useTicker } from '../../hooks/useFetch.ts'
 import { useRevision } from '../../state/bus.ts'
 import { journalDateOf, openDate, panesStore } from '../../state/panes.ts'
 import { useStore } from '../../state/store.ts'
 import { notify, prefsStore } from '../../state/ui.ts'
 import { clock, duration, isMove, isStay, KIND_CODE, KIND_LABEL, KIND_ORDER, kindColor, km, placeNamer, type Theme } from './kinds.ts'
+import { MapSync } from './MapSync.tsx'
 import { MapView } from './MapView.tsx'
 import styles from './Map.module.css'
 
@@ -18,10 +19,15 @@ export function MapTab(_: CanvasPluginProps) {
   const theme = useStore(prefsStore, (s) => s.theme) as Theme
   const rev = useRevision()
   const [bump, setBump] = useState(0)
-  const { data: day, error, loading } = useFetch<GpsDayDTO>(`gps|${date}|${rev}|${bump}`, (signal) =>
+  const [syncOpen, setSyncOpen] = useState(false)
+  // Imports from Google Drive run in the background (and from the sync window): refetch when one finishes.
+  const tick = useTicker(syncOpen ? 3000 : 60_000)
+  const { data: drive } = useFetch(`gpsdrive|${tick}`, (signal) => unwrap(api.gps.drive.status.$get({}, { init: { signal } })))
+  const synced = drive?.running ? 'running' : drive?.lastSync
+  const { data: day, error, loading } = useFetch<GpsDayDTO>(`gps|${date}|${rev}|${bump}|${synced}`, (signal) =>
     unwrap(api.gps.day[':date'].$get({ param: { date } }, { init: { signal } })),
   )
-  const { data: days } = useFetch(`gpsdays|${bump}`, (signal) => unwrap(api.gps.days.$get({}, { init: { signal } })))
+  const { data: days } = useFetch(`gpsdays|${bump}|${synced}`, (signal) => unwrap(api.gps.days.$get({}, { init: { signal } })))
   const shown = day?.date === date ? day : undefined
 
   const scan = () =>
@@ -58,15 +64,20 @@ export function MapTab(_: CanvasPluginProps) {
           <button onClick={scan} title="Process new or changed files in data/gps/">
             Scan
           </button>
+          <button className={styles.iconButton} onClick={() => setSyncOpen(true)} title="Map sync: import GPS files from Google Drive" aria-label="Map sync settings">
+            <CogIcon />
+          </button>
         </div>
       </header>
+      {syncOpen && <MapSync onClose={() => setSyncOpen(false)} />}
       {shown ? (
         <Day day={shown} theme={theme} onChange={() => setBump((b) => b + 1)} />
       ) : loading && !error ? (
         <div className={styles.placeholder} />
       ) : (
         <p className={styles.empty}>
-          No GPS for {formatJournalDate(date)}. Drop GPSLogger files (<code>YYYYMMDD.zip</code> or <code>.gpx</code>) into <code>data/gps/</code> and press Scan.
+          No GPS for {formatJournalDate(date)}. Import GPSLogger files from Google Drive with the ⚙ button, or drop them (<code>YYYYMMDD.zip</code> or <code>.gpx</code>) into{' '}
+          <code>data/gps/</code> and press Scan.
         </p>
       )}
     </div>
@@ -181,6 +192,15 @@ function Day({ day, theme, onChange }: { day: GpsDayDTO; theme: Theme; onChange:
         </tbody>
       </table>
     </>
+  )
+}
+
+function CogIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
   )
 }
 

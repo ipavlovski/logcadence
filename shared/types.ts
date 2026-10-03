@@ -241,3 +241,32 @@ export interface GpsDayDTO {
   /** ms per kind; sums to the day's length. */
   totals: Record<GpsKind, number>
 }
+
+/** GPS files imported from a Google Drive folder (server/lib/gps/drive.ts). */
+export interface GpsDriveStatus {
+  /** A Google OAuth client is set (GOOGLE_CLIENT_ID/SECRET or saved from the settings window). */
+  configured: boolean
+  connected: boolean
+  /** Must be an authorized redirect URI when the OAuth client is a "Web application" (Desktop clients take any). */
+  redirectUri: string
+  folder: { id: string; name: string } | null
+  /** New files are imported in the background. */
+  auto: boolean
+  /** Newest day imported; automatic imports take files from this day on (it may still have grown). */
+  lastDate: string | null
+  running: 'new' | 'range' | null
+  progress: { done: number; total: number } | null
+  lastSync: number | null
+  error: string | null
+  result: GpsDriveResult | null
+}
+
+export interface GpsDriveResult {
+  downloaded: number
+  unchanged: number
+  /** Days classified by the scan after the download. */
+  processed: number
+  errors: string[]
+  /** Files in the folder dated before lastDate that aren't here: import them with a date range. */
+  older: { count: number; from: string; to: string } | null
+}

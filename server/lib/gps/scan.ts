@@ -10,10 +10,16 @@ import { withZip } from '../zip.ts'
 import { classifyDay, totals } from './classify.ts'
 import { parseGpx } from './gpx.ts'
 
-// GPS files are dropped into data/gps/ (by hand for now, later by a Google Drive sync): one file per
+// GPS files land in data/gps/, dropped by hand or imported from Google Drive (./drive.ts): one file per
 // day named YYYYMMDD(.zip|.gpx), as GPSLogger writes them. Each changed file is classified once.
 
 export const GPS_DIR = process.env.LOGCADENCE_GPS_DIR ? path.resolve(process.env.LOGCADENCE_GPS_DIR) : path.join(DATA_DIR, 'gps')
+
+/** The day a GPS file covers, from its name; null for other files. */
+export function gpsFileDate(name: string): string | null {
+  const m = /^(\d{4})-?(\d{2})-?(\d{2})\.(zip|gpx)$/i.exec(name)
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : null
+}
 
 interface SourceFile {
   date: string
@@ -29,11 +35,11 @@ function sourceFiles(): SourceFile[] {
     return []
   }
   return names.flatMap((name) => {
-    const m = /^(\d{4})-?(\d{2})-?(\d{2})\.(zip|gpx)$/i.exec(name)
-    if (!m) return []
+    const date = gpsFileDate(name)
+    if (!date) return []
     const file = path.join(GPS_DIR, name)
     const st = statSync(file)
-    return [{ date: `${m[1]}-${m[2]}-${m[3]}`, file, stamp: `${Math.round(st.mtimeMs)}:${st.size}` }]
+    return [{ date, file, stamp: `${Math.round(st.mtimeMs)}:${st.size}` }]
   })
 }
 
@@ -96,6 +102,12 @@ export function scanGps() {
     }
     return result
   })().finally(() => (scanning = null)))
+}
+
+/** Like scanGps, but a scan already running (which may have listed the folder too early) is waited out first. */
+export async function rescanGps() {
+  await scanning?.catch(() => {})
+  return scanGps()
 }
 
 // ── queries ────────────────────────────────────────────────────────────────

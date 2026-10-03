@@ -1,0 +1,150 @@
+.loading {
+  height: 120px;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.section {
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+
+.section:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+
+.section h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+.row h3 {
+  margin: 0;
+}
+
+.section p {
+  margin: 6px 0;
+}
+
+.section ol {
+  margin: 6px 0 10px;
+  padding-left: 20px;
+}
+
+.section li {
+  margin: 3px 0;
+}
+
+.section code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--code-bg);
+  padding: 1px 5px;
+  border-radius: 4px;
+  word-break: break-all;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fields > button {
+  align-self: flex-start;
+}
+
+.section input:not([type='checkbox']) {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  padding: 4px 8px;
+  color: var(--text);
+  min-width: 0;
+}
+
+.section button,
+.section a.primary {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  padding: 4px 12px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 12px;
+}
+
+.section button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.section button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.section .primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.push {
+  margin-left: auto;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 8px;
+}
+
+.muted {
+  color: var(--text-faint);
+}
+
+.ok {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.ok::before {
+  content: '●';
+  color: #3a9a5b;
+  margin-right: 4px;
+}
+
+.status {
+  color: var(--text-muted);
+}
+
+.status progress {
+  width: 120px;
+  vertical-align: middle;
+}
+
+.note {
+  background: var(--surface-2);
+  border-left: 3px solid var(--accent);
+  padding: 6px 10px;
+  border-radius: 4px;
+}
+
+.error {
+  color: var(--danger);
+}
