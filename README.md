@@ -97,4 +97,4 @@ src/
 
 ## Keyboard
 
-Press `?` in the app for the full list. Journal entries fold to their title and tags: **fold all** at the top of a day or `Ctrl+.` folds or unfolds all of them, and `Shift+click` on a title folds one. Folds are remembered per entry; a find (`Ctrl+F`) shows its matches inside folded entries. Browsers reserve `Ctrl+W`, `Ctrl+N`, `Ctrl+Shift+N` and `Ctrl+Shift+W`, so each also has an `Alt+` binding.
+Press `?` in the app for the full list. Journal entries fold to their title and tags: the top bar's **fold** button (its chevron points right when the day's entries are all folded) or `Ctrl+.` folds or unfolds all of the open day's entries, and `Shift+click` on a title folds one (with Shift held, titles show a fold or unfold cursor). Folds are remembered per entry; a find (`Ctrl+F`) shows its matches inside folded entries. Browsers reserve `Ctrl+W`, `Ctrl+N`, `Ctrl+Shift+N` and `Ctrl+Shift+W`, so each also has an `Alt+` binding.

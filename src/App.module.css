@@ -62,6 +62,32 @@
   height: 26px;
 }
 
+.topBar .foldButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.topBar .foldButton:disabled {
+  opacity: 0.4;
+  cursor: default;
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+
+/* Right-pointing when the day's entries are folded, down when they're open. */
+.chevron {
+  width: 5px;
+  height: 5px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+}
+
+.chevronOpen {
+  transform: translateY(-2px) rotate(45deg);
+}
+
 .topBar .iconButton {
   position: relative;
   display: grid;

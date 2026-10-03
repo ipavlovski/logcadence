@@ -10,6 +10,8 @@ import { Spotlight } from './components/Spotlight/Spotlight.tsx'
 import { TagOpDialog } from './components/Tags/TagOpDialog.tsx'
 import { Updates } from './components/Updates/Updates.tsx'
 import { BINDINGS, EDITOR_KEYS, formatCombo, handleGlobalKey } from './shortcuts.ts'
+import { runCommand } from './state/commands.ts'
+import { dayFoldStore } from './state/fold.ts'
 import { journalDateOf, openDate, panesStore, PANES } from './state/panes.ts'
 import { useStore } from './state/store.ts'
 import { openSpotlight, prefsStore, setPref, toggleHelp, uiStore } from './state/ui.ts'
@@ -36,6 +38,7 @@ export function App() {
         <span className={styles.brand}>logcadence</span>
         <div className={styles.actions}>
           <DayNav />
+          <FoldButton />
           <button onClick={() => openSpotlight('search')} title="Search everything (Ctrl+Shift+F)">
             search
           </button>
@@ -73,6 +76,22 @@ export function App() {
       <Updates />
       <UpdatePrompt />
     </div>
+  )
+}
+
+/** Folds or unfolds all entries of the open journal day; the chevron points right when they're all folded. */
+function FoldButton() {
+  const allFolded = useStore(dayFoldStore, (s) => s.allFolded)
+  return (
+    <button
+      className={styles.foldButton}
+      disabled={allFolded === null}
+      onClick={() => runCommand('journal.toggleFoldAll')}
+      title={allFolded ? 'Unfold all entries (Ctrl+.)' : 'Fold all entries (Ctrl+.); Shift+click a title folds one'}
+    >
+      <i className={allFolded ? styles.chevron : `${styles.chevron} ${styles.chevronOpen}`} />
+      fold
+    </button>
   )
 }
 

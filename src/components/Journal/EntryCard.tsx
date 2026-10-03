@@ -34,7 +34,10 @@ export const EntryCard = memo(function EntryCard({ entry, focus, find, flashId, 
   const toggleFold = () => day.toggleFold(entry.id)
 
   return (
-    <article className={`${styles.entry} ${entry.archived ? styles.archived : ''} ${flashId === entry.id ? styles.flash : ''}`} data-reveal={entry.id}>
+    <article
+      className={`${styles.entry} ${entry.archived ? styles.archived : ''} ${flashId === entry.id ? styles.flash : ''} ${folded ? styles.folded : ''}`}
+      data-reveal={entry.id}
+    >
       <header className={styles.entryHead}>
         <div className={styles.entryHeadMain}>
           {chat ? (

@@ -4,7 +4,7 @@ import type { EntryDTO } from '../../../shared/types.ts'
 import { createEntry } from '../../actions.ts'
 import { matches } from '../../markdown.ts'
 import { useCommand } from '../../state/commands.ts'
-import { foldStore, setFolded } from '../../state/fold.ts'
+import { dayFoldStore, foldStore, setFolded } from '../../state/fold.ts'
 import { journalStore, requestReveal, setCursor } from '../../state/journal.ts'
 import { useStore } from '../../state/store.ts'
 import { DayContext, type DayApi, type FocusRequest, type FocusTarget } from './dayContext.ts'
@@ -90,8 +90,32 @@ export function JournalDay({ date, find }: Props) {
   )
   const ids = entries?.map((e) => e.id) ?? []
   const allFolded = ids.length > 0 && ids.every((id) => foldedIds.includes(id))
-  const toggleAll = () => fold(ids, !allFolded)
-  useCommand('journal.toggleFoldAll', toggleAll)
+  useCommand('journal.toggleFoldAll', () => fold(ids, !allFolded))
+  const hasEntries = ids.length > 0
+  useEffect(() => {
+    dayFoldStore.set(() => ({ allFolded: hasEntries ? allFolded : null }))
+    return () => dayFoldStore.set(() => ({ allFolded: null }))
+  }, [hasEntries, allFolded])
+
+  // While Shift is held, titles show the fold cursor (Shift+click folds; see Journal.module.css).
+  useEffect(() => {
+    const root = document.documentElement
+    const set = (on: boolean) => (on ? root.setAttribute('data-shift', '') : root.removeAttribute('data-shift'))
+    const onKey = (e: KeyboardEvent) => e.key === 'Shift' && set(e.type === 'keydown')
+    const onMove = (e: MouseEvent) => set(e.shiftKey)
+    const off = () => set(false)
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('keyup', onKey)
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('blur', off)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('keyup', onKey)
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('blur', off)
+      off()
+    }
+  }, [])
 
   useEffect(() => {
     if (!flashId) return
@@ -163,12 +187,6 @@ export function JournalDay({ date, find }: Props) {
               {isToday && ' · today'}
             </div>
           </div>
-          {ids.length > 0 && (
-            <button className={styles.foldAll} onClick={toggleAll} title={`${allFolded ? 'Unfold' : 'Fold'} all entries (Ctrl+.); Shift+click a title folds one`}>
-              <i className={allFolded ? styles.chevron : `${styles.chevron} ${styles.open}`} />
-              {allFolded ? 'unfold all' : 'fold all'}
-            </button>
-          )}
         </header>
 
         {error && <p className={styles.error}>Could not load this day: {error}</p>}

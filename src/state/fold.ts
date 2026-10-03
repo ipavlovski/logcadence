@@ -1,4 +1,4 @@
-import { persistedStore } from './store.ts'
+import { createStore, persistedStore } from './store.ts'
 
 // Folded journal entries (only their title and tags show), by entry id. Kept per browser, like the other view
 // preferences; the oldest folds are dropped past MAX so the list can't grow without bound.
@@ -19,3 +19,7 @@ export function setFolded(ids: string[], folded: boolean) {
 }
 
 export const toggleFolded = (id: string) => setFolded([id], !foldStore.get().folded.includes(id))
+
+/** The open journal day, for the top bar's fold button: whether all its entries are folded (null: no entries). */
+export const dayFoldStore = createStore<{ allFolded: boolean | null }>({ allFolded: null })
+
