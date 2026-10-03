@@ -30,6 +30,7 @@ export const BINDINGS: Binding[] = [
   { keys: ['alt+arrowright'], label: 'Forward', group: 'Navigation', run: (p) => goHistory(p, 1) },
   { keys: ['mod+n', 'alt+n'], label: 'New entry at cursor', group: 'Journal', run: () => newEntryAtCursor(), inInputs: true },
   { keys: ['mod+shift+n', 'alt+shift+n'], label: 'New entry…', group: 'Journal', run: () => newEntryWithDialog(), inInputs: true },
+  { keys: ['mod+.'], label: 'Fold / unfold all entries', group: 'Journal', run: () => runCommand('journal.toggleFoldAll'), inInputs: true },
   { keys: ['delete'], label: 'Archive / unarchive selection', group: 'Tags', pane: 'tags', run: () => runCommand('tags.archive') },
   { keys: ['shift+delete'], label: 'Delete selection', group: 'Tags', pane: 'tags', run: () => runCommand('tags.delete') },
   { keys: ['mod+/'], label: 'Keyboard shortcuts', group: 'General', run: () => toggleHelp(), inInputs: true },
@@ -45,6 +46,7 @@ export const EDITOR_KEYS: [string, string][] = [
   ['Esc', 'Stop editing'],
   ['Paste / drop image', 'Add to node gallery'],
   ['Ctrl+click', 'Open link / tag / date in a new tab'],
+  ['Shift+click a title', 'Fold / unfold that entry'],
   ['Shift+click', 'Multi-select (tags pane)'],
 ]
 

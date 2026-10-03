@@ -3,6 +3,8 @@ import { formatJournalDate, today, weekday } from '../../../shared/dates.ts'
 import type { EntryDTO } from '../../../shared/types.ts'
 import { createEntry } from '../../actions.ts'
 import { matches } from '../../markdown.ts'
+import { useCommand } from '../../state/commands.ts'
+import { foldStore, setFolded } from '../../state/fold.ts'
 import { journalStore, requestReveal, setCursor } from '../../state/journal.ts'
 import { useStore } from '../../state/store.ts'
 import { DayContext, type DayApi, type FocusRequest, type FocusTarget } from './dayContext.ts'
@@ -23,6 +25,11 @@ export function JournalDay({ date, find }: Props) {
   const reveal = useStore(journalStore, (s) => s.reveal)
   const nonce = useRef(0)
   const q = find.trim()
+  // Folded entries show only their title and tags. A find (ctrl+f) shows its matches regardless.
+  const foldedIds = useStore(foldStore, (s) => s.folded)
+  const folded = useMemo(() => new Set(q ? [] : foldedIds), [foldedIds, q])
+  const foldedRef = useRef(folded)
+  foldedRef.current = folded
 
   const focusTo = useCallback((t: FocusRequest | null) => setFocus(t && { ...t, n: ++nonce.current }), [])
 
@@ -60,10 +67,31 @@ export function JournalDay({ date, find }: Props) {
   useEffect(() => {
     if (!reveal || reveal.date !== date || !entries?.some((e) => e.id === reveal.entryId)) return
     requestReveal(null)
+    if (reveal.nodeId) setFolded([reveal.entryId], false)
     if (reveal.mode === 'title') focusTo({ kind: 'title', entryId: reveal.entryId, caret: 'end' })
     else if (reveal.mode === 'node' && reveal.nodeId) focusTo({ kind: 'node', nodeId: reveal.nodeId, caret: 'end' })
     else setFlashId(reveal.nodeId ?? reveal.entryId)
   }, [reveal, entries, date, focusTo])
+
+  // Moving the caret into a folded entry's node (arrow keys, Enter in its title) unfolds it.
+  useEffect(() => {
+    if (focus?.kind !== 'node') return
+    const e = entries?.find((x) => x.nodes.some((n) => n.id === focus.nodeId))
+    if (e && foldStore.get().folded.includes(e.id)) setFolded([e.id], false)
+  }, [focus, entries])
+
+  /** Folds or unfolds entries; folding one that is being edited ends the edit (its draft is saved on unmount). */
+  const fold = useCallback(
+    (ids: string[], fold: boolean) => {
+      if (fold) setFocus((f) => (f?.kind === 'node' && entriesRef.current?.some((e) => ids.includes(e.id) && e.nodes.some((n) => n.id === f.nodeId)) ? null : f))
+      setFolded(ids, fold)
+    },
+    [],
+  )
+  const ids = entries?.map((e) => e.id) ?? []
+  const allFolded = ids.length > 0 && ids.every((id) => foldedIds.includes(id))
+  const toggleAll = () => fold(ids, !allFolded)
+  useCommand('journal.toggleFoldAll', toggleAll)
 
   useEffect(() => {
     if (!flashId) return
@@ -80,9 +108,10 @@ export function JournalDay({ date, find }: Props) {
       blurNode: (nodeId) => setFocus((f) => (f?.kind === 'node' && f.nodeId === nodeId ? null : f)),
       navigate(from, dir) {
         // Read-only AI chat entries have nothing to edit, so the caret skips them.
+        // A folded entry's nodes are skipped: just its title is a stop.
         const stops: FocusRequest[] = orderRef.current.filter((e) => !e.chat).flatMap((e) => [
           { kind: 'title' as const, entryId: e.id, caret: 'end' as const },
-          ...e.nodes.map((n) => ({ kind: 'node' as const, nodeId: n.id, caret: 'end' as const })),
+          ...(foldedRef.current.has(e.id) ? [] : e.nodes.map((n) => ({ kind: 'node' as const, nodeId: n.id, caret: 'end' as const }))),
         ])
         const i = stops.findIndex((s) => (from.nodeId ? s.kind === 'node' && s.nodeId === from.nodeId : s.kind === 'title' && s.entryId === from.entryId))
         const next = stops[i + dir]
@@ -113,8 +142,9 @@ export function JournalDay({ date, find }: Props) {
         const e = entriesRef.current?.find((x) => x.id === entryId)
         if (e) setCursor({ date, entryId, tags: e.tags })
       },
+      toggleFold: (entryId) => fold([entryId], !foldStore.get().folded.includes(entryId)),
     }),
-    [actions, date, focusTo],
+    [actions, date, focusTo, fold],
   )
 
   const focusFor = (e: EntryDTO) =>
@@ -133,6 +163,12 @@ export function JournalDay({ date, find }: Props) {
               {isToday && ' · today'}
             </div>
           </div>
+          {ids.length > 0 && (
+            <button className={styles.foldAll} onClick={toggleAll} title={`${allFolded ? 'Unfold' : 'Fold'} all entries (Ctrl+.); Shift+click a title folds one`}>
+              <i className={allFolded ? styles.chevron : `${styles.chevron} ${styles.open}`} />
+              {allFolded ? 'unfold all' : 'fold all'}
+            </button>
+          )}
         </header>
 
         {error && <p className={styles.error}>Could not load this day: {error}</p>}
@@ -147,7 +183,7 @@ export function JournalDay({ date, find }: Props) {
         {groups.map(([tag, list]) => (
           <section key={tag || '_untagged'} className={styles.group}>
             {list.map((e) => (
-              <EntryCard key={e.id} entry={e} focus={focusFor(e)} find={q} flashId={flashId} />
+              <EntryCard key={e.id} entry={e} focus={focusFor(e)} find={q} flashId={flashId} folded={folded.has(e.id)} />
             ))}
           </section>
         ))}

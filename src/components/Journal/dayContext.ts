@@ -20,6 +20,8 @@ export interface DayApi extends DayActions {
   backspaceAtStart(node: NodeDTO, draft: string): boolean
   /** Remember this entry as the journal cursor (for tag inheritance). */
   touch(entryId: string): void
+  /** Folds or unfolds one entry (Shift+click on its title). */
+  toggleFold(entryId: string): void
 }
 
 export const DayContext = createContext<DayApi | null>(null)

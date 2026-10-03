@@ -264,6 +264,54 @@ kbd {
   outline-offset: 2px;
 }
 
+.foldAll {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--border);
+  background: none;
+  border-radius: var(--radius);
+  padding: 2px 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.foldAll:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+/* Right-pointing when folded, down when open. */
+.chevron {
+  width: 5px;
+  height: 5px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+}
+
+.chevron.open {
+  transform: translateY(-2px) rotate(45deg);
+}
+
+/* A folded entry's stand-in for its nodes. */
+.foldedHint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 0 2px;
+  padding: 0 0 0 15px;
+  border: none;
+  border-left: 1px solid var(--border);
+  background: none;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.foldedHint:hover {
+  color: var(--accent);
+}
+
 .newEntry {
   border: none;
   background: none;

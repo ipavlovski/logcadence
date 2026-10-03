@@ -1,4 +1,4 @@
-import { memo, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { memo, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { chatTag } from '../../../shared/tags.ts'
 import type { EntryDTO } from '../../../shared/types.ts'
 import { AutoTextarea } from '../AutoTextarea/AutoTextarea.tsx'
@@ -14,23 +14,35 @@ interface Props {
   focus: FocusTarget | null
   find: string
   flashId: string | null
+  /** Only the title and tags show. */
+  folded: boolean
 }
 
-export const EntryCard = memo(function EntryCard({ entry, focus, find, flashId }: Props) {
+/** Shift+click on a title folds or unfolds its entry. On mousedown, so the title doesn't start editing first. */
+function foldOnShiftClick(e: MouseEvent, toggle: () => void) {
+  if (!e.shiftKey) return
+  e.preventDefault()
+  toggle()
+}
+
+export const EntryCard = memo(function EntryCard({ entry, focus, find, flashId, folded }: Props) {
   const day = useDayApi()
   const titleFocus = focus?.kind === 'title' && focus.entryId === entry.id ? focus : null
   const isEmpty = !entry.title && !entry.tags.length && entry.nodes.every((n) => !n.content && !n.images.length)
   // Imported AI chats are read-only apart from tags (their source tag is locked); each prompt links to the transcript.
   const chat = entry.chat
+  const toggleFold = () => day.toggleFold(entry.id)
 
   return (
     <article className={`${styles.entry} ${entry.archived ? styles.archived : ''} ${flashId === entry.id ? styles.flash : ''}`} data-reveal={entry.id}>
       <header className={styles.entryHead}>
         <div className={styles.entryHeadMain}>
           {chat ? (
-            <div className={`${styles.title} ${styles.readOnly}`}>{mark(entry.title, find)}</div>
+            <div className={`${styles.title} ${styles.readOnly}`} onMouseDown={(e) => foldOnShiftClick(e, toggleFold)}>
+              {mark(entry.title, find)}
+            </div>
           ) : (
-            <EntryTitle entry={entry} focus={titleFocus} find={find} isEmpty={isEmpty} />
+            <EntryTitle entry={entry} focus={titleFocus} find={find} isEmpty={isEmpty} toggleFold={toggleFold} />
           )}
           <TagInput
             className={styles.entryTags}
@@ -63,24 +75,31 @@ export const EntryCard = memo(function EntryCard({ entry, focus, find, flashId }
           </button>
         </div>
       </header>
-      <div className={styles.nodes}>
-        {entry.nodes.map((n) =>
-          chat ? (
-            <PromptNode key={n.id} node={n} chat={chat} find={find} flash={flashId === n.id} />
-          ) : (
-            <NodeBlock key={n.id} node={n} editing={focus?.kind === 'node' && focus.nodeId === n.id ? focus : null} find={find} flash={flashId === n.id} />
-          ),
-        )}
-        {!chat && (
-          <button
-            className={styles.addNode}
-            title="Add a node"
-            onClick={() => day.focusTo({ kind: 'node', nodeId: day.insertNode(entry.id, entry.nodes.at(-1)?.id ?? null, ''), caret: 'start' })}
-          >
-            +
-          </button>
-        )}
-      </div>
+      {folded ? (
+        <button className={styles.foldedHint} onClick={toggleFold} title="Unfold (or Shift+click the title)">
+          <i className={styles.chevron} />
+          {entry.nodes.length} {entry.nodes.length === 1 ? 'node' : 'nodes'}
+        </button>
+      ) : (
+        <div className={styles.nodes}>
+          {entry.nodes.map((n) =>
+            chat ? (
+              <PromptNode key={n.id} node={n} chat={chat} find={find} flash={flashId === n.id} />
+            ) : (
+              <NodeBlock key={n.id} node={n} editing={focus?.kind === 'node' && focus.nodeId === n.id ? focus : null} find={find} flash={flashId === n.id} />
+            ),
+          )}
+          {!chat && (
+            <button
+              className={styles.addNode}
+              title="Add a node"
+              onClick={() => day.focusTo({ kind: 'node', nodeId: day.insertNode(entry.id, entry.nodes.at(-1)?.id ?? null, ''), caret: 'start' })}
+            >
+              +
+            </button>
+          )}
+        </div>
+      )}
     </article>
   )
 })
@@ -90,11 +109,13 @@ function EntryTitle({
   focus,
   find,
   isEmpty,
+  toggleFold,
 }: {
   entry: EntryDTO
   focus: Extract<FocusTarget, { kind: 'title' }> | null
   find: string
   isEmpty: boolean
+  toggleFold: () => void
 }) {
   const day = useDayApi()
   const [draft, setDraft] = useState(entry.title)
@@ -151,7 +172,8 @@ function EntryTitle({
       <div
         className={`${styles.title} ${entry.title ? '' : styles.placeholder}`}
         tabIndex={0}
-        onClick={() => day.focusTo({ kind: 'title', entryId: entry.id, caret: 'end' })}
+        onMouseDown={(e) => foldOnShiftClick(e, toggleFold)}
+        onClick={(e) => !e.shiftKey && day.focusTo({ kind: 'title', entryId: entry.id, caret: 'end' })}
         onFocus={() => setEditing(true)}
       >
         {entry.title ? mark(entry.title, find) : 'Untitled entry'}
