@@ -33,3 +33,13 @@ export function useDebounced<T>(value: T, ms: number): T {
   }, [value, ms])
   return v
 }
+
+/** Re-renders every `ms` while the page is visible. */
+export function useTicker(ms: number): number {
+  const [n, setN] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => document.visibilityState === 'visible' && setN((x) => x + 1), ms)
+    return () => clearInterval(t)
+  }, [ms])
+  return n
+}

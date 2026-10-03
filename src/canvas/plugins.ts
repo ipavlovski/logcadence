@@ -1,4 +1,5 @@
 import { lazy, type ComponentType, type LazyExoticComponent } from 'react'
+import { Activity } from '../components/Activity/Activity.tsx'
 import { AiChats } from '../components/AiChats/AiChats.tsx'
 import { Shortcuts } from '../components/Shortcuts/Shortcuts.tsx'
 import { Spotify } from '../components/Spotify/Spotify.tsx'
@@ -33,6 +34,7 @@ export const PLUGINS: CanvasPlugin[] = [
   { type: 'images', title: 'Images', description: 'Browse every image pasted into the journal.' },
   { type: 'threads', title: 'Threads', description: 'Project progress over time: one line per done:<project> tag, one circle per day.', Component: Threads },
   { type: 'ai-prompts', title: 'AI', description: 'Chats imported from Claude, Claude Code, Gemini and Antigravity, with full transcripts.', Component: AiChats },
+  { type: 'activity', title: 'Activity', description: 'Keyboard and mouse activity in 5-minute slots, grouped into sessions of computer use (desktop app).', Component: Activity },
 ]
 
 export const pluginByType = (type: string) => PLUGINS.find((p) => p.type === type)

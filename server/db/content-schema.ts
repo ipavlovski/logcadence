@@ -182,3 +182,18 @@ export const gpsSegments = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.date, t.idx] })],
 )
+
+// Computer activity for the canvas Activity tab (see server/lib/activity.ts). `input` spans are stretches of
+// keyboard/mouse input (pauses under a minute included); `tracked` spans are when the recorder was running
+// with the machine awake, so idle time can be told apart from time that was not recorded.
+export const activitySpans = sqliteTable(
+  'activity_spans',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    device: text('device').notNull(), // host name
+    kind: text('kind', { enum: ['input', 'tracked'] }).notNull(),
+    startAt: integer('start_at').notNull(), // epoch ms
+    endAt: integer('end_at').notNull(),
+  },
+  (t) => [index('activity_spans_end_idx').on(t.endAt)],
+)

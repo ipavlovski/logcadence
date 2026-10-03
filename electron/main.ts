@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell, type WebContents } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, powerMonitor, shell, type WebContents } from 'electron'
 import { createWriteStream, rmSync } from 'node:fs'
 import path from 'node:path'
 import { today } from '../shared/dates.ts'
@@ -44,12 +44,18 @@ async function main() {
   // Imported only now: the server opens the library's databases when it loads.
   const { startServer } = await import('../server/start.ts')
   try {
-    server = await startServer({ port: PORT, staticDir: DEV_URL ? undefined : path.join(RESOURCES, 'dist') })
+    server = await startServer({
+      port: PORT,
+      staticDir: DEV_URL ? undefined : path.join(RESOURCES, 'dist'),
+      idleSeconds: () => powerMonitor.getSystemIdleTime(),
+    })
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'EADDRINUSE')
       return fatal(new Error(`Port ${PORT} is in use. Is the app (or the web server from \`pnpm dev\`) already running?`))
     throw err
   }
+
+  watchPower()
 
   setMenu({
     exportData: (opts) => void exportData(opts),
@@ -193,6 +199,13 @@ function progress(w: BrowserWindow | undefined, p: TransferProgress | null) {
   if (!w || w.isDestroyed()) return
   w.setProgressBar(p ? (p.phase === 'tables' ? 0.02 : p.done / Math.max(1, p.total)) : -1)
   if (p) w.webContents.send('transfer-progress', p)
+}
+
+/** Screen locks and sleep end the open activity spans; while locked, input doesn't count. */
+function watchPower() {
+  powerMonitor.on('lock-screen', () => server?.activity?.setLocked(true))
+  powerMonitor.on('unlock-screen', () => server?.activity?.setLocked(false))
+  powerMonitor.on('suspend', () => server?.activity?.close())
 }
 
 // ── plumbing ────────────────────────────────────────────────────────────────

@@ -33,6 +33,7 @@ export const CONTENT_TABLES = {
   gps_places: content.gpsPlaces,
   gps_days: content.gpsDays,
   gps_segments: content.gpsSegments,
+  activity_spans: content.activitySpans,
 }
 export const EVENTS_TABLES = { events: events.events }
 

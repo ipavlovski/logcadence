@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { formatJournalDate, shiftDate, today } from '../../../shared/dates.ts'
 import type { SpotifyNowPlaying, SpotifyPlay, SpotifyResume, SpotifyStatus } from '../../../shared/types.ts'
 import { api, unwrap } from '../../api.ts'
 import type { CanvasPluginProps } from '../../canvas/plugins.ts'
-import { useFetch } from '../../hooks/useFetch.ts'
+import { useFetch, useTicker } from '../../hooks/useFetch.ts'
 import { useRevision } from '../../state/bus.ts'
 import { notify } from '../../state/ui.ts'
 import { Heatmap } from '../Heatmap/Heatmap.tsx'
@@ -20,16 +20,6 @@ function ago(ms: number): string {
   if (min < 1) return 'just now'
   if (min < 60) return `${min} min ago`
   return `${Math.round(min / 60)} h ago`
-}
-
-/** Re-renders every `ms` while the page is visible. */
-function useTicker(ms: number): number {
-  const [n, setN] = useState(0)
-  useEffect(() => {
-    const t = setInterval(() => document.visibilityState === 'visible' && setN((x) => x + 1), ms)
-    return () => clearInterval(t)
-  }, [ms])
-  return n
 }
 
 /** Canvas "Spotify" tab: what is playing, where yesterday's listening stopped, and daily history. */
