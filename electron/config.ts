@@ -1,6 +1,7 @@
 import { app } from 'electron'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
+import { APP_NAME } from './channel.ts'
 
 // The desktop app's own settings (userData/config.json): just which library folder to open.
 
@@ -29,4 +30,4 @@ export function configuredLibrary(): string | null {
   return p && existsSync(p) ? p : null
 }
 
-export const defaultLibraryPath = () => path.join(app.getPath('documents'), 'Logcadence')
+export const defaultLibraryPath = () => path.join(app.getPath('documents'), APP_NAME)

@@ -11,3 +11,4 @@ ds-bundle/
 .design-sync/node_modules
 dist-electron
 release
+release-dev

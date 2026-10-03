@@ -4,16 +4,22 @@ import path from 'node:path'
 import { today } from '../shared/dates.ts'
 import type { ActionResult, TransferProgress, UpdateStatus } from '../shared/desktop.ts'
 import type { RunningServer } from '../server/start.ts'
+import { APP_NAME, BUILD_LABEL, IS_DEV_CHANNEL, PORT } from './channel.ts'
 import { configuredLibrary, writeConfig } from './config.ts'
 import { chooseImport, chooseLibrary, runImport } from './library.ts'
 import { setMenu } from './menu.ts'
 import { checkForUpdates, initUpdater, installUpdate, updateStatus } from './updater.ts'
 
-// The desktop app: runs the API server in this process (server/start.ts) on 127.0.0.1:3002 and shows the web
-// app from it, so the renderer is the unchanged web build. 3002 is fixed because Spotify's login redirect is
-// registered for it.
+// The desktop app: runs the API server in this process (server/start.ts) on 127.0.0.1:PORT (3002, or 3003 for
+// LogcadenceDev, see channel.ts) and shows the web app from it, so the renderer is the unchanged web build.
 
-const PORT = 3002
+// LogcadenceDev keeps its settings (and so its library and single-instance lock) apart from the released app's.
+if (IS_DEV_CHANNEL) {
+  app.setName(APP_NAME)
+  app.setPath('userData', path.join(app.getPath('appData'), APP_NAME))
+}
+// Read by the server when it loads (Spotify's redirect URI).
+process.env.PORT = String(PORT)
 // Set by `pnpm dev:electron`: the renderer comes from Vite (hot reload), which proxies the API to PORT.
 const DEV_URL = process.env.ELECTRON_DEV_URL
 const APP_URL = DEV_URL ?? `http://127.0.0.1:${PORT}`
@@ -69,7 +75,7 @@ async function main() {
   const setupWin = setup?.win
   setup = undefined
   setupWin?.close()
-  initUpdater((s) => send('update-status', s))
+  if (!IS_DEV_CHANNEL) initUpdater((s) => send('update-status', s))
 }
 
 function createWindow() {
@@ -81,6 +87,10 @@ function createWindow() {
     autoHideMenuBar: true,
     webPreferences: { preload: path.join(import.meta.dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false },
   })
+  if (IS_DEV_CHANNEL) {
+    win.on('page-title-updated', (e) => e.preventDefault())
+    win.setTitle(`${APP_NAME} ${BUILD_LABEL}`)
+  }
   win.once('ready-to-show', () => win?.show())
   win.on('closed', () => (win = undefined))
   guardNavigation(win.webContents)
@@ -117,7 +127,7 @@ function runSetup(): Promise<string | null> {
       resizable: false,
       backgroundColor: '#282c34',
       autoHideMenuBar: true,
-      title: 'Logcadence',
+      title: APP_NAME,
       webPreferences: { preload: path.join(import.meta.dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false },
     })
     w.setMenu(null)
@@ -248,6 +258,6 @@ app.on('window-all-closed', () => {
 })
 
 function fatal(err: Error) {
-  dialog.showErrorBox('Logcadence', err.message)
+  dialog.showErrorBox(APP_NAME, err.message)
   app.exit(1)
 }

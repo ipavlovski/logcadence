@@ -1,11 +1,11 @@
 # Builds the Windows installer and publishes it as a GitHub Release, which the installed apps update from
-# (electron-builder.yml → publish). Release: bump "version" in package.json, commit, then
-#   git tag v<version> && git push --tags
+# (electron-builder.yml → publish). Started by `pnpm release` (scripts/release.ts), which pushes a vX.Y.Z tag.
+# Dev builds' four-part tags (v0.2.0.1) don't match.
 name: Release
 
 on:
   push:
-    tags: ['v*']
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
 
 permissions:
   contents: write

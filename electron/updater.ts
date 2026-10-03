@@ -1,6 +1,7 @@
 import { app, dialog } from 'electron'
 import electronUpdater from 'electron-updater'
 import type { UpdateStatus } from '../shared/desktop.ts'
+import { IS_DEV_CHANNEL } from './channel.ts'
 
 // Auto-update from the GitHub Releases of the public repo (electron-builder.yml → publish). Updates download in
 // the background and install on quit, or right away from the "restart" prompt.
@@ -40,6 +41,10 @@ export function initUpdater(send: (s: UpdateStatus) => void) {
 export const updateStatus = () => last
 
 export async function checkForUpdates(byUser = true) {
+  if (IS_DEV_CHANNEL) {
+    if (byUser) await dialog.showMessageBox({ message: 'LogcadenceDev is updated with pnpm preview, not from GitHub.' })
+    return
+  }
   if (!app.isPackaged) {
     if (byUser) await dialog.showMessageBox({ message: 'Updates are only checked in the installed app.' })
     return
