@@ -1,11 +1,11 @@
-import { app, BrowserWindow, dialog, ipcMain, powerMonitor, shell, type WebContents } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, powerMonitor, session, shell, type WebContents } from 'electron'
 import { createWriteStream, rmSync } from 'node:fs'
 import path from 'node:path'
 import { today } from '../shared/dates.ts'
 import type { ActionResult, AppInfo, TransferProgress, UpdateStatus } from '../shared/desktop.ts'
 import type { RunningServer } from '../server/start.ts'
 import { APP_NAME, BUILD_LABEL, IS_DEV_CHANNEL, PORT } from './channel.ts'
-import { configuredLibrary, writeConfig } from './config.ts'
+import { configuredLibrary, readConfig, writeConfig } from './config.ts'
 import { chooseImport, chooseLibrary, runImport } from './library.ts'
 import { setMenu } from './menu.ts'
 import { checkForUpdates, initUpdater, installRelease, installUpdate, updateStatus } from './updater.ts'
@@ -70,12 +70,23 @@ async function main() {
     showLibraryFolder: () => void shell.openPath(library),
     checkForUpdates: () => void checkForUpdates(),
   })
+  await clearCacheAfterUpdate()
   createWindow()
   // Closed only now, so the app never has zero windows (which would quit it).
   const setupWin = setup?.win
   setup = undefined
   setupWin?.close()
   if (!IS_DEV_CHANNEL) initUpdater((s) => send('update-status', s))
+}
+
+/**
+ * The first start of a new version drops the web cache: versions before 0.2.0.2 served the page without
+ * Cache-Control, so the window could keep showing the previous version's page and scripts.
+ */
+async function clearCacheAfterUpdate() {
+  if (readConfig().lastVersion === app.getVersion()) return
+  await session.defaultSession.clearCache()
+  writeConfig({ lastVersion: app.getVersion() })
 }
 
 function createWindow() {

@@ -1,5 +1,6 @@
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
+import type { Context } from 'hono'
 import { readdirSync } from 'node:fs'
 import path from 'node:path'
 import { app } from './app.ts'
@@ -36,8 +37,12 @@ export interface RunningServer {
 export function startServer({ port, staticDir, idleSeconds }: StartOptions): Promise<RunningServer> {
   if (staticDir) {
     const root = path.relative(process.cwd(), staticDir)
-    app.use('/*', serveStatic({ root }))
-    app.get('*', serveStatic({ path: path.join(root, 'index.html') }))
+    // Built files under static/ have content hashes in their names, so they never change. Everything else (the
+    // page itself) must be re-checked, or an updated app keeps showing the old page from the browser cache.
+    const onFound = (file: string, c: Context) =>
+      c.header('Cache-Control', /[\\/]static[\\/]/.test(file) ? 'public, max-age=31536000, immutable' : 'no-cache')
+    app.use('/*', serveStatic({ root, onFound }))
+    app.get('*', serveStatic({ path: path.join(root, 'index.html'), onFound }))
   }
 
   // The markdown mirror is derived from the database: rebuild it when it is missing (e.g. after a data import).

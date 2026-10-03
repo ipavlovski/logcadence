@@ -7,6 +7,8 @@ import { APP_NAME } from './channel.ts'
 
 interface Config {
   libraryPath?: string
+  /** The version that last ran, to notice an update (main.ts clears the web cache then). */
+  lastVersion?: string
 }
 
 const file = () => path.join(app.getPath('userData'), 'config.json')
@@ -19,9 +21,10 @@ export function readConfig(): Config {
   }
 }
 
+/** Updates the given settings, keeping the others. */
 export function writeConfig(c: Config) {
   mkdirSync(path.dirname(file()), { recursive: true })
-  writeFileSync(file(), JSON.stringify(c, null, 2))
+  writeFileSync(file(), JSON.stringify({ ...readConfig(), ...c }, null, 2))
 }
 
 /** The configured library, if its folder still exists (an unplugged drive sends the user to setup). */
