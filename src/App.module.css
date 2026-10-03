@@ -62,6 +62,23 @@
   height: 26px;
 }
 
+.topBar .iconButton {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 0 7px;
+}
+
+.badge {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
 .topBar button:hover {
   color: var(--text);
   border-color: var(--accent);

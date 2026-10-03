@@ -15,6 +15,7 @@
     "dist:win": "pnpm build:electron && electron-builder --win --publish never",
     "preview": "tsx scripts/preview.ts",
     "release": "tsx scripts/release.ts",
+    "release:dev": "tsx scripts/release.ts --dev",
     "start": "NODE_ENV=production tsx server/index.ts",
     "db:generate": "drizzle-kit generate --config drizzle.content.config.ts && drizzle-kit generate --config drizzle.events.config.ts",
     "seed": "tsx scripts/seed.ts",

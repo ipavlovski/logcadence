@@ -19,11 +19,11 @@ export function out(cmd: string, args: string[], opts: SpawnSyncOptions & { ok?:
 
 export const git = (...args: string[]) => out('git', args)
 
-/** Changes that would make a build differ from HEAD: tracked edits, and new files in the source folders. */
+/** Changes that would make a build differ from HEAD: edits and new files in the sources (docs don't count). */
 export function uncommitted(): string[] {
-  const SOURCES = /^(src|server|shared|electron|scripts)\/|^(package\.json|pnpm-lock\.yaml|index\.html|electron-builder.*\.yml)$/
+  const SOURCES = /^(src|server|shared|electron|scripts|\.github)\/|^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|index\.html|vite\.config\.ts|tsconfig\.json|electron-builder.*\.yml)$/
   return git('status', '--porcelain')
     .split('\n')
     .filter(Boolean)
-    .filter((l) => !l.startsWith('??') || SOURCES.test(l.slice(3)))
+    .filter((l) => SOURCES.test(l.slice(3)))
 }

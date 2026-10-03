@@ -20,11 +20,21 @@ export interface ActionResult {
   error?: string
 }
 
+export interface AppInfo {
+  /** Semver: 0.1.0, 0.2.0-dev.3 (a dev build), 0.2.0-preview.3 (LogcadenceDev). */
+  version: string
+  /** "dev" is LogcadenceDev, which is updated by pnpm preview rather than from GitHub. */
+  channel: 'release' | 'dev'
+}
+
 export interface DesktopApi {
   platform: string
+  appInfo(): Promise<AppInfo>
   /** Writes an export zip to a file picked in a save dialog. */
   exportData(opts?: { assets?: boolean; gps?: boolean }): Promise<ActionResult>
   checkForUpdates(): Promise<void>
+  /** Downloads one release (by tag, e.g. a dev build) as the next update; progress comes through onUpdate. */
+  installRelease(tag: string): Promise<void>
   /** Restarts into a downloaded update. */
   installUpdate(): Promise<void>
   onUpdate(cb: (s: UpdateStatus) => void): () => void

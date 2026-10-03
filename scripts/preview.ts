@@ -1,14 +1,13 @@
 // Builds the working tree as LogcadenceDev (electron/channel.ts) and (re)starts it on Windows, next to the
 // released Logcadence. Usage: pnpm preview  (from WSL, or from a Windows shell)
 //
-// Version: dev builds of main's X.Y.Z are X.(Y+1).0.N (scripts/lib/versions.ts). On the dev branch with
-// everything committed, the build's commit is tagged vX.(Y+1).0.N (once; a rebuild of a tagged commit reuses its
-// number). Uncommitted builds are labelled N-wip with the next N and not tagged.
+// Version: previews are labelled with the dev build they lead up to (shared/versions.ts): with main at 0.1.0 and
+// v0.2.0.2 the last dev build, 0.2.0.3-preview. Nothing is tagged; `pnpm release:dev` does that.
 
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { git, out, run, uncommitted } from './lib/run.ts'
-import { devNumbers, devSemver, devSeries, nextDevNumber } from './lib/versions.ts'
+import { devSeries, nextDevNumber } from '../shared/versions.ts'
 
 const EXE = 'LogcadenceDev.exe'
 const WSL = process.platform === 'linux' && !!out('sh', ['-c', 'command -v wslpath'], { ok: true })
@@ -25,12 +24,9 @@ const release = (JSON.parse(readFileSync('package.json', 'utf8')) as { version: 
 const series = devSeries(release)
 const branch = git('rev-parse', '--abbrev-ref', 'HEAD')
 const dirty = uncommitted()
-const headTag = devNumbers(series, git('tag', '--points-at', 'HEAD').split('\n'))[0]
-const n = dirty.length ? nextDevNumber(series, git('tag', '-l').split('\n')) : (headTag ?? nextDevNumber(series, git('tag', '-l').split('\n')))
-const tagIt = !dirty.length && headTag === undefined && branch === 'dev'
-const label = `${series}.${n}${dirty.length ? '-wip' : ''}`
-console.log(`LogcadenceDev ${label}  (main ${release}, branch ${branch}${dirty.length ? `, ${dirty.length} uncommitted change(s)` : ''})`)
-if (!dirty.length && branch !== 'dev') console.log('Not on the dev branch: this build is not tagged.')
+const n = nextDevNumber(series, git('tag', '-l').split('\n'))
+const label = `${series}.${n}-preview`
+console.log(`LogcadenceDev ${label}  (main ${release}, ${branch} @ ${git('rev-parse', '--short', 'HEAD')}${dirty.length ? ` + ${dirty.length} uncommitted change(s)` : ''})`)
 
 // ── build ───────────────────────────────────────────────────────────────────
 
@@ -48,7 +44,7 @@ run('pnpm', [
   '--dir',
   '--config',
   'electron-builder.dev.yml',
-  `-c.extraMetadata.version=${devSemver(series, n)}${dirty.length ? '.wip' : ''}`,
+  `-c.extraMetadata.version=${series}-preview.${n}`,
   `-c.buildVersion=${series}.${n}`,
 ])
 const built = path.resolve('release-dev/win-unpacked')
@@ -91,8 +87,4 @@ const shortcutScript = (dir: string) => `$s = (New-Object -ComObject WScript.She
 $s.TargetPath = '${dir}\\${EXE}'; $s.WorkingDirectory = '${dir}'; $s.Description = 'Logcadence dev build (pnpm preview)'; $s.Save()`
 run('powershell.exe', ['-NoProfile', '-Command', `${shortcutScript(targetWin)}; Start-Process -FilePath '${targetWin}\\${EXE}'`], winOpts)
 
-if (tagIt) {
-  git('tag', '-a', `v${series}.${n}`, '-m', `LogcadenceDev ${series}.${n}`)
-  console.log(`Tagged ${git('rev-parse', '--short', 'HEAD')} as v${series}.${n}`)
-}
 step(`LogcadenceDev ${label} is running`)

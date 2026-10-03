@@ -12,7 +12,9 @@ function subscribe<T>(channel: string, cb: (v: T) => void) {
 const api: DesktopApi = {
   platform: process.platform,
   exportData: (opts) => ipcRenderer.invoke('export-data', opts),
+  appInfo: () => ipcRenderer.invoke('app-info'),
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+  installRelease: (tag) => ipcRenderer.invoke('install-release', tag),
   installUpdate: () => ipcRenderer.invoke('install-update'),
   onUpdate: (cb) => subscribe<UpdateStatus>('update-status', cb),
   onProgress: (cb) => subscribe<TransferProgress>('transfer-progress', cb),

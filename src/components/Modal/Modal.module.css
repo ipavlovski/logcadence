@@ -32,6 +32,16 @@
   flex-direction: column;
 }
 
+.large {
+  width: min(1040px, 100%);
+  height: min(720px, 88vh);
+  max-height: none;
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
 .title {
   margin: 0 0 14px;
   font-size: 15px;

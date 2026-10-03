@@ -1,11 +1,12 @@
-# Builds the Windows installer and publishes it as a GitHub Release, which the installed apps update from
-# (electron-builder.yml → publish). Started by `pnpm release` (scripts/release.ts), which pushes a vX.Y.Z tag.
-# Dev builds' four-part tags (v0.2.0.1) don't match.
+# Builds the Windows installer for a pushed release tag and publishes it as a GitHub Release, which the installed
+# apps update from. Tags come from scripts/release.ts: `pnpm release` pushes vX.Y.Z (a release: installed apps
+# update to it on their own), `pnpm release:dev` pushes vX.Y.Z.N (a dev build, published as a pre-release: only
+# installed from the app's Updates window). See shared/versions.ts for the numbering.
 name: Release
 
 on:
   push:
-    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+    tags: ['v*']
 
 permissions:
   contents: write
@@ -13,8 +14,13 @@ permissions:
 jobs:
   windows:
     runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # tags and history, for the release notes
       - uses: pnpm/action-setup@v4
         with:
           version: 11
@@ -23,14 +29,20 @@ jobs:
           node-version: 24
           cache: pnpm
 
-      - name: Tag matches package.json version
-        shell: bash
-        run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
-
       - run: pnpm install --frozen-lockfile
+      # Fails unless the tag matches package.json (vX.Y.Z, or vX.(Y+1).0.N for a dev build).
+      - name: Version and release notes
+        id: meta
+        run: pnpm exec tsx scripts/release-notes.ts "$GITHUB_REF_NAME" notes.md >> "$GITHUB_OUTPUT"
       - run: pnpm test
       - run: pnpm build:electron
-      - name: Build installer and publish the release
-        run: pnpm exec electron-builder --win --publish always
+      # The app's version comes from the tag: a dev build v0.2.0.3 is 0.2.0-dev.3 (semver, as the updater needs).
+      - run: pnpm exec electron-builder --win --publish never -c.extraMetadata.version=${{ steps.meta.outputs.version }}
+      # Published here rather than by electron-builder, which would name the release after the semver version.
+      - name: Publish the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >
+          gh release create "$GITHUB_REF_NAME" --title "${{ steps.meta.outputs.title }}" --notes-file notes.md
+          ${{ steps.meta.outputs.prerelease == 'true' && '--prerelease' || '--latest' }}
+          release/Logcadence-Setup-*.exe release/Logcadence-Setup-*.exe.blockmap release/latest.yml

@@ -7,9 +7,11 @@ interface Props {
   children: ReactNode
   /** Spotlight-style: pinned near the top, wider. */
   spotlight?: boolean
+  /** A window-sized dialog that lays out its own content (no padding or title). */
+  large?: boolean
 }
 
-export function Modal({ title, onClose, children, spotlight }: Props) {
+export function Modal({ title, onClose, children, spotlight, large }: Props) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -23,8 +25,8 @@ export function Modal({ title, onClose, children, spotlight }: Props) {
 
   return (
     <div className={`${styles.scrim} ${spotlight ? styles.top : ''}`} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className={`${styles.dialog} ${spotlight ? styles.wide : ''}`} role="dialog" aria-label={title}>
-        {title && <h2 className={styles.title}>{title}</h2>}
+      <div className={`${styles.dialog} ${spotlight ? styles.wide : ''} ${large ? styles.large : ''}`} role="dialog" aria-label={title}>
+        {title && !large && <h2 className={styles.title}>{title}</h2>}
         {children}
       </div>
     </div>

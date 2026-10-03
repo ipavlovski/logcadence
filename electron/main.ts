@@ -2,13 +2,13 @@ import { app, BrowserWindow, dialog, ipcMain, powerMonitor, shell, type WebConte
 import { createWriteStream, rmSync } from 'node:fs'
 import path from 'node:path'
 import { today } from '../shared/dates.ts'
-import type { ActionResult, TransferProgress, UpdateStatus } from '../shared/desktop.ts'
+import type { ActionResult, AppInfo, TransferProgress, UpdateStatus } from '../shared/desktop.ts'
 import type { RunningServer } from '../server/start.ts'
 import { APP_NAME, BUILD_LABEL, IS_DEV_CHANNEL, PORT } from './channel.ts'
 import { configuredLibrary, writeConfig } from './config.ts'
 import { chooseImport, chooseLibrary, runImport } from './library.ts'
 import { setMenu } from './menu.ts'
-import { checkForUpdates, initUpdater, installUpdate, updateStatus } from './updater.ts'
+import { checkForUpdates, initUpdater, installRelease, installUpdate, updateStatus } from './updater.ts'
 
 // The desktop app: runs the API server in this process (server/start.ts) on 127.0.0.1:PORT (3002, or 3003 for
 // LogcadenceDev, see channel.ts) and shows the web app from it, so the renderer is the unchanged web build.
@@ -222,7 +222,9 @@ function watchPower() {
 
 function registerIpc() {
   ipcMain.handle('export-data', (_e, opts?: { assets?: boolean; gps?: boolean }) => exportData(opts))
+  ipcMain.handle('app-info', (): AppInfo => ({ version: app.getVersion(), channel: IS_DEV_CHANNEL ? 'dev' : 'release' }))
   ipcMain.handle('check-for-updates', () => checkForUpdates())
+  ipcMain.handle('install-release', (_e, tag: string) => installRelease(tag))
   ipcMain.handle('install-update', async () => {
     await stopServer()
     installUpdate()
