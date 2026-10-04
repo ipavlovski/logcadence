@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
-import { asc, eq, inArray } from 'drizzle-orm'
+import { and, asc, eq, gt, inArray, lt } from 'drizzle-orm'
 import type { GpsDayDTO, GpsKind, GpsPlaceDTO } from '../../../shared/types.ts'
 import { DATA_DIR, db } from '../../db/client.ts'
-import { gpsDays, gpsPlaces, gpsSegments } from '../../db/content-schema.ts'
+import { gpsDays, gpsPlaces, gpsSegments, gpsTrips } from '../../db/content-schema.ts'
 import { bad, notFound } from '../validate.ts'
 import { withZip } from '../zip.ts'
 import { classifyDay, totals } from './classify.ts'
@@ -145,6 +145,12 @@ export function getDay(date: string): GpsDayDTO | null {
     pointCount: day.pointCount,
     segments,
     places,
+    trips: db
+      .select({ id: gpsTrips.id, start: gpsTrips.startAt, end: gpsTrips.endAt })
+      .from(gpsTrips)
+      .where(eq(gpsTrips.date, date))
+      .orderBy(asc(gpsTrips.startAt))
+      .all(),
     totals: totals(segments),
   }
 }
@@ -159,4 +165,23 @@ export function setHomebase(date: string, placeId: string | null) {
   const src = sourceFiles().find((s) => s.date === date) ?? notFound('GPS file for that day')
   if (placeId && !db.select().from(gpsPlaces).where(eq(gpsPlaces.id, placeId)).get()) bad('unknown place')
   processDay(src, placeId)
+}
+
+/** Groups the stretch start–end of a day into a trip; trips it overlaps are merged into it. */
+export function addTrip(date: string, start: number, end: number) {
+  if (!db.select().from(gpsDays).where(eq(gpsDays.date, date)).get()) notFound('GPS day')
+  db.transaction((tx) => {
+    const overlap = and(eq(gpsTrips.date, date), lt(gpsTrips.startAt, end), gt(gpsTrips.endAt, start))
+    for (const t of tx.select().from(gpsTrips).where(overlap).all()) {
+      start = Math.min(start, t.startAt)
+      end = Math.max(end, t.endAt)
+    }
+    tx.delete(gpsTrips).where(overlap).run()
+    tx.insert(gpsTrips).values({ id: randomUUID(), date, startAt: start, endAt: end, createdAt: Date.now() }).run()
+  })
+}
+
+export function deleteTrip(date: string, id: string) {
+  const res = db.delete(gpsTrips).where(and(eq(gpsTrips.date, date), eq(gpsTrips.id, id))).run()
+  if (!res.changes) notFound('trip')
 }

@@ -4,8 +4,8 @@ import { isIsoDate } from '../../shared/dates.ts'
 import { disconnect, forget, GoogleAuthError, handleCallback, loginUrl, setClient } from '../lib/gdrive/auth.ts'
 import { DriveError } from '../lib/gdrive/drive.ts'
 import { importNew, importRange, setFolder, status, updateSettings } from '../lib/gps/drive.ts'
-import { getDay, listDays, renamePlace, scanGps, setHomebase } from '../lib/gps/scan.ts'
-import { bad, notFound, obj, optBool, str } from '../lib/validate.ts'
+import { addTrip, deleteTrip, getDay, listDays, renamePlace, scanGps, setHomebase } from '../lib/gps/scan.ts'
+import { bad, notFound, num, obj, optBool, str } from '../lib/validate.ts'
 
 const dateParam = (date: string) => (isIsoDate(date) ? date : bad('invalid date'))
 
@@ -56,6 +56,28 @@ export const gpsRoutes = new Hono()
       return c.json(getDay(date)!)
     },
   )
+  // Trips: rows of the timetable grouped by hand, as a time range (epoch ms).
+  .post(
+    '/gps/day/:date/trips',
+    validator('json', (v) => {
+      const o = obj(v)
+      const start = num(o, 'start')
+      const end = num(o, 'end')
+      if (!(start < end)) bad('start must be before end')
+      return { start, end }
+    }),
+    (c) => {
+      const date = dateParam(c.req.param('date'))
+      const { start, end } = c.req.valid('json')
+      addTrip(date, start, end)
+      return c.json(getDay(date)!)
+    },
+  )
+  .delete('/gps/day/:date/trips/:id', (c) => {
+    const date = dateParam(c.req.param('date'))
+    deleteTrip(date, c.req.param('id'))
+    return c.json(getDay(date)!)
+  })
 
   // ── Google Drive import ──
   .get('/gps/drive/status', (c) => c.json(status()))

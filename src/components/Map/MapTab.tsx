@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState, type CSSProperties } from 'react'
 import { formatJournalDate } from '../../../shared/dates.ts'
-import type { GpsDayDTO, GpsKind } from '../../../shared/types.ts'
+import type { GpsDayDTO, GpsKind, GpsTripDTO } from '../../../shared/types.ts'
 import { api, unwrap } from '../../api.ts'
 import type { CanvasPluginProps } from '../../canvas/plugins.ts'
 import { useFetch, useTicker } from '../../hooks/useFetch.ts'
@@ -71,7 +71,7 @@ export function MapTab(_: CanvasPluginProps) {
       </header>
       {syncOpen && <MapSync onClose={() => setSyncOpen(false)} />}
       {shown ? (
-        <Day day={shown} theme={theme} onChange={() => setBump((b) => b + 1)} />
+        <Day key={shown.date} day={shown} theme={theme} onChange={() => setBump((b) => b + 1)} />
       ) : loading && !error ? (
         <div className={styles.placeholder} />
       ) : (
@@ -86,13 +86,26 @@ export function MapTab(_: CanvasPluginProps) {
 
 function Day({ day, theme, onChange }: { day: GpsDayDTO; theme: Theme; onChange: () => void }) {
   const [hovered, setHovered] = useState<number | null>(null)
-  const [selected, setSelected] = useState<number | null>(null)
+  const [hoveredTrip, setHoveredTrip] = useState<GpsTripDTO | null>(null)
+  // Clicked rows: a click sets both ends, Shift+click moves the focus end.
+  const [sel, setSel] = useState<{ anchor: number; focus: number } | null>(null)
+  const lo = sel ? Math.min(sel.anchor, sel.focus) : -1
+  const hi = sel ? Math.max(sel.anchor, sel.focus) : -1
+  const selected = useMemo(() => (lo < 0 ? [] : Array.from({ length: hi - lo + 1 }, (_, k) => lo + k)), [lo, hi])
+  const tripOf = useMemo(() => day.segments.map((s) => tripAt(day.trips, (s.start + s.end) / 2)), [day])
+  // The selection is exactly one trip: its button removes it; a longer selection gets one that adds a trip.
+  const selTrip = lo >= 0 && tripOf[lo] && tripOf[lo] === tripOf[hi] && tripOf[lo - 1] !== tripOf[lo] && tripOf[hi + 1] !== tripOf[hi] ? tripOf[lo] : null
   const name = useMemo(
     () => placeNamer(day.places, day.homebaseId, day.segments.flatMap((s) => [s.placeId, s.fromPlaceId, s.toPlaceId])),
     [day],
   )
   const onHover = useCallback((i: number | null) => setHovered(i), [])
-  const onSelect = useCallback((i: number) => setSelected(i), [])
+  const onSelect = useCallback((i: number) => setSel({ anchor: i, focus: i }), [])
+  const click = (i: number, shift: boolean) => {
+    if (shift && sel) setSel({ ...sel, focus: i })
+    else if (i >= lo && i <= hi) setSel(null)
+    else setSel({ anchor: i, focus: i })
+  }
 
   const rename = (placeId: string) => {
     const next = prompt('Name this place', name(placeId))
@@ -101,6 +114,17 @@ function Day({ day, theme, onChange }: { day: GpsDayDTO; theme: Theme; onChange:
   }
   const setHomebase = (placeId: string | null) =>
     unwrap(api.gps.day[':date'].homebase.$put({ param: { date: day.date }, json: { placeId } })).then(onChange, (err: Error) => notify(err.message))
+
+  const addTrip = () =>
+    unwrap(api.gps.day[':date'].trips.$post({ param: { date: day.date }, json: { start: day.segments[lo]!.start, end: day.segments[hi]!.end } })).then(onChange, (err: Error) =>
+      notify(err.message),
+    )
+  const removeTrip = (id: string) =>
+    unwrap(api.gps.day[':date'].trips[':id'].$delete({ param: { date: day.date, id } })).then(onChange, (err: Error) => notify(err.message))
+  const tripTitle = (t: GpsTripDTO) => {
+    const rows = day.segments.filter((_, i) => tripOf[i] === t)
+    return `Trip ${clock(t.start)}–${clock(t.end)} · ${duration(t.end - t.start)}, ${km(rows.reduce((n, s) => n + s.distanceM, 0))}`
+  }
 
   const travelled = day.segments.reduce((n, s) => n + s.distanceM, 0)
   const moving = day.totals['A->B'] + day.totals['B->B'] + day.totals['B->A'] + day.totals['A->A']
@@ -141,6 +165,7 @@ function Day({ day, theme, onChange }: { day: GpsDayDTO; theme: Theme; onChange:
       <table className={styles.table}>
         <thead>
           <tr>
+            <th className={styles.tripCol} />
             <th>Type</th>
             <th>Time</th>
             <th>Duration</th>
@@ -151,11 +176,42 @@ function Day({ day, theme, onChange }: { day: GpsDayDTO; theme: Theme; onChange:
           {day.segments.map((s, i) => (
             <tr
               key={i}
-              className={[i === hovered && styles.hovered, i === selected && styles.selected, s.kind === 'gap' && styles.gapRow].filter(Boolean).join(' ')}
+              className={[i === hovered && styles.hovered, i >= lo && i <= hi && styles.selected, s.kind === 'gap' && styles.gapRow].filter(Boolean).join(' ')}
               onMouseEnter={() => setHovered(i)}
               onMouseLeave={() => setHovered(null)}
-              onClick={() => s.kind !== 'gap' && setSelected(i)}
+              // Shift would select the table's text.
+              onMouseDown={(e) => e.shiftKey && e.preventDefault()}
+              onClick={(e) => click(i, e.shiftKey)}
             >
+              <td className={styles.tripCol}>
+                {tripOf[i] && (
+                  <span
+                    className={[styles.trip, tripOf[i - 1] !== tripOf[i] && styles.tripStart, tripOf[i + 1] !== tripOf[i] && styles.tripEnd, (tripOf[i] === selTrip || tripOf[i] === hoveredTrip) && styles.tripOn]
+                      .filter(Boolean)
+                      .join(' ')}
+                    title={`${tripTitle(tripOf[i]!)} (click to select)`}
+                    onMouseEnter={() => setHoveredTrip(tripOf[i])}
+                    onMouseLeave={() => setHoveredTrip(null)}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      const t = tripOf[i]
+                      setSel(t === selTrip ? null : { anchor: tripOf.indexOf(t), focus: tripOf.lastIndexOf(t) })
+                    }}
+                  />
+                )}
+                {i === lo && selTrip ? (
+                  <button className={styles.tripButton} onClick={(e) => (e.stopPropagation(), removeTrip(selTrip.id))} title="Remove this trip" aria-label="Remove trip">
+                    ×
+                  </button>
+                ) : (
+                  i === lo &&
+                  hi > lo && (
+                    <button className={styles.tripButton} onClick={(e) => (e.stopPropagation(), addTrip())} title="Group the selected rows into a trip" aria-label="Add trip">
+                      +
+                    </button>
+                  )
+                )}
+              </td>
               <td>
                 <Chip kind={s.kind} theme={theme} /> {KIND_CODE[s.kind]}
               </td>
@@ -193,6 +249,11 @@ function Day({ day, theme, onChange }: { day: GpsDayDTO; theme: Theme; onChange:
       </table>
     </>
   )
+}
+
+/** The trip a moment falls in. */
+function tripAt(trips: GpsTripDTO[], t: number): GpsTripDTO | null {
+  return trips.find((trip) => t >= trip.start && t <= trip.end) ?? null
 }
 
 function CogIcon() {

@@ -27,9 +27,9 @@ interface Props {
   day: GpsDayDTO
   theme: Theme
   name: (placeId: string | null) => string
-  /** Timetable row under the pointer / clicked. */
+  /** Timetable row under the pointer / rows clicked (several with Shift). */
   hovered: number | null
-  selected: number | null
+  selected: number[]
   onHover: (idx: number | null) => void
   onSelect: (idx: number) => void
 }
@@ -86,23 +86,26 @@ export function MapView({ day, theme, name, hovered, selected, onHover, onSelect
     if (!b.isEmpty()) m.fitBounds(b, { padding: 48, maxZoom: 15, duration: 0 })
   }, [moves, stops])
 
-  // Fly to a clicked row.
+  // Fly to the clicked rows.
   useEffect(() => {
     const m = map.current
-    const s = selected !== null ? day.segments[selected] : null
-    if (!m || !s) return
+    if (!m) return
     const b = new LngLatBounds()
-    for (const [lon, lat] of s.path) b.extend([lon, lat])
-    const place = s.placeId ? day.places.find((p) => p.id === s.placeId) : null
-    if (place) b.extend([place.lon, place.lat])
+    for (const idx of selected) {
+      const s = day.segments[idx]
+      if (!s) continue
+      for (const [lon, lat] of s.path) b.extend([lon, lat])
+      const place = s.placeId ? day.places.find((p) => p.id === s.placeId) : null
+      if (place) b.extend([place.lon, place.lat])
+    }
     if (!b.isEmpty()) m.fitBounds(b, { padding: 64, maxZoom: 16, duration: 600 })
   }, [selected, day])
 
   useEffect(() => {
     const o = overlay.current
     if (!o) return
-    const active = hovered ?? selected
-    const dim = (idxs: number[]) => active !== null && !idxs.includes(active)
+    const active = hovered !== null ? [hovered] : selected
+    const dim = (idxs: number[]) => active.length > 0 && !idxs.some((i) => active.includes(i))
     const surface = rgb(theme === 'dark' ? '#2b313c' : '#f7f7f4')
     o.setProps({
       layers: [
@@ -111,7 +114,7 @@ export function MapView({ day, theme, name, hovered, selected, onHover, onSelect
           data: moves,
           getPath: (s) => s.path.map(([lon, lat]) => [lon, lat] as [number, number]),
           getColor: (s) => rgb(kindColor(s.kind, theme), dim([s.idx]) ? 70 : 235),
-          getWidth: (s) => (s.idx === active ? 6 : 3),
+          getWidth: (s) => (active.includes(s.idx) ? 6 : 3),
           widthUnits: 'pixels',
           capRounded: true,
           jointRounded: true,

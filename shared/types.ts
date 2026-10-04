@@ -229,6 +229,13 @@ export interface GpsSegmentDTO {
   path: [number, number, number][]
 }
 
+/** Rows of the timetable grouped by hand; a segment belongs to the trip its midpoint falls in. */
+export interface GpsTripDTO {
+  id: string
+  start: number
+  end: number
+}
+
 export interface GpsDayDTO {
   date: string
   dayStart: number
@@ -238,6 +245,7 @@ export interface GpsDayDTO {
   segments: GpsSegmentDTO[]
   /** Places referenced by the day's segments. */
   places: GpsPlaceDTO[]
+  trips: GpsTripDTO[]
   /** ms per kind; sums to the day's length. */
   totals: Record<GpsKind, number>
 }

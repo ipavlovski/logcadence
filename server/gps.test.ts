@@ -162,4 +162,21 @@ describe('GPS files', () => {
     const { json: back } = await req<GpsDayDTO>('PUT', `/api/gps/day/${DATE}/homebase`, { placeId: null })
     expect(back).toMatchObject({ homebaseId: day.homebaseId, homebaseOverride: false })
   })
+
+  it('groups rows into trips, merging overlaps, kept across a re-classify', async () => {
+    const { json: day } = await req<GpsDayDTO>('GET', `/api/gps/day/${DATE}`)
+    expect(day.trips).toEqual([])
+    const [out, , back] = day.segments.slice(1, 4) // A->B, B, B->A: the morning errand
+    const { json: one } = await req<GpsDayDTO>('POST', `/api/gps/day/${DATE}/trips`, { start: out!.start, end: day.segments[2]!.end })
+    expect(one.trips).toEqual([{ id: expect.any(String), start: out!.start, end: day.segments[2]!.end }])
+    // Overlapping the first one: one trip over both.
+    const { json: merged } = await req<GpsDayDTO>('POST', `/api/gps/day/${DATE}/trips`, { start: day.segments[2]!.start, end: back!.end })
+    expect(merged.trips).toEqual([{ id: expect.any(String), start: out!.start, end: back!.end }])
+    const { json: later } = await req<GpsDayDTO>('PUT', `/api/gps/day/${DATE}/homebase`, { placeId: null })
+    expect(later.trips).toEqual(merged.trips)
+    expect((await req('POST', `/api/gps/day/${DATE}/trips`, { start: back!.end, end: out!.start })).status).toBe(400)
+    const { json: none } = await req<GpsDayDTO>('DELETE', `/api/gps/day/${DATE}/trips/${merged.trips[0]!.id}`)
+    expect(none.trips).toEqual([])
+    expect((await req('DELETE', `/api/gps/day/${DATE}/trips/${merged.trips[0]!.id}`)).status).toBe(404)
+  })
 })

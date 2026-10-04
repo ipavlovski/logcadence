@@ -183,6 +183,22 @@ export const gpsSegments = sqliteTable(
   (t) => [primaryKey({ columns: [t.date, t.idx] })],
 )
 
+// Trips: stretches of a day's timeline grouped by hand. Kept as times, not segment indexes, so they
+// survive the day being classified again (a changed file or homebase).
+export const gpsTrips = sqliteTable(
+  'gps_trips',
+  {
+    id: text('id').primaryKey(),
+    date: text('date')
+      .notNull()
+      .references(() => gpsDays.date, { onDelete: 'cascade' }),
+    startAt: integer('start_at').notNull(),
+    endAt: integer('end_at').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('gps_trips_date_idx').on(t.date)],
+)
+
 // Computer activity for the canvas Activity tab (see server/lib/activity.ts). `input` spans are stretches of
 // keyboard/mouse input (pauses under a minute included); `tracked` spans are when the recorder was running
 // with the machine awake, so idle time can be told apart from time that was not recorded.
