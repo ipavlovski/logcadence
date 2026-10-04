@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react'
 import { bin, BIN_MS, dayBounds, partOfDay, sessions, union, type ActivitySpansDTO, type Session, type Span } from '../../../shared/activity.ts'
 import { formatJournalDate, shiftDate, today, weekday } from '../../../shared/dates.ts'
 import { api, unwrap } from '../../api.ts'
@@ -100,18 +100,12 @@ export function Activity(_: CanvasPluginProps) {
 }
 
 function DayView({ day }: { day: Day }) {
-  const [hover, setHover] = useState<number | null>(null)
-  const lane = useRef<HTMLDivElement>(null)
-  const laneWidth = useWidth(lane)
-  const span = day.end - day.start
-  const pct = (t: number) => `${((t - day.start) / span) * 100}%`
+  // The zoomed session, by its start (the live session's end moves on every refresh).
+  const [zoomAt, setZoomAt] = useState<number | null>(null)
+  const zoom = day.sessions.find((s) => s.startAt === zoomAt)
+  const toggleZoom = (s: Session) => setZoomAt(s.startAt === zoom?.startAt ? null : s.startAt)
   const firstInput = day.input[0]?.startAt
   const lastInput = day.input.at(-1)?.endAt
-  const ticks = [0, 3, 6, 9, 12, 15, 18, 21].map((h) => {
-    const d = new Date(day.start)
-    d.setHours(h)
-    return { h, t: d.getTime() }
-  })
 
   return (
     <>
@@ -122,39 +116,7 @@ function DayView({ day }: { day: Day }) {
         <Stat label="First – last input" value={firstInput != null && lastInput != null ? `${clock(firstInput)} – ${clock(lastInput)}` : '—'} />
       </section>
 
-      <section className={styles.chart}>
-        <div className={styles.readout}>
-          {hover != null ? (
-            <>
-              <b>
-                {clock(day.start + hover * BIN_MS)}–{clock(Math.min(day.end, day.start + (hover + 1) * BIN_MS))}
-              </b>{' '}
-              {day.tracked[hover] ? `${duration(day.bins[hover]!)} of input` : 'not recorded'}
-            </>
-          ) : (
-            <span className={styles.muted}>Input per 5-minute slot · blank: not recorded</span>
-          )}
-        </div>
-        <div className={styles.bars} style={{ '--n': day.bins.length } as CSSProperties} onMouseLeave={() => setHover(null)}>
-          {day.bins.map((ms, i) => (
-            <div key={i} className={`${styles.slot} ${day.tracked[i] ? '' : styles.untracked} ${hover === i ? styles.hovered : ''}`} onMouseEnter={() => setHover(i)}>
-              {ms > 0 && <span style={{ height: `${Math.max(4, (ms / BIN_MS) * 100)}%` }} />}
-            </div>
-          ))}
-        </div>
-        <div className={styles.lane} ref={lane}>
-          {day.sessions.map((s) => (
-            <SessionBand key={s.startAt} s={s} start={(s.startAt - day.start) / span} size={(s.endAt - s.startAt) / span} laneWidth={laneWidth} />
-          ))}
-        </div>
-        <div className={styles.axis}>
-          {ticks.map(({ h, t }) => (
-            <span key={h} style={{ left: pct(t) }}>
-              {String(h).padStart(2, '0')}
-            </span>
-          ))}
-        </div>
-      </section>
+      <Chart key={zoom?.startAt ?? 'day'} day={day} zoom={zoom} onBand={toggleZoom} onUnzoom={() => setZoomAt(null)} />
 
       {day.sessions.length > 0 && (
         <section className={styles.sessions}>
@@ -169,7 +131,8 @@ function DayView({ day }: { day: Day }) {
             </thead>
             <tbody>
               {day.sessions.map((s) => (
-                <tr key={s.startAt}>
+                <tr key={s.startAt} className={s.startAt === zoom?.startAt ? styles.zoomed : ''} onClick={() => toggleZoom(s)} title="Zoom into this session">
+
                   <td>{partOfDay(s)}</td>
                   <td>
                     {clock(s.startAt)} – {clock(s.endAt)}
@@ -188,15 +151,128 @@ function DayView({ day }: { day: Day }) {
   )
 }
 
-function SessionBand({ s, start, size, laneWidth }: { s: Session; start: number; size: number; laneWidth: number }) {
+/** Slots a zoomed view fits across the chart's width (4 hours); longer sessions scroll sideways. */
+const ZOOM_BINS = 48
+/** Narrowest a zoomed slot gets: two slots (one 10-minute mark) leave the slanted labels clear of each other; narrower panes scroll. */
+const ZOOM_SLOT_PX = 9
+
+/** Slot range [i0, i1) of a zoomed session: the session plus a slot either side, widened around it to at least ZOOM_BINS. */
+function zoomRange(day: Day, s: Session): [number, number] {
+  const n = day.bins.length
+  let i0 = Math.max(0, Math.floor((s.startAt - day.start) / BIN_MS) - 1)
+  let i1 = Math.min(n, Math.ceil((s.endAt - day.start) / BIN_MS) + 1)
+  const short = ZOOM_BINS - (i1 - i0)
+  if (short > 0) {
+    i0 = Math.max(0, i0 - Math.floor(short / 2))
+    i1 = Math.min(n, i0 + ZOOM_BINS)
+    i0 = Math.max(0, i1 - ZOOM_BINS)
+  }
+  return [i0, i1]
+}
+
+/** Bars, session lane and time axis of the whole day, or of the slots around one session (`zoom`). */
+function Chart({ day, zoom, onBand, onUnzoom }: { day: Day; zoom?: Session; onBand: (s: Session) => void; onUnzoom: () => void }) {
+  const [hover, setHover] = useState<number | null>(null)
+  const lane = useRef<HTMLDivElement>(null)
+  const laneWidth = useWidth(lane)
+  const [i0, i1] = zoom ? zoomRange(day, zoom) : [0, day.bins.length]
+  const from = day.start + i0 * BIN_MS
+  const to = Math.min(day.end, day.start + i1 * BIN_MS)
+  const frac = (t: number) => (Math.min(to, Math.max(from, t)) - from) / (to - from)
+  const ticks: { t: number; label: string; hour?: boolean }[] = zoom
+    ? // Every 10 minutes, slanted; labels end at their mark, so none within two slots of the left edge where it'd be cut off.
+      Array.from({ length: i1 - i0 - 2 }, (_, k) => day.start + (i0 + k + 2) * BIN_MS)
+        .filter((t) => new Date(t).getMinutes() % 10 === 0)
+        .map((t) => ({ t, label: clock(t), hour: new Date(t).getMinutes() === 0 }))
+    : [0, 3, 6, 9, 12, 15, 18, 21].map((h) => {
+        const d = new Date(day.start)
+        d.setHours(h)
+        return { t: d.getTime(), label: String(h).padStart(2, '0') }
+      })
+
+  return (
+    <section className={styles.chart}>
+      <div className={styles.readout}>
+        {zoom && (
+          <button className={styles.unzoom} onClick={onUnzoom} title="Back to the whole day">
+            ‹ Day
+          </button>
+        )}
+        {hover != null ? (
+          <span>
+            <b>
+              {clock(day.start + hover * BIN_MS)}–{clock(Math.min(day.end, day.start + (hover + 1) * BIN_MS))}
+            </b>{' '}
+            {day.tracked[hover] ? `${duration(day.bins[hover]!)} of input` : 'not recorded'}
+          </span>
+        ) : zoom ? (
+          <span>
+            <b>
+              {partOfDay(zoom)} {clock(zoom.startAt)} – {clock(zoom.endAt)}
+            </b>{' '}
+            {duration(zoom.activeMs)} of input in {duration(zoom.endAt - zoom.startAt)}
+          </span>
+        ) : (
+          <span className={styles.muted}>Input per 5-minute slot · blank: not recorded · click a session to zoom in</span>
+        )}
+      </div>
+      <div className={zoom ? styles.scroll : ''}>
+        <div style={zoom ? { width: `${(Math.max(ZOOM_BINS, i1 - i0) / ZOOM_BINS) * 100}%`, minWidth: (i1 - i0) * ZOOM_SLOT_PX } : undefined}>
+          <div className={styles.bars} style={{ '--n': i1 - i0 } as CSSProperties} onMouseLeave={() => setHover(null)}>
+            {day.bins.slice(i0, i1).map((ms, k) => {
+              const i = i0 + k
+              return (
+                <div key={i} className={`${styles.slot} ${day.tracked[i] ? '' : styles.untracked} ${hover === i ? styles.hovered : ''}`} onMouseEnter={() => setHover(i)}>
+                  {ms > 0 && <span style={{ height: `${Math.max(4, (ms / BIN_MS) * 100)}%` }} />}
+                </div>
+              )
+            })}
+          </div>
+          <div className={`${styles.axis} ${zoom ? styles.slanted : ''}`}>
+            {ticks.map(({ t, label, hour }) => (
+              <Fragment key={t}>
+                {zoom && <i className={hour ? styles.hour : ''} style={{ left: `${frac(t) * 100}%` }} />}
+                <span className={`${t === from ? styles.edge : ''} ${hour ? styles.hour : ''}`} style={{ left: `${frac(t) * 100}%` }}>
+                  {label}
+                </span>
+              </Fragment>
+            ))}
+          </div>
+          <div className={styles.lane} ref={lane}>
+            {day.sessions
+              .filter((s) => s.endAt > from && s.startAt < to)
+              .map((s) => (
+                <SessionBand
+                  key={s.startAt}
+                  s={s}
+                  start={frac(s.startAt)}
+                  size={frac(s.endAt) - frac(s.startAt)}
+                  laneWidth={laneWidth}
+                  zoomed={s.startAt === zoom?.startAt}
+                  onClick={() => onBand(s)}
+                />
+              ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function SessionBand({ s, start, size, laneWidth, zoomed, onClick }: { s: Session; start: number; size: number; laneWidth: number; zoomed: boolean; onClick: () => void }) {
   const long = `${partOfDay(s)} · ${duration(s.endAt - s.startAt)}`
   // As much of "Morning · 3 h 05" as fits the band (~7 px per character).
   const px = size * laneWidth - 14
   const label = px >= long.length * 7 ? long : px >= duration(s.endAt - s.startAt).length * 7 ? duration(s.endAt - s.startAt) : ''
   return (
-    <span className={styles.band} style={{ left: `${start * 100}%`, width: `${size * 100}%` }} title={`${long} (${clock(s.startAt)} – ${clock(s.endAt)}, ${duration(s.activeMs)} of input)`}>
+    <button
+      className={`${styles.band} ${zoomed ? styles.zoomed : ''}`}
+      style={{ left: `${start * 100}%`, width: `${size * 100}%` }}
+      onClick={onClick}
+      title={`${long} (${clock(s.startAt)} – ${clock(s.endAt)}, ${duration(s.activeMs)} of input) · ${zoomed ? 'click for the whole day' : 'click to zoom in'}`}
+    >
       <em>{label}</em>
-    </span>
+    </button>
   )
 }
 

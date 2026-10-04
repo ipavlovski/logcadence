@@ -82,17 +82,23 @@ function validKey(pane: PaneId, key: string): boolean {
   }
 }
 
+// Tabs saved under a plugin's former name.
+const RENAMED: Record<string, string> = { 'plugin:threads': 'plugin:progress' }
+const renamed = (k: unknown) => (typeof k === 'string' ? (RENAMED[k] ?? k) : k)
+
 function revive(stored: unknown): PanesState {
   const s = stored as Partial<PanesState>
   const panes = { ...initial.panes }
   for (const id of PANES) {
     const p = s.panes?.[id]
     if (!p || !Array.isArray(p.tabs)) continue
-    const tabs = [PRIMARY[id], ...new Set(p.tabs.filter((k) => typeof k === 'string' && k !== PRIMARY[id] && validKey(id, k)))]
-    const history = Array.isArray(p.history) ? p.history.filter((k) => typeof k === 'string' && validKey(id, k)).slice(-50) : []
+    const valid = (k: unknown): k is string => typeof k === 'string' && validKey(id, k)
+    const tabs = [PRIMARY[id], ...new Set(p.tabs.map(renamed).filter(valid).filter((k) => k !== PRIMARY[id]))]
+    const history = Array.isArray(p.history) ? p.history.map(renamed).filter(valid).slice(-50) : []
+    const active = renamed(p.active)
     panes[id] = {
       tabs,
-      active: tabs.includes(p.active) ? p.active : PRIMARY[id],
+      active: typeof active === 'string' && tabs.includes(active) ? active : PRIMARY[id],
       history: history.length ? history : [PRIMARY[id]],
       hIndex: Math.min(Math.max(0, p.hIndex ?? 0), Math.max(0, history.length - 1)),
     }

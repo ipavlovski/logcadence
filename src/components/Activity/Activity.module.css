@@ -107,9 +107,33 @@
 }
 
 .readout {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   height: 20px;
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.unzoom {
+  border: 1px solid var(--border);
+  background: none;
+  border-radius: var(--radius);
+  padding: 0 8px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--text-muted);
+}
+
+.unzoom:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+/* A zoomed session longer than the 48 slots that fit across scrolls sideways. */
+.scroll {
+  overflow-x: auto;
+  padding-bottom: 4px;
 }
 
 .readout b {
@@ -148,7 +172,7 @@
 .lane {
   position: relative;
   height: 24px;
-  margin-top: 6px;
+  margin-top: 4px;
 }
 
 .band {
@@ -159,7 +183,21 @@
   border-radius: 4px;
   background: color-mix(in srgb, var(--accent) 22%, transparent);
   border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  padding: 0;
+  font: inherit;
+  text-align: left;
   overflow: hidden;
+  cursor: zoom-in;
+}
+
+.band:hover {
+  border-color: var(--accent);
+}
+
+.band.zoomed {
+  background: color-mix(in srgb, var(--accent) 38%, transparent);
+  border-color: var(--accent);
+  cursor: zoom-out;
 }
 
 .band em {
@@ -177,6 +215,7 @@
 .axis {
   position: relative;
   height: 16px;
+  margin-top: 2px;
   font-size: 11px;
   color: var(--text-faint);
 }
@@ -186,8 +225,39 @@
   transform: translateX(-50%);
 }
 
-.axis span:first-child {
+.axis span.edge {
   transform: none;
+}
+
+/* Zoomed: a label every 10 minutes, slanted to end at its mark under a short tick. Hours stand out, the rest stay faint. */
+.axis.slanted {
+  height: 38px;
+}
+
+.axis.slanted span {
+  top: 6px;
+  font-size: 10px;
+  line-height: 1;
+  white-space: nowrap;
+  opacity: 0.7;
+  transform: translateX(-100%) rotate(-45deg);
+  transform-origin: 100% 0;
+}
+
+.axis.slanted span.hour {
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+.axis.slanted i {
+  position: absolute;
+  top: 0;
+  height: 4px;
+  border-left: 1px solid var(--border);
+}
+
+.axis.slanted i.hour {
+  border-color: var(--text-faint);
 }
 
 /* ── sessions table ── */
@@ -215,6 +285,19 @@
 
 .sessions .num {
   text-align: right;
+}
+
+.sessions tbody tr {
+  cursor: zoom-in;
+}
+
+.sessions tbody tr:hover td {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.sessions tbody tr.zoomed td {
+  background: var(--selection);
 }
 
 /* ── overview ── */

@@ -1,13 +1,10 @@
 # LOGCADENCE
 
-- purpose: knowledge base, similar to logse
+- purpose: knowledge base, similar to logseq
 - 3-pane workflow journaling app: canvas/journal/tags
 - structure: journal with entries are first class citizens (journal pane) 
   allow tag view on the right (tag pane) and custom render view on the left (canvas pane)
-- usecases
-  organize notes by projects and ideas, link personal ideas to youtube vids and web link
-  organize youtube videos into custom lists
-  track project progress
+
 
 ## UI DESCRIPTION
 - each pane can have multiple tabs
@@ -17,11 +14,8 @@
 - each pane has a primary tab, which opens on load and cannot be closed
   - canvas -> 'dashboard' tab
   - journal -> 'today' tab
-  - tags -> the most recently opened tag
-- editing
-  - canvas -> canvas is a dynamic pane, and editing can be asdf
-    some actions in the canvas pane can programmatically create journal entries 
-    e.g. map timeline processing -> can create timestamped entries
+  - tags -> 'tag tree' virtual view, showing all the existing tags 
+
 
 ## SHORTCUTS
 - search/spotlight
@@ -45,15 +39,6 @@
   - shift+delete -> delete
 
 ## IMPLEMENTATION
-- will develop for 3 platforms simultaneously - web, desktop, mobile
-  web/browser (cloudflare-hosted/self-hosted) - honojs
-  desktop (windows/mac/linux) - electron
-  mobile (android/iphone) - react native
-- optional constraint -> make web read-only
-  just upload static code and data
-- syncable
-  sync devices over wifi, discovery
-- optional 'remote' (paid plan)
 - db structure -> 2 sqlite databases
   - content.db -> all the notes
   - events.db -> all the events
@@ -74,39 +59,27 @@
 - plugins -> new types and canvas renderings 
   fundamental 
 
-
-## ENTRY TYPES
-- journal -> default type
-  journal entry is a 
-- youtube video
-  must contain a youtube video link
-  has a property 'downlaoded video'
-  has a proeprty 'custom description'
-  all children are timestamped nodes
-- link
-  Link must contain a linkified title and a screenshot of a page
-  Its children nodes must pertain directly to the link
-- shortcuts
-  all children represent 'shortcuts'
-- thread node
-  thread node must be linked to a project 
-- pdf
-  must be linked to a PDF file
-  does not render PDF file internally
+## FOR LATER DEVELOPMENT
+- will develop for 3 platforms simultaneously - web, desktop, mobile
+  web/browser (cloudflare-hosted/self-hosted) - honojs
+  desktop (windows/mac/linux) - electron
+  mobile (android/iphone) - react native
+- optional constraint -> make web read-only
+  just upload static code and data
+- syncable
+  sync devices over wifi on home nework
+- optional 'remote' (paid plan)
 
 ## PANES
 
 ### JOURNAL
-- the only pane in which text can be typed - canvas pane and tag pane have no text editing ability 
-  - can filter view by entry type (e.g. journal, threads, youtube, map, etc.)
-  - each entry in the journal has a particular type, which give it certain constraints
-- some entry types can be previewed in the canvas
+- the main editing pane
 - journal entries can have multiple tags, which can be viewed 
 - tags are hierarchical and separated by colon- e.g. system:windows:powertoys, design:davinci-resolve:til
+- all entries are 2-level: entry (contains title and categories) and children nodes
 - first tag is considered to be a primary tag and is used to sort the entry in the journal view
-- depending on a type, can have some helper methods for creating nodes
 - depending on the location of active cursor/button -> inherit properties (e.g. tags)
-- image handling
+- image handling -> nodes can have images
   pasting an image creates a large preview of an image
   pasting more images keeps large preview 
   there is always an 'active' image
@@ -160,7 +133,7 @@
 - reuse functionality of 
 - would need a separate data structure to track 
 
-#### THREADS
+#### PROGRESS
 - vertical calendar with dates
 - can show true scale (w/ day gaps) vs. false scale (remove gaps)
 - each node should show a flat-list of finished tasks for a project

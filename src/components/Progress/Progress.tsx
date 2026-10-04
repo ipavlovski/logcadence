@@ -8,10 +8,10 @@ import { useRevision } from '../../state/bus.ts'
 import { requestReveal } from '../../state/journal.ts'
 import { openDate } from '../../state/panes.ts'
 import { useStore } from '../../state/store.ts'
-import { setThreadScale, threadsStore, toggleThread } from '../../state/threads.ts'
-import { DONE_TAG, groupThreads, threadRows } from '../../threads.ts'
+import { PROGRESS_TAG, groupProgress, progressLabels, progressRows, sortProjects } from '../../progress.ts'
+import { progressStore, setProgressScale, toggleProject } from '../../state/progress.ts'
 import { Markdown } from '../Markdown/Markdown.tsx'
-import styles from './Threads.module.css'
+import styles from './Progress.module.css'
 
 const ROW_H = 40
 const DATE_W = 150
@@ -24,22 +24,24 @@ interface Hover {
   rect: DOMRect
 }
 
-/** Canvas "Threads" tab: one vertical line per project, one circle per day with "done:<project>" entries. */
-export function Threads(_: CanvasPluginProps) {
+/** Canvas "Progress" tab: one vertical line per project, one circle per day with "tasks:progress" entries. */
+export function Progress(_: CanvasPluginProps) {
   const rev = useRevision()
-  const scale = useStore(threadsStore, (s) => s.scale)
-  const hidden = useStore(threadsStore, (s) => s.hidden)
-  const { data, error } = useFetch(`threads|${rev}`, (signal) =>
-    unwrap(api.tags.entries.$get({ query: { tag: DONE_TAG, archived: '0', sub: '1' } }, { init: { signal } })),
+  const scale = useStore(progressStore, (s) => s.scale)
+  const hidden = useStore(progressStore, (s) => s.hidden)
+  const { data, error } = useFetch(`progress|${rev}`, (signal) =>
+    unwrap(api.tags.entries.$get({ query: { tag: PROGRESS_TAG, archived: '0', sub: '0' } }, { init: { signal } })),
   )
 
-  const threads = useMemo(() => groupThreads(data?.entries ?? []), [data])
-  const projects = useMemo(() => [...threads.keys()].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })), [threads])
+  const progress = useMemo(() => groupProgress(data?.entries ?? []), [data])
+  const projects = useMemo(() => sortProjects([...progress.keys()]), [progress])
+  const labels = useMemo(() => progressLabels(projects), [projects])
+  const label = (p: string) => labels.get(p)!
   const color = (p: string) => PALETTE[projects.indexOf(p) % PALETTE.length]!
   const visible = useMemo(() => projects.filter((p) => !hidden.includes(p)), [projects, hidden])
-  const activeDays = useMemo(() => new Set(visible.flatMap((p) => [...threads.get(p)!.keys()])), [threads, visible])
+  const activeDays = useMemo(() => new Set(visible.flatMap((p) => [...progress.get(p)!.keys()])), [progress, visible])
   const end = today()
-  const rows = useMemo(() => threadRows(activeDays, end, scale), [activeDays, end, scale])
+  const rows = useMemo(() => progressRows(activeDays, end, scale), [activeDays, end, scale])
   const rowOf = useMemo(() => new Map(rows.map((d, i) => [d, i])), [rows])
 
   const scroller = useRef<HTMLDivElement>(null)
@@ -69,7 +71,7 @@ export function Threads(_: CanvasPluginProps) {
     return () => ro.disconnect()
   }, [])
 
-  // Start at the bottom, where the threads end today.
+  // Start at the bottom, where the lines end today.
   const shownFor = useRef('')
   useLayoutEffect(() => {
     const key = `${scale}|${rows.length > 0}`
@@ -83,17 +85,17 @@ export function Threads(_: CanvasPluginProps) {
   const width = DATE_W + visible.length * COL_W
   const y = (date: string) => rowOf.get(date)! * ROW_H + ROW_H / 2
   const x = (i: number) => DATE_W + i * COL_W + COL_W / 2
-  const hoverEntries = hover ? threads.get(hover.project)?.get(hover.date) : undefined
+  const hoverEntries = hover ? progress.get(hover.project)?.get(hover.date) : undefined
 
   return (
     <div className={styles.frame}>
       <header className={styles.header}>
-        <h2>Threads</h2>
+        <h2>Progress</h2>
         <div className={styles.scale} role="group" aria-label="Scale">
-          <button className={scale === 'true' ? styles.on : ''} title="One row per calendar day, gaps included" onClick={() => setThreadScale('true')}>
+          <button className={scale === 'true' ? styles.on : ''} title="One row per calendar day, gaps included" onClick={() => setProgressScale('true')}>
             true scale
           </button>
-          <button className={scale === 'compact' ? styles.on : ''} title="Only days with progress" onClick={() => setThreadScale('compact')}>
+          <button className={scale === 'compact' ? styles.on : ''} title="Only days with progress" onClick={() => setProgressScale('compact')}>
             compact
           </button>
         </div>
@@ -103,11 +105,11 @@ export function Threads(_: CanvasPluginProps) {
               key={p}
               className={`${styles.project} ${hidden.includes(p) ? styles.off : ''}`}
               style={{ '--c': color(p) } as CSSProperties}
-              title={hidden.includes(p) ? `Show ${p}` : `Hide ${p}`}
-              onClick={() => toggleThread(p)}
+              title={`${hidden.includes(p) ? 'Show' : 'Hide'} ${p || 'untagged'}`}
+              onClick={() => toggleProject(p)}
             >
               <span className={styles.swatch} />
-              {p}
+              {label(p)}
             </button>
           ))}
         </div>
@@ -124,7 +126,8 @@ export function Threads(_: CanvasPluginProps) {
         {error && <p className={styles.error}>{error.message}</p>}
         {data && !projects.length && (
           <p className={styles.muted}>
-            No threads yet. Tag a journal entry <code>done:&lt;project&gt;</code> to mark progress on that project for the day.
+            No progress yet. Tag a journal entry <code>#tasks:progress</code> to mark progress for the day on the project named by its primary tag
+            (e.g. <code>#project:coop</code>); entries without one go under untagged.
           </p>
         )}
         {data && projects.length > 0 && !visible.length && <p className={styles.muted}>All projects are hidden.</p>}
@@ -145,7 +148,7 @@ export function Threads(_: CanvasPluginProps) {
 
             <div className={styles.lines}>
               {visible.map((p, i) => {
-                const first = [...threads.get(p)!.keys()].sort()[0]!
+                const first = [...progress.get(p)!.keys()].sort()[0]!
                 const top = y(first) - ROW_H / 2
                 return (
                   <div
@@ -158,12 +161,12 @@ export function Threads(_: CanvasPluginProps) {
             </div>
 
             {visible.map((p, i) =>
-              [...threads.get(p)!].map(([d, list]) => (
+              [...progress.get(p)!].map(([d, list]) => (
                 <button
                   key={`${p}|${d}`}
                   className={`${styles.dot} ${hover?.project === p && hover.date === d ? styles.hot : ''}`}
                   style={{ left: x(i), top: y(d), '--c': color(p) } as CSSProperties}
-                  aria-label={`${p}: ${list.length} done on ${formatJournalDate(d)}`}
+                  aria-label={`${label(p)}: ${list.length} progress on ${formatJournalDate(d)}`}
                   onMouseEnter={(e) => {
                     keepOpen()
                     setHover({ project: p, date: d, rect: e.currentTarget.getBoundingClientRect() })
@@ -178,7 +181,7 @@ export function Threads(_: CanvasPluginProps) {
       </div>
 
       {hover && hoverEntries && (
-        <DonePopover key={`${hover.project}|${hover.date}`} hover={hover} color={color(hover.project)} entries={hoverEntries} onEnter={keepOpen} onLeave={closeSoon} />
+        <DonePopover key={`${hover.project}|${hover.date}`} hover={hover} label={label(hover.project)} color={color(hover.project)} entries={hoverEntries} onEnter={keepOpen} onLeave={closeSoon} />
       )}
     </div>
   )
@@ -189,7 +192,7 @@ function revealIn(entry: EntryDTO, nodeId?: string, newTab = false) {
   requestReveal({ date: entry.date, entryId: entry.id, nodeId, mode: 'flash' })
 }
 
-function DonePopover({ hover, color, entries, onEnter, onLeave }: { hover: Hover; color: string; entries: EntryDTO[]; onEnter: () => void; onLeave: () => void }) {
+function DonePopover({ hover, label, color, entries, onEnter, onLeave }: { hover: Hover; label: string; color: string; entries: EntryDTO[]; onEnter: () => void; onLeave: () => void }) {
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState({ left: hover.rect.right + 10, top: hover.rect.top - 8 })
 
@@ -209,7 +212,7 @@ function DonePopover({ hover, color, entries, onEnter, onLeave }: { hover: Hover
     <div ref={ref} className={styles.popover} style={{ ...pos, '--c': color } as CSSProperties} onMouseEnter={onEnter} onMouseLeave={onLeave}>
       <div className={styles.popHead}>
         <span className={styles.swatch} />
-        <strong>{hover.project}</strong>
+        <strong>{label}</strong>
         <span className={styles.muted}>{formatJournalDate(hover.date)}</span>
       </div>
       {entries.map((entry) => {
