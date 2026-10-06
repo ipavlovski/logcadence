@@ -1,40 +1,56 @@
-import { YoutubeError, type Playlist, type PlaylistVideo } from './playlist.ts'
+import { isRetryableStatus, RetryableError, retryAfter, withRetry } from './http.ts'
+import { YoutubeError, type ImportProgress, type PlaylistVideo } from './playlist.ts'
 
 // Reads a playlist through the YouTube Data API v3 with an API key. Unlike the playlist page, it tells when each
 // video was added to the playlist (playlistItems' snippet.publishedAt), and gives exact durations, view counts and
-// publish dates. Cost: 1 quota unit per 50 videos for each of playlistItems, videos and channels (10,000 a day free).
+// publish dates. Cost: 1 quota unit per 50 videos for playlistItems, and for videos and channels only for what the
+// catalog doesn't have yet (10,000 units a day free). Answers are trimmed to the fields used (`fields`), so a
+// 4,000-video playlist lists in well under a megabyte.
 
 const API = 'https://www.googleapis.com/youtube/v3'
 const BATCH = 50
 // Guards against a paging loop; YouTube caps playlists at 5,000 videos.
 const MAX_PAGES = 200
 
-export interface ApiVideo extends PlaylistVideo {
+/** A video of the playlist with when it was added; `info` is missing for videos the catalog already has. */
+export interface ApiVideo {
+  id: string
   /** When it was added to the playlist (epoch ms). */
   addedAt: number
-  /** When YouTube published it (epoch ms). */
-  publishedAt: number | null
+  info?: PlaylistVideo & { publishedAt: number | null }
 }
 
-export interface ApiPlaylist extends Omit<Playlist, 'videos'> {
+export interface ApiPlaylist {
+  id: string
+  title: string
+  channel: string | null
   videos: ApiVideo[]
+  /** Entries that are private or deleted (left out). */
+  unavailable: number
 }
 
 type Json = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 
+// 403s that mean "slow down" rather than "no".
+const RATE_LIMITS = new Set(['rateLimitExceeded', 'userRateLimitExceeded'])
+
 async function get(path: string, params: Record<string, string>, key: string, fetchFn: typeof fetch): Promise<Json> {
   const url = `${API}/${path}?${new URLSearchParams({ ...params, key })}`
-  const res = await fetchFn(url, { headers: { accept: 'application/json' } })
-  const body = (await res.json().catch(() => ({}))) as Json
-  if (!res.ok) {
+  return withRetry(async () => {
+    const res = await fetchFn(url, { headers: { accept: 'application/json' } })
+    const body = (await res.json().catch(() => ({}))) as Json
+    if (res.ok) return body
     const reason = body.error?.errors?.[0]?.reason as string | undefined
     const message = (body.error?.message as string | undefined)?.replace(/<[^>]+>/g, '') ?? `YouTube Data API answered ${res.status}`
+    if (isRetryableStatus(res.status) || (reason && RATE_LIMITS.has(reason))) throw new RetryableError(`YouTube Data API: ${message}`, retryAfter(res))
     if (reason === 'playlistNotFound') throw new YoutubeError('YouTube has no such playlist (or it is private)')
     if (reason === 'quotaExceeded') throw new YoutubeError('The API key’s daily YouTube quota is used up; try again tomorrow')
-    if (res.status === 400 || res.status === 403) throw new YoutubeError(`YouTube Data API: ${message}`)
-    throw new YoutubeError(message)
-  }
-  return body
+    throw new YoutubeError(`YouTube Data API: ${message}`)
+  }).catch((err: Error) => {
+    // Retries used up: report it as YouTube's answer, not a crash.
+    if (err instanceof RetryableError) throw new YoutubeError(`${err.message} (after retries)`)
+    throw err
+  })
 }
 
 /** Fails with the API's reason when the key doesn't work (1 quota unit). */
@@ -66,39 +82,58 @@ const time = (iso: unknown) => {
   return Number.isFinite(t) ? t : null
 }
 
-/** Every video of a playlist with the time it was added, in playlist order (unavailable ones left out). */
-export async function fetchPlaylistApi(id: string, key: string, fetchFn: typeof fetch = fetch): Promise<ApiPlaylist> {
-  const meta = await get('playlists', { part: 'snippet', id }, key, fetchFn)
+export interface ApiOptions {
+  fetchFn?: typeof fetch
+  /** Videos the catalog already has: their details aren't fetched again. */
+  known?: ReadonlySet<string>
+  /** Channels whose avatar the catalog already has. */
+  knownChannels?: ReadonlySet<string>
+  onProgress?: (p: ImportProgress) => void
+}
+
+/** Every available video of a playlist with the time it was added, in playlist order. */
+export async function fetchPlaylistApi(id: string, key: string, { fetchFn = fetch, known = new Set(), knownChannels = new Set(), onProgress }: ApiOptions = {}): Promise<ApiPlaylist> {
+  const meta = await get('playlists', { part: 'snippet,contentDetails', id, fields: 'items(snippet(title,channelTitle),contentDetails/itemCount)' }, key, fetchFn)
   const snippet = meta.items?.[0]?.snippet
   if (!snippet) throw new YoutubeError('YouTube has no such playlist (or it is private)')
+  const expected = Number(meta.items[0].contentDetails?.itemCount) || 0
 
   const items: { id: string; title: string; channel: string; channelId: string | null; addedAt: number }[] = []
+  let unavailable = 0
   let pageToken: string | undefined
+  const fields = 'nextPageToken,items(snippet(publishedAt,title,videoOwnerChannelTitle,videoOwnerChannelId,resourceId/videoId),status/privacyStatus)'
   for (let n = 0; n < MAX_PAGES; n++) {
-    const page = await get('playlistItems', { part: 'snippet,status', playlistId: id, maxResults: String(BATCH), ...(pageToken && { pageToken }) }, key, fetchFn)
+    const page = await get('playlistItems', { part: 'snippet,status', playlistId: id, maxResults: String(BATCH), fields, ...(pageToken && { pageToken }) }, key, fetchFn)
     for (const it of (page.items ?? []) as Json[]) {
       const s = it.snippet ?? {}
       const videoId = s.resourceId?.videoId as string | undefined
       const status = it.status?.privacyStatus as string | undefined
-      // Deleted videos have no owner; private ones say so.
-      if (!videoId || status === 'private' || !s.videoOwnerChannelTitle) continue
-      items.push({ id: videoId, title: s.title, channel: s.videoOwnerChannelTitle, channelId: s.videoOwnerChannelId ?? null, addedAt: time(s.publishedAt) ?? Date.now() })
+      // Deleted videos have no owner (and status "privacyStatusUnspecified"); private ones say so.
+      if (!videoId || status === 'private' || !s.videoOwnerChannelTitle) {
+        unavailable++
+        continue
+      }
+      items.push({ id: videoId, title: s.title ?? '', channel: s.videoOwnerChannelTitle, channelId: s.videoOwnerChannelId ?? null, addedAt: time(s.publishedAt) ?? Date.now() })
     }
+    onProgress?.({ phase: 'listing', done: items.length + unavailable, total: Math.max(expected, items.length + unavailable) })
     pageToken = page.nextPageToken
     if (!pageToken) break
   }
 
-  // Durations, views and publish dates, then channel avatars and handles; 50 per request.
+  // Durations, views and publish dates of new videos, then avatars and handles of new channels; 50 per request.
+  const fresh = [...new Set(items.filter((v) => !known.has(v.id)).map((v) => v.id))]
   const details = new Map<string, Json>()
-  for (let i = 0; i < items.length; i += BATCH) {
-    const ids = items.slice(i, i + BATCH).map((v) => v.id)
-    const page = await get('videos', { part: 'snippet,contentDetails,statistics', id: ids.join(','), maxResults: String(BATCH) }, key, fetchFn)
+  for (let i = 0; i < fresh.length; i += BATCH) {
+    const ids = fresh.slice(i, i + BATCH)
+    const page = await get('videos', { part: 'snippet,contentDetails,statistics', id: ids.join(','), maxResults: String(BATCH), fields: 'items(id,snippet(title,publishedAt),contentDetails/duration,statistics/viewCount)' }, key, fetchFn)
     for (const v of (page.items ?? []) as Json[]) details.set(v.id, v)
+    onProgress?.({ phase: 'details', done: Math.min(i + BATCH, fresh.length), total: fresh.length })
   }
-  const channelIds = [...new Set(items.map((v) => v.channelId).filter((c): c is string => !!c))]
+  const freshSet = new Set(fresh)
+  const channelIds = [...new Set(items.filter((v) => freshSet.has(v.id)).map((v) => v.channelId).filter((c): c is string => !!c && !knownChannels.has(c)))]
   const channels = new Map<string, Json>()
   for (let i = 0; i < channelIds.length; i += BATCH) {
-    const page = await get('channels', { part: 'snippet', id: channelIds.slice(i, i + BATCH).join(','), maxResults: String(BATCH) }, key, fetchFn)
+    const page = await get('channels', { part: 'snippet', id: channelIds.slice(i, i + BATCH).join(','), maxResults: String(BATCH), fields: 'items(id,snippet(customUrl,thumbnails/default/url))' }, key, fetchFn)
     for (const c of (page.items ?? []) as Json[]) channels.set(c.id, c)
   }
 
@@ -107,21 +142,35 @@ export async function fetchPlaylistApi(id: string, key: string, fetchFn: typeof 
   for (const it of items) {
     if (seen.has(it.id)) continue
     seen.add(it.id)
+    if (!freshSet.has(it.id)) {
+      videos.push({ id: it.id, addedAt: it.addedAt })
+      continue
+    }
     const d = details.get(it.id)
     const c = it.channelId ? channels.get(it.channelId) : undefined
     const handle = c?.snippet?.customUrl as string | undefined
+    // A channel the catalog has: its stored avatar and link are used (left null here).
+    const knownChannel = !!it.channelId && knownChannels.has(it.channelId)
     videos.push({
       id: it.id,
-      title: d?.snippet?.title ?? it.title,
-      channel: it.channel,
-      channelUrl: handle ? `https://www.youtube.com/${handle.startsWith('@') ? handle : `@${handle}`}` : it.channelId ? `https://www.youtube.com/channel/${it.channelId}` : null,
-      channelAvatar: c?.snippet?.thumbnails?.default?.url ?? null,
-      duration: formatDuration(d?.contentDetails?.duration),
-      views: formatViews(d?.statistics?.viewCount),
-      published: null,
       addedAt: it.addedAt,
-      publishedAt: time(d?.snippet?.publishedAt),
+      info: {
+        id: it.id,
+        title: d?.snippet?.title ?? it.title,
+        channel: it.channel,
+        channelUrl: handle
+          ? `https://www.youtube.com/${handle.startsWith('@') ? handle : `@${handle}`}`
+          : it.channelId && !knownChannel
+            ? `https://www.youtube.com/channel/${it.channelId}`
+            : null,
+        channelAvatar: c?.snippet?.thumbnails?.default?.url ?? null,
+        channelId: it.channelId,
+        duration: formatDuration(d?.contentDetails?.duration),
+        views: formatViews(d?.statistics?.viewCount),
+        published: null,
+        publishedAt: time(d?.snippet?.publishedAt),
+      },
     })
   }
-  return { id, title: snippet.title ?? id, channel: snippet.channelTitle ?? null, videos }
+  return { id, title: snippet.title ?? id, channel: snippet.channelTitle ?? null, videos, unavailable }
 }

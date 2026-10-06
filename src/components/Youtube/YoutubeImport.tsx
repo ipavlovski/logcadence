@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import type { YtImportResult, YtSettingsDTO } from '../../../shared/types.ts'
+import type { YtImportResult, YtPlaylistDTO, YtSettingsDTO, YtThumbStatus } from '../../../shared/types.ts'
 import { api, unwrap } from '../../api.ts'
-import { useFetch } from '../../hooks/useFetch.ts'
+import { useFetch, useTicker } from '../../hooks/useFetch.ts'
 import { notify } from '../../state/ui.ts'
 import { bumpYt } from '../../state/youtube.ts'
 import { Modal } from '../Modal/Modal.tsx'
@@ -20,16 +20,29 @@ function ago(ms: number): string {
   return new Date(ms).toLocaleDateString()
 }
 
+const n = (x: number) => x.toLocaleString()
+
 const describe = (r: YtImportResult) =>
   r.error
     ? `${r.title}: ${r.error}`
-    : `${r.title}: ${r.added ? `${r.added} new` : 'nothing new'}${r.redated ? `, ${r.redated} given their real added date` : ''} (${r.found} in the playlist)`
+    : `${r.title}: ${r.added ? `${n(r.added)} new` : 'nothing new'}${r.redated ? `, ${n(r.redated)} given their real added date` : ''} (${n(r.found)} in the playlist${
+        r.unavailable ? `; ${n(r.unavailable)} private or deleted, skipped` : ''
+      })`
+
+function progressText(p: NonNullable<YtPlaylistDTO['progress']>) {
+  return p.phase === 'listing' ? `Reading the playlist… ${n(p.done)} of ${n(p.total)}` : `Fetching details of new videos… ${n(p.done)} of ${n(p.total)}`
+}
 
 export function YoutubeImport({ onClose }: { onClose: () => void }) {
   const [bump, setBump] = useState(0)
-  const { data } = useFetch(`ytpl|${bump}`, (signal) => unwrap(api.youtube.playlists.$get({}, { init: { signal } })))
   const [url, setUrl] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
+  // Polled while an import or thumbnail downloads run, for their progress.
+  const [polling, setPolling] = useState(true)
+  const tick = useTicker(1000)
+  const { data } = useFetch(`ytpl|${bump}|${busy || polling ? tick : ''}`, (signal) => unwrap(api.youtube.playlists.$get({}, { init: { signal } })))
+  const thumbsRunning = !!data?.thumbs.running
+  if (data && !busy && polling !== thumbsRunning) setPolling(thumbsRunning)
   const [results, setResults] = useState<YtImportResult[]>([])
 
   const run = (label: string, p: Promise<YtImportResult[]>) => {
@@ -39,6 +52,7 @@ export function YoutubeImport({ onClose }: { onClose: () => void }) {
       if (rs.some((r) => r.added || r.redated)) bumpYt()
     }, fail).finally(() => {
       setBusy(null)
+      setPolling(true)
       setBump((b) => b + 1)
     })
   }
@@ -105,7 +119,8 @@ export function YoutubeImport({ onClose }: { onClose: () => void }) {
                     <span className={styles.muted}>
                       {[p.channel, p.count != null && `${p.count} videos`, p.lastImportAt && `imported ${ago(p.lastImportAt)}`].filter(Boolean).join(' · ')}
                     </span>
-                    {p.lastError && <span className={styles.error}>Last import failed: {p.lastError}</span>}
+                    {p.progress && <span className={styles.progress}>{progressText(p.progress)}</span>}
+                    {p.lastError && !p.progress && <span className={styles.error}>Last import failed: {p.lastError}</span>}
                   </div>
                   <a className={styles.link} href={`https://www.youtube.com/playlist?list=${p.id}`} target="_blank" rel="noreferrer" title="Open on YouTube">
                     ↗
@@ -129,6 +144,7 @@ export function YoutubeImport({ onClose }: { onClose: () => void }) {
               ))}
             </ul>
           )}
+          {data && <Thumbs status={data.thumbs} />}
         </section>
 
         {data && <ApiKey settings={data.settings} onSave={setKey} />}
@@ -206,5 +222,23 @@ function ApiKey({ settings, onSave }: { settings: YtSettingsDTO; onSave: (key: s
         </>
       )}
     </section>
+  )
+}
+
+/** Thumbnail downloads: running, or what's left (they resume at the next import or start). */
+function Thumbs({ status: t }: { status: YtThumbStatus }) {
+  if (t.running)
+    return (
+      <p className={styles.progress}>
+        Downloading thumbnails… {n(t.done)} of {n(t.total)} <progress value={t.done} max={t.total || 1} />
+        {t.failed > 0 && <span className={styles.error}> · {n(t.failed)} failed (tried again later)</span>}
+      </p>
+    )
+  if (!t.pending && !t.error) return null
+  return (
+    <p className={styles.muted} title={t.error ?? undefined}>
+      {t.pending ? `${n(t.pending)} thumbnails not downloaded yet; they are fetched at the next import.` : ''}
+      {t.error && <span className={styles.error}> Last problem: {t.error}</span>}
+    </p>
   )
 }

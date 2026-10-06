@@ -256,7 +256,7 @@ function VideoCard({ v }: { v: YtVideoSummary }) {
   return (
     <article className={styles.card} onClick={() => openVideo(v.id)}>
       <div className={styles.thumb}>
-        <img src={thumb(v.id)} alt="" loading="lazy" draggable={false} />
+        <img src={v.thumbSmallUrl ?? thumb(v.id)} alt="" loading="lazy" decoding="async" draggable={false} />
         {v.duration && <span className={styles.duration}>{v.duration}</span>}
         {v.hasNotes && (
           <span className={styles.noteBadge} title="Has notes">
@@ -402,7 +402,7 @@ function VideoPage({ id, lib }: { id: string; lib: YtLibraryDTO | undefined }) {
         error ? <p className={styles.empty}>{error.message}</p> : <div className={styles.loading} />
       ) : (
         <>
-          <Thumbnail id={v.id} />
+          <Thumbnail v={v} />
           <h1 className={styles.pageTitle}>{v.title}</h1>
           <div className={styles.owner}>
             <Avatar v={v} large onClick={() => setYtFilter({ kind: 'channel', name: v.channel })} />
@@ -485,15 +485,18 @@ function VideoPage({ id, lib }: { id: string; lib: YtLibraryDTO | undefined }) {
   )
 }
 
-/** The thumbnail, large (maxres isn't made for every video: YouTube answers 404, so fall back to hq). */
-function Thumbnail({ id }: { id: string }) {
-  const [src, setSrc] = useState(thumb(id, 'maxres'))
+/** The thumbnail, large: the downloaded one, or until then YouTube's (maxres isn't made for every video: on a 404, hq). */
+function Thumbnail({ v }: { v: YtVideoSummary }) {
+  // The downloaded copy; until it's there, YouTube's own.
+  const [src, setSrc] = useState(v.thumbUrl ?? thumb(v.id, 'maxres'))
   return (
-    <div className={styles.player}>
-      <img src={src} alt="" onError={() => setSrc(thumb(id))} />
+    <div className={styles.player} title={v.thumbSize ? THUMB_SIZE[v.thumbSize] : 'Thumbnail not downloaded yet'}>
+      <img src={src} alt="" onError={() => setSrc(thumb(v.id))} />
     </div>
   )
 }
+
+const THUMB_SIZE = { maxres: 'Thumbnail: 1280×720 (the largest YouTube makes)', sd: 'Thumbnail: 640×480', hq: 'Thumbnail: 480×360', none: 'YouTube has no thumbnail for this video' }
 
 interface TextSectionProps {
   videoId: string

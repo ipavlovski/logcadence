@@ -220,6 +220,7 @@ export const ytVideos = sqliteTable(
     channel: text('channel').notNull().default(''),
     channelUrl: text('channel_url'),
     channelAvatar: text('channel_avatar'),
+    channelId: text('channel_id'), // UC…, when the import source gives it
     duration: text('duration'), // "15:25", as YouTube shows it
     views: text('views'), // "3.7M views", as of the last import
     published: text('published'), // "4 years ago", as of the last import (without an API key)
@@ -234,6 +235,12 @@ export const ytVideos = sqliteTable(
     // Comments worth keeping (markdown, plus screenshots in yt_images under 'comments').
     comments: text('comments').notNull().default(''),
     commentsActiveImageId: text('comments_active_image_id'),
+    // Thumbnail files under data/assets, downloaded once: the largest YouTube has (thumbSize: maxres = 1280×720,
+    // sd = 640×480, hq = 480×360) for the video page, and a 480×360 one for the grid. thumbSize null = not
+    // downloaded yet (retried by the next import); 'none' = YouTube has none (a removed video).
+    thumb: text('thumb'),
+    thumbSmall: text('thumb_small'),
+    thumbSize: text('thumb_size', { enum: ['maxres', 'sd', 'hq', 'none'] }),
     updatedAt: integer('updated_at').notNull(),
   },
   (t) => [index('yt_videos_added_idx').on(t.addedDate, t.addedAt)],

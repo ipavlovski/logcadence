@@ -292,6 +292,8 @@ export interface YtPlaylistDTO {
   count: number | null
   lastImportAt: number | null
   lastError: string | null
+  /** While an import runs: listing the playlist, then (Data API) fetching new videos' details. */
+  progress: { phase: 'listing' | 'details'; done: number; total: number } | null
 }
 
 /** A video in the listing. */
@@ -308,6 +310,14 @@ export interface YtVideoSummary {
   /** "4 years ago" as of an import without an API key; publishedAt (epoch ms) comes from the Data API. */
   published: string | null
   publishedAt: number | null
+  /**
+   * The thumbnail downloaded into the library (largest YouTube has), and a 480×360 one for the grid; null until
+   * downloaded (show YouTube's own meanwhile). thumbSize: maxres = 1280×720, sd = 640×480, hq = 480×360, none =
+   * YouTube has none.
+   */
+  thumbUrl: string | null
+  thumbSmallUrl: string | null
+  thumbSize: 'maxres' | 'sd' | 'hq' | 'none' | null
   /**
    * When it was added to a playlist (epoch ms) and that local day: from the Data API, or without an API key,
    * when an import first saw it.
@@ -359,8 +369,22 @@ export interface YtImportResult {
   added: number
   /** Known videos whose added date moved earlier (a real date from the Data API). */
   redated: number
+  /** Private or deleted videos in the playlist, left out. */
+  unavailable: number
   /** Added dates came from the Data API (an API key is set). */
   dated: boolean
+  error: string | null
+}
+
+/** Thumbnail downloads (they run in the background after an import). */
+export interface YtThumbStatus {
+  running: boolean
+  done: number
+  total: number
+  /** Failed this run; tried again at the next import or start. */
+  failed: number
+  /** Videos still without a downloaded thumbnail. */
+  pending: number
   error: string | null
 }
 

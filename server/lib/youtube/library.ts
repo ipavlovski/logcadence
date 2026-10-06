@@ -7,9 +7,10 @@ import { ytImages, ytPlaylists, ytTags, ytVideos, ytVideoTags } from '../../db/c
 import { imageUrl } from '../content.ts'
 import { logEvent } from '../events.ts'
 import { bad, notFound } from '../validate.ts'
-import { fetchPlaylistApi, type ApiVideo } from './dataApi.ts'
-import { fetchPlaylist, parsePlaylistId, YoutubeError, type PlaylistVideo } from './playlist.ts'
+import { fetchPlaylistApi } from './dataApi.ts'
+import { fetchPlaylist, parsePlaylistId, YoutubeError, type ImportProgress, type PlaylistVideo } from './playlist.ts'
 import { apiKey } from './settings.ts'
+import { downloadThumbs } from './thumbs.ts'
 
 // The YouTube catalog: videos imported from playlists, with notes, comments, images and tags of their own. A
 // video's day is when it was added to a playlist: from the Data API when an API key is set, else when an import
@@ -59,6 +60,9 @@ function toSummary(v: VideoRow, tags: string[], hasImages: boolean): YtVideoSumm
     views: v.views,
     published: v.published,
     publishedAt: v.publishedAt,
+    thumbUrl: v.thumb ? imageUrl(v.thumb) : null,
+    thumbSmallUrl: v.thumbSmall ? imageUrl(v.thumbSmall) : null,
+    thumbSize: v.thumbSize,
     addedAt: v.addedAt,
     addedDate: v.addedDate,
     importedAt: v.importedAt,
@@ -73,7 +77,7 @@ export function listPlaylists(): YtPlaylistDTO[] {
     .from(ytPlaylists)
     .orderBy(asc(ytPlaylists.createdAt))
     .all()
-    .map((p) => ({ id: p.id, title: p.title, channel: p.channel, count: p.lastImportCount, lastImportAt: p.lastImportAt, lastError: p.lastError }))
+    .map((p) => ({ id: p.id, title: p.title, channel: p.channel, count: p.lastImportCount, lastImportAt: p.lastImportAt, lastError: p.lastError, progress: progress.get(p.id) ?? null }))
 }
 
 export function tagInfos(): TagInfo[] {
@@ -256,16 +260,40 @@ interface Fetched {
   id: string
   title: string
   channel: string | null
-  /** With an API key: each video's time added to the playlist. */
-  videos: (PlaylistVideo & Partial<Pick<ApiVideo, 'addedAt' | 'publishedAt'>>)[]
+  /** `addedAt` comes with an API key; `info` is left out for videos the catalog has (Data API only). */
+  videos: { id: string; addedAt?: number; info?: PlaylistVideo & { publishedAt?: number | null } }[]
+  unavailable: number
   dated: boolean
 }
+
+// How far each running import is, for the importer window.
+const progress = new Map<string, ImportProgress>()
 
 /** Through the Data API when a key is set (real added dates), else from the playlist page. */
 async function fetchAny(id: string, fetchFn?: typeof fetch): Promise<Fetched> {
   const key = apiKey()
-  if (key) return { ...(await fetchPlaylistApi(id, key, fetchFn)), dated: true }
-  return { ...(await fetchPlaylist(id, fetchFn)), dated: false }
+  const onProgress = (p: ImportProgress) => progress.set(id, p)
+  if (key) {
+    const known = new Set(db.select({ id: ytVideos.id }).from(ytVideos).all().map((r) => r.id))
+    const knownChannels = new Set(
+      db
+        .selectDistinct({ id: ytVideos.channelId })
+        .from(ytVideos)
+        .where(sql`${ytVideos.channelId} is not null and ${ytVideos.channelAvatar} is not null`)
+        .all()
+        .map((r) => r.id!),
+    )
+    return { ...(await fetchPlaylistApi(id, key, { fetchFn, known, knownChannels, onProgress })), dated: true }
+  }
+  const p = await fetchPlaylist(id, { fetchFn, onProgress })
+  return { ...p, videos: p.videos.map((v) => ({ id: v.id, info: v })), dated: false }
+}
+
+/** Errors that are YouTube's (or the network's) become a message; anything else is a bug and stays one. */
+function describeError(err: unknown): string {
+  if (err instanceof YoutubeError) return err.message
+  if (err instanceof TypeError || (err instanceof Error && /fetch failed|ECONN|ETIMEDOUT|EAI_AGAIN|socket/i.test(err.message))) return `could not reach YouTube: ${err.message}`
+  throw err
 }
 
 /** Adds a playlist (by link or id) and imports it. */
@@ -277,11 +305,12 @@ export async function addPlaylist(input: string, fetchFn?: typeof fetch): Promis
   try {
     playlist = await fetchAny(id, fetchFn)
   } catch (err) {
-    if (err instanceof YoutubeError) bad(err.message)
-    throw err
+    bad(describeError(err))
+  } finally {
+    progress.delete(id)
   }
   db.insert(ytPlaylists).values({ id, title: playlist.title, channel: playlist.channel, createdAt: Date.now() }).onConflictDoNothing().run()
-  return store(playlist)
+  return store(playlist, fetchFn)
 }
 
 /** Stops importing a playlist; its videos stay. */
@@ -292,18 +321,28 @@ export function removePlaylist(id: string) {
 // One import per playlist at a time (the background job and a click could overlap).
 const running = new Map<string, Promise<YtImportResult>>()
 
-/** Imports the playlist's new videos and refreshes the rest. Failures are recorded on the playlist, not thrown. */
+/**
+ * Imports the playlist's new videos and refreshes the rest. Failures are recorded on the playlist, not thrown.
+ * Nothing is written until the whole playlist is read, so a failed import changes nothing (and costs only the
+ * listing, a few MB at most, to run again).
+ */
 export function importPlaylist(id: string, fetchFn?: typeof fetch): Promise<YtImportResult> {
   const p = db.select().from(ytPlaylists).where(eq(ytPlaylists.id, id)).get() ?? notFound('playlist')
   const pending = running.get(id)
   if (pending) return pending
   const job = fetchAny(id, fetchFn)
-    .then(store, (err: Error) => {
-      const error = err instanceof YoutubeError ? err.message : `could not reach YouTube: ${err.message}`
-      db.update(ytPlaylists).set({ lastError: error }).where(eq(ytPlaylists.id, id)).run()
-      return { playlistId: id, title: p.title, found: 0, added: 0, redated: 0, dated: !!apiKey(), error }
+    .then(
+      (playlist) => store(playlist, fetchFn),
+      (err: unknown) => {
+        const error = describeError(err)
+        db.update(ytPlaylists).set({ lastError: error }).where(eq(ytPlaylists.id, id)).run()
+        return { playlistId: id, title: p.title, found: 0, added: 0, redated: 0, unavailable: 0, dated: !!apiKey(), error }
+      },
+    )
+    .finally(() => {
+      running.delete(id)
+      progress.delete(id)
     })
-    .finally(() => running.delete(id))
   running.set(id, job)
   return job
 }
@@ -315,8 +354,8 @@ export async function importAll(fetchFn?: typeof fetch): Promise<YtImportResult[
   return out
 }
 
-/** Writes a fetched playlist: new videos join the catalog; known ones get YouTube's current details. */
-function store(playlist: Fetched): YtImportResult {
+/** Writes a fetched playlist: new videos join the catalog; known ones get YouTube's current details. Then thumbnails. */
+function store(playlist: Fetched, fetchFn?: typeof fetch): YtImportResult {
   const now = Date.now()
   let added = 0
   let redated = 0
@@ -329,46 +368,54 @@ function store(playlist: Fetched): YtImportResult {
       db
         .select({ id: ytVideos.id, addedAt: ytVideos.addedAt })
         .from(ytVideos)
-        .where(
-          inArray(
-            ytVideos.id,
-            playlist.videos.map((v) => v.id),
-          ),
-        )
         .all()
         .map((r) => [r.id, r.addedAt]),
     )
+    // A known channel's avatar and link, for new videos whose channel details weren't fetched again.
+    const channels = new Map(
+      db
+        .select({ id: ytVideos.channelId, avatar: ytVideos.channelAvatar, url: ytVideos.channelUrl })
+        .from(ytVideos)
+        .where(sql`${ytVideos.channelId} is not null and ${ytVideos.channelAvatar} is not null`)
+        .all()
+        .map((r) => [r.id!, r]),
+    )
     for (const v of playlist.videos) {
-      const details = {
-        title: v.title,
-        channel: v.channel,
-        channelUrl: v.channelUrl,
-        channelAvatar: v.channelAvatar,
-        duration: v.duration,
-        views: v.views,
-        ...(v.published !== null || !v.publishedAt ? { published: v.published } : {}),
-        ...(v.publishedAt ? { publishedAt: v.publishedAt } : {}),
+      const info = v.info
+      const ch = info?.channelId ? channels.get(info.channelId) : undefined
+      const details = info && {
+        title: info.title,
+        channel: info.channel,
+        channelUrl: info.channelUrl ?? ch?.url ?? null,
+        channelAvatar: info.channelAvatar ?? ch?.avatar ?? null,
+        channelId: info.channelId,
+        duration: info.duration,
+        views: info.views,
+        ...(info.published !== null || !info.publishedAt ? { published: info.published } : {}),
+        ...(info.publishedAt ? { publishedAt: info.publishedAt } : {}),
       }
       const prev = known.get(v.id)
       if (prev !== undefined) {
         // A real added date replaces an import-time guess (always later), and the earliest playlist wins.
         const addedAt = v.addedAt !== undefined && v.addedAt < prev ? v.addedAt : prev
         if (addedAt !== prev) redated++
+        if (!details && addedAt === prev) continue
         db.update(ytVideos)
           .set({ ...details, addedAt, addedDate: toIsoDate(new Date(addedAt)) })
           .where(eq(ytVideos.id, v.id))
           .run()
-      } else {
+      } else if (details) {
         const addedAt = v.addedAt ?? now
         // Inserted in playlist order, so the rowid keeps videos imported together (same time) in that order.
         db.insert(ytVideos)
           .values({ id: v.id, ...details, addedAt, addedDate: toIsoDate(new Date(addedAt)), importedAt: now, updatedAt: now })
           .run()
-        logEvent('yt-video', v.id, 'create', { title: v.title, addedAt })
+        logEvent('yt-video', v.id, 'create', { title: info!.title, addedAt })
         known.set(v.id, addedAt)
         added++
       }
     }
   })
-  return { playlistId: playlist.id, title: playlist.title, found: playlist.videos.length, added, redated, dated: playlist.dated, error: null }
+  downloadThumbs(fetchFn).catch((err: Error) => console.warn(`youtube thumbnails: ${err.message}`))
+  return { playlistId: playlist.id, title: playlist.title, found: playlist.videos.length, added, redated, unavailable: playlist.unavailable, dated: playlist.dated, error: null }
 }

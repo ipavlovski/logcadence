@@ -57,6 +57,13 @@
       "when": 1791251723235,
       "tag": "0007_flashy_zodiak",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1791292709342,
+      "tag": "0008_typical_echo",
+      "breakpoints": true
     }
   ]
 }

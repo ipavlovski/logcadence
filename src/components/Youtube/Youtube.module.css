@@ -753,6 +753,16 @@ a.channel:hover {
   text-decoration: underline;
 }
 
+.progress {
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.progress progress {
+  width: 120px;
+  vertical-align: middle;
+}
+
 .results {
   margin: 10px 0 0;
   padding: 8px 12px;

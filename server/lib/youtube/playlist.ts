@@ -3,7 +3,16 @@
 // tokens. YouTube renders playlist rows as `lockupViewModel`s now and `playlistVideoRenderer`s before; both
 // are read.
 
+import { isRetryableStatus, RetryableError, retryAfter, withRetry } from './http.ts'
+
 export class YoutubeError extends Error {}
+
+/** How far an import is: listing the playlist, then (Data API) fetching new videos' details. */
+export interface ImportProgress {
+  phase: 'listing' | 'details'
+  done: number
+  total: number
+}
 
 export interface PlaylistVideo {
   id: string
@@ -11,6 +20,8 @@ export interface PlaylistVideo {
   channel: string
   channelUrl: string | null
   channelAvatar: string | null
+  /** YouTube's channel id (UC…), when the source gives it. */
+  channelId: string | null
   duration: string | null
   views: string | null
   published: string | null
@@ -21,6 +32,8 @@ export interface Playlist {
   title: string
   channel: string | null
   videos: PlaylistVideo[]
+  /** Rows of private or deleted videos (left out). The playlist page hides most of them, so this can be low. */
+  unavailable: number
 }
 
 const ORIGIN = 'https://www.youtube.com'
@@ -93,12 +106,14 @@ const channelLink = (url: unknown) => {
   return u ? (u.startsWith('http') ? u : ORIGIN + u) : null
 }
 
-function fromLockup(l: Json): PlaylistVideo | null {
+type Row = PlaylistVideo | 'unavailable' | null
+
+function fromLockup(l: Json): Row {
   if (l.contentType !== 'LOCKUP_CONTENT_TYPE_VIDEO') return null
   const id = str(l.contentId)
   const meta = at(l, 'metadata', 'lockupMetadataViewModel')
   const title = text(at(meta, 'title'))
-  if (!id || !title || UNAVAILABLE.test(title)) return null
+  if (!id || !title || UNAVAILABLE.test(title)) return 'unavailable'
   const rows = arr(at(meta, 'metadata', 'contentMetadataViewModel', 'metadataRows')).map((r) => arr(at(r, 'metadataParts')).filter(isObj))
   const channelPart = rows[0]?.[0]
   const [viewsPart, publishedPart] = rows[1] ?? []
@@ -110,6 +125,7 @@ function fromLockup(l: Json): PlaylistVideo | null {
     channel: text(channelPart?.text) ?? '',
     channelUrl: channelLink(at(channelPart, 'text', 'commandRuns', 0, 'onTap', 'innertubeCommand', 'commandMetadata', 'webCommandMetadata', 'url')),
     channelAvatar: largest(at(meta, 'image', 'decoratedAvatarViewModel', 'avatar', 'avatarViewModel', 'image', 'sources')),
+    channelId: str(at(channelPart, 'text', 'commandRuns', 0, 'onTap', 'innertubeCommand', 'browseEndpoint', 'browseId')),
     duration: str(badge?.text),
     // "3.7M" with a play icon; the label spells it out ("3.7 million views").
     views: views && (/view/i.test(views) ? views : `${views} views`),
@@ -117,10 +133,10 @@ function fromLockup(l: Json): PlaylistVideo | null {
   }
 }
 
-function fromRenderer(r: Json): PlaylistVideo | null {
+function fromRenderer(r: Json): Row {
   const id = str(r.videoId)
   const title = text(r.title)
-  if (!id || !title || UNAVAILABLE.test(title) || r.isPlayable === false) return null
+  if (!id || !title || UNAVAILABLE.test(title) || r.isPlayable === false) return 'unavailable'
   const byline = text(r.shortBylineText)
   // "3.7M views • 4 years ago"
   const info = arr(at(r, 'videoInfo', 'runs'))
@@ -132,6 +148,7 @@ function fromRenderer(r: Json): PlaylistVideo | null {
     channel: byline ?? '',
     channelUrl: channelLink(at(r, 'shortBylineText', 'runs', 0, 'navigationEndpoint', 'commandMetadata', 'webCommandMetadata', 'url')),
     channelAvatar: null,
+    channelId: str(at(r, 'shortBylineText', 'runs', 0, 'navigationEndpoint', 'browseEndpoint', 'browseId')),
     duration: text(r.lengthText),
     views: info[0] ?? null,
     published: info[1] ?? null,
@@ -139,20 +156,28 @@ function fromRenderer(r: Json): PlaylistVideo | null {
 }
 
 /** The videos of one page of a playlist and the token for the next page, from a list of rows. */
-export function parseItems(items: unknown[]): { videos: PlaylistVideo[]; next: string | null } {
+export function parseItems(items: unknown[]): { videos: PlaylistVideo[]; unavailable: number; next: string | null } {
   const videos: PlaylistVideo[] = []
+  let unavailable = 0
   let next: string | null = null
   for (const item of items) {
     if (!isObj(item)) continue
-    const v = isObj(item.lockupViewModel) ? fromLockup(item.lockupViewModel) : isObj(item.playlistVideoRenderer) ? fromRenderer(item.playlistVideoRenderer) : null
-    if (v) videos.push(v)
+    // One odd row (a format change, a removed video) is skipped, never the end of the import.
+    let v: Row = null
+    try {
+      v = isObj(item.lockupViewModel) ? fromLockup(item.lockupViewModel) : isObj(item.playlistVideoRenderer) ? fromRenderer(item.playlistVideoRenderer) : null
+    } catch {
+      v = 'unavailable'
+    }
+    if (v === 'unavailable') unavailable++
+    else if (v) videos.push(v)
     const token =
       at(item, 'continuationItemViewModel', 'continuationCommand', 'innertubeCommand', 'continuationCommand', 'token') ??
       at(item, 'continuationItemRenderer', 'continuationEndpoint', 'continuationCommand', 'token') ??
       findAll(item.continuationItemRenderer, 'token')[0]
     if (!next && (isObj(item.continuationItemViewModel) || isObj(item.continuationItemRenderer))) next = str(token)
   }
-  return { videos, next }
+  return { videos, unavailable, next }
 }
 
 /** The playlist's rows on its page: the item section listing the videos (or the older playlistVideoListRenderer). */
@@ -179,13 +204,29 @@ export function parseHeader(data: unknown): { title: string | null; channel: str
 }
 
 /** The first page of a playlist, parsed from its HTML. */
-export function parsePlaylistPage(html: string): { title: string | null; channel: string | null; videos: PlaylistVideo[]; next: string | null; clientVersion: string | null; apiKey: string | null } {
+export function parsePlaylistPage(html: string): {
+  title: string | null
+  channel: string | null
+  /** "6 videos" in the header, when it says. */
+  total: number | null
+  videos: PlaylistVideo[]
+  unavailable: number
+  next: string | null
+  clientVersion: string | null
+  apiKey: string | null
+} {
   const data = extractInitialData(html)
   const alert = findAll(data.alerts, 'alertRenderer').map((a) => text(at(a, 'text'))).find(Boolean)
   const items = pageItems(data)
   if (!items.length && alert) throw new YoutubeError(alert)
+  const count = findAll(at(data, 'header'), 'metadataParts')
+    .flatMap(arr)
+    .map((p) => text(at(p, 'text')))
+    .map((t) => t?.match(/^([\d,.]+) videos?$/)?.[1])
+    .find(Boolean)
   return {
     ...parseHeader(data),
+    total: count ? Number(count.replace(/[,.]/g, '')) : null,
     ...parseItems(items),
     clientVersion: html.match(/"INNERTUBE_CLIENT_VERSION":"([^"]+)"/)?.[1] ?? null,
     apiKey: html.match(/"INNERTUBE_API_KEY":"([^"]+)"/)?.[1] ?? null,
@@ -206,30 +247,43 @@ function extractInitialData(html: string): Json {
 }
 
 /** Continuation pages answer with `appendContinuationItemsAction`s holding the next rows. */
-export function parseContinuation(data: unknown): { videos: PlaylistVideo[]; next: string | null } {
+export function parseContinuation(data: unknown): { videos: PlaylistVideo[]; unavailable: number; next: string | null } {
   const items = findAll(at(data, 'onResponseReceivedActions'), 'continuationItems').flatMap(arr)
   return parseItems(items)
 }
 
+/** One request to YouTube, retried on network errors, 429 and 5xx. */
+async function request<T>(fetchFn: typeof fetch, url: string, init: RequestInit, read: (res: Response) => Promise<T>, what: string): Promise<T> {
+  try {
+    return await withRetry(async () => {
+      const res = await fetchFn(url, init)
+      if (isRetryableStatus(res.status)) throw new RetryableError(`YouTube answered ${res.status} for ${what}`, retryAfter(res))
+      if (res.status === 404) throw new YoutubeError('YouTube has no such playlist')
+      if (!res.ok) throw new YoutubeError(`YouTube answered ${res.status} for ${what}`)
+      return read(res)
+    })
+  } catch (err) {
+    if (err instanceof RetryableError) throw new YoutubeError(`${err.message} (after retries)`)
+    throw err
+  }
+}
+
 /** Every video of a playlist, in playlist order (duplicates dropped). */
-export async function fetchPlaylist(id: string, fetchFn: typeof fetch = fetch): Promise<Playlist> {
-  const res = await fetchFn(`${ORIGIN}/playlist?list=${encodeURIComponent(id)}&hl=en`, { headers: HEADERS })
-  if (res.status === 404) throw new YoutubeError('YouTube has no such playlist')
-  if (!res.ok) throw new YoutubeError(`YouTube answered ${res.status}`)
-  const page = parsePlaylistPage(await res.text())
+export async function fetchPlaylist(id: string, { fetchFn = fetch, onProgress }: { fetchFn?: typeof fetch; onProgress?: (p: ImportProgress) => void } = {}): Promise<Playlist> {
+  const page = await request(fetchFn, `${ORIGIN}/playlist?list=${encodeURIComponent(id)}&hl=en`, { headers: HEADERS }, async (r) => parsePlaylistPage(await r.text()), 'the playlist page')
   const videos = [...page.videos]
+  let unavailable = page.unavailable
   let next = page.next
+  const progress = () => onProgress?.({ phase: 'listing', done: videos.length + unavailable, total: Math.max(page.total ?? 0, videos.length + unavailable) })
+  progress()
   for (let n = 0; next && n < MAX_PAGES; n++) {
     const url = `${ORIGIN}/youtubei/v1/browse?prettyPrint=false${page.apiKey ? `&key=${page.apiKey}` : ''}`
-    const r = await fetchFn(url, {
-      method: 'POST',
-      headers: { ...HEADERS, 'content-type': 'application/json' },
-      body: JSON.stringify({ context: { client: { clientName: 'WEB', clientVersion: page.clientVersion ?? '2.20260101.00.00', hl: 'en', gl: 'US' } }, continuation: next }),
-    })
-    if (!r.ok) throw new YoutubeError(`YouTube answered ${r.status} for page ${n + 2} of the playlist`)
-    const more = parseContinuation(await r.json())
+    const body = JSON.stringify({ context: { client: { clientName: 'WEB', clientVersion: page.clientVersion ?? '2.20260101.00.00', hl: 'en', gl: 'US' } }, continuation: next })
+    const more = await request(fetchFn, url, { method: 'POST', headers: { ...HEADERS, 'content-type': 'application/json' }, body }, async (r) => parseContinuation(await r.json()), `page ${n + 2} of the playlist`)
     videos.push(...more.videos)
+    unavailable += more.unavailable
     next = more.next
+    progress()
   }
   const seen = new Set<string>()
   return {
@@ -237,5 +291,6 @@ export async function fetchPlaylist(id: string, fetchFn: typeof fetch = fetch): 
     title: page.title ?? id,
     channel: page.channel,
     videos: videos.filter((v) => !seen.has(v.id) && !!seen.add(v.id)),
+    unavailable,
   }
 }

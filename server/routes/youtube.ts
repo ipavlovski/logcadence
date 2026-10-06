@@ -9,6 +9,7 @@ import { addImage, addPlaylist, deleteImage, deleteTag, deleteVideo, getVideo, i
 import { checkKey } from '../lib/youtube/dataApi.ts'
 import { YoutubeError } from '../lib/youtube/playlist.ts'
 import { publicSettings, saveSettings } from '../lib/youtube/settings.ts'
+import { thumbStatus } from '../lib/youtube/thumbs.ts'
 import { normalizeTag } from '../../shared/tags.ts'
 import { bad, defined, notFound, obj, optBool, optStr, optStrArr, str } from '../lib/validate.ts'
 
@@ -104,7 +105,7 @@ export const youtubeRoutes = new Hono()
   )
 
   // ── playlists and the importer ──
-  .get('/youtube/playlists', (c) => c.json({ playlists: listPlaylists(), settings: publicSettings() }))
+  .get('/youtube/playlists', (c) => c.json({ playlists: listPlaylists(), settings: publicSettings(), thumbs: thumbStatus() }))
   .post(
     '/youtube/playlists',
     validator('json', (v) => ({ url: str(obj(v), 'url') })),

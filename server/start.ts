@@ -14,6 +14,7 @@ import { isConnected } from './lib/spotify/auth.ts'
 import { sync as syncSpotify } from './lib/spotify/spotify.ts'
 import { importAll as importYoutube } from './lib/youtube/library.ts'
 import { loadSettings as youtubeSettings } from './lib/youtube/settings.ts'
+import { downloadThumbs } from './lib/youtube/thumbs.ts'
 
 // Starts the API (and, given staticDir, the built web app) plus the background jobs. Shared by the web
 // server (server/index.ts) and the desktop app, which runs it inside Electron's main process.
@@ -96,6 +97,8 @@ export function startServer({ port, staticDir, idleSeconds }: StartOptions): Pro
   const youtubeTimer = setInterval(youtubeTick, YOUTUBE_SYNC_MS)
   youtubeTimer.unref()
   youtubeTick()
+  // Thumbnails left over from an interrupted run (app closed, offline), when no import is due to start them.
+  if (!youtubeSettings().auto) downloadThumbs().catch((err: Error) => console.warn(`youtube thumbnails: ${err.message}`))
 
   const activity = idleSeconds && startRecorder(db, idleSeconds)
 

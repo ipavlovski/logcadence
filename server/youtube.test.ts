@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFinished } from 'vitest'
 import type { YtLibraryDTO, YtVideoDTO } from '../shared/types.ts'
 import { parsePlaylistId, parsePlaylistPage } from './lib/youtube/playlist.ts'
 
@@ -9,12 +9,17 @@ const dataDir = mkdtempSync(path.join(os.tmpdir(), 'logcadence-yt-'))
 process.env.LOGCADENCE_DATA_DIR = dataDir
 let app: typeof import('./app.ts').app
 let lib: typeof import('./lib/youtube/library.ts')
+let thumbs: typeof import('./lib/youtube/thumbs.ts')
 
 beforeAll(async () => {
   app = (await import('./app.ts')).app
   lib = await import('./lib/youtube/library.ts')
+  thumbs = await import('./lib/youtube/thumbs.ts')
+  // No waiting between retries.
+  ;(await import('./lib/youtube/http.ts')).retry.delaysMs = [0, 0, 0]
 })
 afterAll(async () => {
+  await thumbs.downloadThumbs() // let background downloads finish before the database closes
   const { closeDbs } = await import('./db/client.ts')
   closeDbs()
   rmSync(dataDir, { recursive: true, force: true })
@@ -43,7 +48,7 @@ const lockup = (id: string, title: string, channel: string) => ({
         metadata: {
           contentMetadataViewModel: {
             metadataRows: [
-              { metadataParts: [{ text: { content: channel, commandRuns: [{ onTap: { innertubeCommand: { commandMetadata: { webCommandMetadata: { url: `/@${channel}` } } } } }] } }] },
+              { metadataParts: [{ text: { content: channel, commandRuns: [{ onTap: { innertubeCommand: { commandMetadata: { webCommandMetadata: { url: `/@${channel}` } }, browseEndpoint: { browseId: 'UCwot' } } } }] } }] },
               { metadataParts: [{ text: { content: '3.7M' }, accessibilityLabel: '3.7 million views' }, { text: { content: '4y ago' }, accessibilityLabel: '4 years ago' }] },
             ],
           },
@@ -73,16 +78,33 @@ function page(items: unknown[], withMore: boolean) {
         tabs: [{ tabRenderer: { content: { sectionListRenderer: { contents: [{ itemSectionRenderer: { contents: items } }, ...(withMore ? [continuation('PAGE2')] : [])] } } } }],
       },
     },
-    header: { pageHeaderRenderer: { pageTitle: 'BUILD - WELL', content: { pageHeaderViewModel: { metadata: { avatarStackViewModel: { text: { content: 'by trickticklerschmoove' } } } } } } },
+    header: {
+      pageHeaderRenderer: {
+        pageTitle: 'BUILD - WELL',
+        content: {
+          pageHeaderViewModel: {
+            metadata: {
+              avatarStackViewModel: { text: { content: 'by trickticklerschmoove' } },
+              contentMetadataViewModel: { metadataRows: [{ metadataParts: [{ text: { content: 'Playlist' } }, { text: { content: '4,123 videos' } }] }] },
+            },
+          },
+        },
+      },
+    },
     metadata: { playlistMetadataRenderer: { title: 'BUILD - WELL' } },
   }
   return `<html><script>ytcfg.set({"INNERTUBE_CLIENT_VERSION":"2.20261002.10.00","INNERTUBE_API_KEY":"KEY"});</script><script nonce="x">var ytInitialData = ${JSON.stringify(data)};</script></html>`
 }
 
 /** A fake YouTube; `videos` is what the playlist holds now (the first two on the page, the rest paged). */
+/** Thumbnails: YouTube has none in these tests, unless a test serves its own. */
+const noThumbs = (url: string) => (url.startsWith('https://i.ytimg.com/') ? new Response('', { status: 404 }) : null)
+
 function youtube(videos: { id: string; title: string }[]): typeof fetch {
   return (async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input)
+    const img = noThumbs(url)
+    if (img) return img
     if (url.includes('/playlist?list=')) {
       if (!url.includes(LIST)) return new Response('', { status: 404 })
       const first = videos.slice(0, 2).map((v) => lockup(v.id, v.title, 'WOT'))
@@ -106,7 +128,7 @@ describe('playlist parsing', () => {
 
   it('reads the first page: details, the paging token, unavailable videos left out', () => {
     const p = parsePlaylistPage(page([lockup('xQRhsoSCXvg', 'DIY Well Drilling', 'WOT'), lockup('private0000', '[Private video]', '')], true))
-    expect(p).toMatchObject({ title: 'BUILD - WELL', channel: 'trickticklerschmoove', next: 'PAGE2', clientVersion: '2.20261002.10.00', apiKey: 'KEY' })
+    expect(p).toMatchObject({ title: 'BUILD - WELL', channel: 'trickticklerschmoove', total: 4123, unavailable: 1, next: 'PAGE2', clientVersion: '2.20261002.10.00', apiKey: 'KEY' })
     expect(p.videos).toEqual([
       {
         id: 'xQRhsoSCXvg',
@@ -114,6 +136,7 @@ describe('playlist parsing', () => {
         channel: 'WOT',
         channelUrl: 'https://www.youtube.com/@WOT',
         channelAvatar: 'https://yt3.ggpht.com/a=s68',
+        channelId: 'UCwot',
         duration: '15:25',
         views: '3.7M views',
         published: '4 years ago',
@@ -125,13 +148,19 @@ describe('playlist parsing', () => {
 // ── the Data API, as it answers with a key ──
 
 /** Fake Data API: the playlist's items (2 per page) with the times they were added, plus videos and channels. */
+/** Video ids the fake Data API was asked the details of. */
+const detailsAsked: string[] = []
+
 function dataApi(items: { id: string; title: string; addedAt: string; status?: string; owner?: string | null }[]): typeof fetch {
   return (async (input: string | URL | Request) => {
+    const img = noThumbs(String(input))
+    if (img) return img
     const url = new URL(String(input))
     expect(url.searchParams.get('key')).toBe('AIzaTEST1234')
     const q = (k: string) => url.searchParams.get(k)
     const route = url.pathname.split('/').at(-1)
-    if (route === 'playlists') return Response.json({ items: q('id') === LIST ? [{ snippet: { title: 'BUILD - WELL', channelTitle: 'trickticklerschmoove' } }] : [] })
+    if (route === 'playlists')
+      return Response.json({ items: q('id') === LIST ? [{ snippet: { title: 'BUILD - WELL', channelTitle: 'trickticklerschmoove' }, contentDetails: { itemCount: items.length } }] : [] })
     if (route === 'playlistItems') {
       const start = Number(q('pageToken') ?? 0)
       const page = items.slice(start, start + 2).map((it) => ({
@@ -140,6 +169,7 @@ function dataApi(items: { id: string; title: string; addedAt: string; status?: s
       }))
       return Response.json({ items: page, ...(start + 2 < items.length && { nextPageToken: String(start + 2) }) })
     }
+    if (route === 'videos') detailsAsked.push(...q('id')!.split(','))
     if (route === 'videos')
       return Response.json({
         items: q('id')!
@@ -190,6 +220,7 @@ describe('importer', () => {
   it('with an API key, takes each video’s real added date (moving earlier ones back) and the API’s details', async () => {
     const { saveSettings, publicSettings } = await import('./lib/youtube/settings.ts')
     saveSettings({ apiKey: 'AIzaTEST1234' })
+    onTestFinished(() => void saveSettings({ apiKey: undefined }))
     expect(publicSettings()).toEqual({ auto: true, apiKey: '…1234', apiKeyFromEnv: false })
     const before = (await req<YtVideoDTO>('GET', `/api/youtube/videos/${V(1).id}`)).importedAt
     const r = await lib.importPlaylist(
@@ -202,7 +233,9 @@ describe('importer', () => {
         { ...V(5), addedAt: '2026-09-02T12:00:00Z' },
       ]),
     )
-    expect(r).toMatchObject({ found: 3, added: 1, redated: 2, dated: true, error: null })
+    expect(r).toMatchObject({ found: 3, added: 1, redated: 2, unavailable: 2, dated: true, error: null })
+    // Known videos keep their details: only the new one's are fetched.
+    expect(detailsAsked).toEqual([V(5).id])
     const { videos } = await req<YtLibraryDTO>('GET', '/api/youtube/library')
     expect(videos.filter((v) => [V(1).id, V(2).id, V(5).id].includes(v.id)).map((v) => [v.id, v.addedAt])).toEqual([
       [V(2).id, Date.parse('2026-09-03T12:00:00Z')],
@@ -210,15 +243,16 @@ describe('importer', () => {
       [V(1).id, Date.parse('2026-09-01T12:00:00Z')],
     ])
     const v1 = await req<YtVideoDTO>('GET', `/api/youtube/videos/${V(1).id}`)
-    expect(v1).toMatchObject({
-      title: `${V(1).id} (API)`,
-      importedAt: before,
+    expect(v1).toMatchObject({ title: 'Well 1', importedAt: before, notes: 'hand drill' })
+    const v5 = await req<YtVideoDTO>('GET', `/api/youtube/videos/${V(5).id}`)
+    expect(v5).toMatchObject({
+      title: `${V(5).id} (API)`,
       duration: '1:02:03',
       views: '3.7M views',
       publishedAt: Date.parse('2022-03-01T10:00:00Z'),
-      channelUrl: 'https://www.youtube.com/@wot_utwente',
-      channelAvatar: 'https://yt3.ggpht.com/wot',
-      notes: 'hand drill',
+      // The channel is known (from the first import): its avatar and link are reused, not fetched again.
+      channelUrl: 'https://www.youtube.com/@WOT',
+      channelAvatar: 'https://yt3.ggpht.com/a=s68',
     })
     // A later import with a later date (another playlist, say) never moves a video forward.
     await lib.importPlaylist(LIST, dataApi([{ ...V(1), addedAt: '2026-09-20T12:00:00Z' }]))
@@ -231,6 +265,111 @@ describe('importer', () => {
     const { formatDuration, formatViews } = await import('./lib/youtube/dataApi.ts')
     expect([formatDuration('PT15M25S'), formatDuration('PT45S'), formatDuration('PT2H'), formatDuration('P0D')]).toEqual(['15:25', '0:45', '2:00:00', null])
     expect([formatViews('1'), formatViews('950'), formatViews('45123'), formatViews(undefined)]).toEqual(['1 view', '950 views', '45.1K views', null])
+  })
+})
+
+describe('large imports: retries, failures, thumbnails', () => {
+  /** Answers with `status` (or a network error, for 0) the first `times` calls whose URL matches. */
+  function flaky(fetchFn: typeof fetch, match: RegExp, times: number, status: number): typeof fetch & { failures: number } {
+    const f = (async (input: string | URL | Request, init?: RequestInit) => {
+      if (match.test(String(input)) && f.failures < times) {
+        f.failures++
+        if (status === 0) throw new TypeError('fetch failed')
+        return new Response('', { status })
+      }
+      return fetchFn(input, init)
+    }) as typeof fetch & { failures: number }
+    f.failures = 0
+    return f
+  }
+
+  it('retries network errors, 5xx and rate limits instead of failing the import', async () => {
+    const page = flaky(flaky(youtube([V(1), V(2), V(3), V(4)]), /youtubei/, 1, 0), /playlist\?list/, 2, 503)
+    const r = await lib.importPlaylist(LIST, page)
+    expect(r).toMatchObject({ found: 4, error: null })
+    expect(page.failures).toBe(2)
+    const { saveSettings } = await import('./lib/youtube/settings.ts')
+    saveSettings({ apiKey: 'AIzaTEST1234' })
+    try {
+      const api = flaky(dataApi([{ ...V(1), addedAt: '2026-09-01T12:00:00Z' }]), /playlistItems/, 2, 429)
+      expect(await lib.importPlaylist(LIST, api)).toMatchObject({ found: 1, error: null })
+      expect(api.failures).toBe(2)
+    } finally {
+      saveSettings({ apiKey: undefined })
+    }
+  })
+
+  it('records a failure that outlasts the retries, and leaves the catalog as it was', async () => {
+    const before = await req<YtLibraryDTO>('GET', '/api/youtube/library')
+    const down = flaky(youtube([V(1), V(2), V(3), V(4), V(6)]), /youtubei/, 99, 502)
+    const r = await lib.importPlaylist(LIST, down)
+    expect(down.failures).toBe(4) // the first try and 3 retries
+    expect(r.error).toMatch(/502 for page 2 of the playlist \(after retries\)/)
+    expect(lib.listPlaylists()[0]!.lastError).toBe(r.error)
+    expect(await req<YtLibraryDTO>('GET', '/api/youtube/library')).toEqual(before)
+  })
+
+  it('explains a network failure when adding a playlist (not an internal error)', async () => {
+    const offline = (async () => {
+      throw new TypeError('fetch failed')
+    }) as unknown as typeof fetch
+    await expect(lib.addPlaylist('PLofflineofflineoffline', offline)).rejects.toThrow(/could not reach YouTube/)
+  })
+
+  it('downloads the largest thumbnail once (webp first), a small one for the grid, and marks videos without any', async () => {
+    const { ytVideos } = await import('./db/content-schema.ts')
+    const { db } = await import('./db/client.ts')
+    await thumbs.downloadThumbs() // whatever an earlier import started
+    db.update(ytVideos).set({ thumbSize: null, thumb: null, thumbSmall: null }).run()
+    const jpeg = new Uint8Array(3000).fill(1)
+    const asked: string[] = []
+    const ytimg = (async (input: string | URL | Request) => {
+      const url = String(input)
+      asked.push(url.replace('https://i.ytimg.com/', ''))
+      if (url.includes(V(1).id)) {
+        if (url.endsWith('maxresdefault.jpg')) return new Response(jpeg, { headers: { 'content-type': 'image/jpeg' } })
+        if (url.endsWith('hqdefault.webp')) return new Response(jpeg, { headers: { 'content-type': 'image/webp' } })
+      }
+      if (url.includes(V(2).id)) throw new TypeError('fetch failed')
+      return new Response(new Uint8Array(1200), { status: 404, headers: { 'content-type': 'image/jpeg' } })
+    }) as unknown as typeof fetch
+    await thumbs.downloadThumbs(ytimg)
+    const v1 = await req<YtVideoDTO>('GET', `/api/youtube/videos/${V(1).id}`)
+    expect(v1).toMatchObject({ thumbSize: 'maxres', thumbUrl: `/assets/yt-${V(1).id}.jpg`, thumbSmallUrl: `/assets/yt-${V(1).id}-sm.webp` })
+    expect(asked.filter((u) => u.includes(V(1).id))).toEqual([`vi_webp/${V(1).id}/maxresdefault.webp`, `vi/${V(1).id}/maxresdefault.jpg`, `vi_webp/${V(1).id}/hqdefault.webp`])
+    expect((await app.request(v1.thumbUrl!)).status).toBe(200)
+    // YouTube has none: recorded, not asked again.
+    expect(await req<YtVideoDTO>('GET', `/api/youtube/videos/${V(3).id}`)).toMatchObject({ thumbSize: 'none', thumbUrl: null })
+    // A network failure leaves it for next time.
+    expect(await req<YtVideoDTO>('GET', `/api/youtube/videos/${V(2).id}`)).toMatchObject({ thumbSize: null, thumbUrl: null })
+    const status = thumbs.thumbStatus()
+    expect(status).toMatchObject({ running: false, failed: 1, pending: 1 })
+    asked.length = 0
+    await thumbs.downloadThumbs(ytimg)
+    expect(new Set(asked.map((u) => u.split('/')[1]))).toEqual(new Set([V(2).id]))
+  })
+
+  it('takes in videos imported while a thumbnail run is going (another playlist)', async () => {
+    const { ytVideos } = await import('./db/content-schema.ts')
+    const { db } = await import('./db/client.ts')
+    const { eq } = await import('drizzle-orm')
+    db.update(ytVideos).set({ thumbSize: null }).where(eq(ytVideos.id, V(1).id)).run()
+    let release!: () => void
+    const gate = new Promise<void>((r) => (release = r))
+    const asked = new Set<string>()
+    const slow = (async (input: string | URL | Request) => {
+      asked.add(String(input).split('/')[4]!)
+      await gate
+      return new Response('', { status: 404 })
+    }) as unknown as typeof fetch
+    const run = thumbs.downloadThumbs(slow)
+    // "Imported" meanwhile:
+    db.update(ytVideos).set({ thumbSize: null }).where(eq(ytVideos.id, V(4).id)).run()
+    release()
+    await run
+    // V(2) is still due from the network failure above.
+    expect(asked).toEqual(new Set([V(1).id, V(2).id, V(4).id]))
+    expect(thumbs.thumbStatus()).toMatchObject({ done: 3, total: 3 })
   })
 })
 
