@@ -43,6 +43,13 @@
       "when": 1791115360114,
       "tag": "0005_gifted_sersi",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1791225550328,
+      "tag": "0006_fluffy_azazel",
+      "breakpoints": true
     }
   ]
 }

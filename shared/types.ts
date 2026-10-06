@@ -278,3 +278,71 @@ export interface GpsDriveResult {
   /** Files in the folder dated before lastDate that aren't here: import them with a date range. */
   older: { count: number; from: string; to: string } | null
 }
+
+// ── YouTube canvas tab ──────────────────────────────────────────────────────
+
+export interface YtPlaylistDTO {
+  id: string
+  title: string
+  channel: string | null
+  /** Videos of this playlist in the catalog (also ones since removed from it on YouTube). */
+  count: number
+  lastImportAt: number | null
+  lastError: string | null
+}
+
+/** A video in the listing. */
+export interface YtVideoSummary {
+  id: string
+  title: string
+  channel: string
+  channelUrl: string | null
+  channelAvatar: string | null
+  /** "15:25", as YouTube shows it. */
+  duration: string | null
+  /** "3.7M views" and "4 years ago", as of the last import. */
+  views: string | null
+  published: string | null
+  /** First imported (epoch ms), and the day it counts as discovered (YYYY-MM-DD, can be changed by hand). */
+  addedAt: number
+  addedDate: string
+  /** Tag paths, primary first. These are YouTube tags, separate from the journal's. */
+  tags: string[]
+  playlistIds: string[]
+  /** Notes or images were added. */
+  hasNotes: boolean
+}
+
+export interface YtVideoDTO extends YtVideoSummary {
+  /** Markdown. */
+  notes: string
+  /** Image shown large; `images[0]` is the first one added. */
+  activeImageId: string | null
+  images: ImageDTO[]
+}
+
+export interface YtLibraryDTO {
+  videos: YtVideoSummary[]
+  playlists: YtPlaylistDTO[]
+  /** Videos tagged with exactly each path (as TagInfo, with `archived` always 0). */
+  tags: TagInfo[]
+}
+
+export interface YtImportResult {
+  playlistId: string
+  title: string
+  /** Videos in the playlist now. */
+  found: number
+  /** Newly discovered (not in the catalog before). */
+  added: number
+  /** Already in the catalog, newly in this playlist. */
+  linked: number
+  error: string | null
+}
+
+export interface UpdateYtVideoBody {
+  notes?: string
+  tags?: string[]
+  addedDate?: string
+  activeImageId?: string | null
+}

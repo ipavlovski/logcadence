@@ -12,6 +12,8 @@ import { scanGps } from './lib/gps/scan.ts'
 import { flushJournalFiles, touchDates } from './lib/journalFiles.ts'
 import { isConnected } from './lib/spotify/auth.ts'
 import { sync as syncSpotify } from './lib/spotify/spotify.ts'
+import { importAll as importYoutube } from './lib/youtube/library.ts'
+import { loadSettings as youtubeSettings } from './lib/youtube/settings.ts'
 
 // Starts the API (and, given staticDir, the built web app) plus the background jobs. Shared by the web
 // server (server/index.ts) and the desktop app, which runs it inside Electron's main process.
@@ -20,6 +22,8 @@ import { sync as syncSpotify } from './lib/spotify/spotify.ts'
 const SPOTIFY_SYNC_MS = 3 * 60_000
 // GPS files from Google Drive: GPSLogger uploads on its own schedule, so every half hour is plenty.
 const GPS_DRIVE_SYNC_MS = 30 * 60_000
+// YouTube playlists: new videos count as discovered on the day an import sees them, so check a few times a day.
+const YOUTUBE_SYNC_MS = 3 * 60 * 60_000
 
 export interface StartOptions {
   port: number
@@ -78,6 +82,21 @@ export function startServer({ port, staticDir, idleSeconds }: StartOptions): Pro
   const gpsDriveTimer = setInterval(gpsDriveTick, GPS_DRIVE_SYNC_MS)
   gpsDriveTimer.unref()
 
+  const youtubeTick = () => {
+    if (!youtubeSettings().auto) return
+    importYoutube().then(
+      (rs) => {
+        const added = rs.reduce((n, r) => n + r.added, 0)
+        if (added) console.log(`youtube: ${added} new video(s)`)
+        for (const r of rs) if (r.error) console.warn(`youtube import of ${r.title}: ${r.error}`)
+      },
+      (err: Error) => console.warn(`youtube import: ${err.message}`),
+    )
+  }
+  const youtubeTimer = setInterval(youtubeTick, YOUTUBE_SYNC_MS)
+  youtubeTimer.unref()
+  youtubeTick()
+
   const activity = idleSeconds && startRecorder(db, idleSeconds)
 
   return new Promise((resolve, reject) => {
@@ -94,6 +113,7 @@ export function startServer({ port, staticDir, idleSeconds }: StartOptions): Pro
           (stopped ??= new Promise<void>((done) => {
             clearInterval(spotifyTimer)
             clearInterval(gpsDriveTimer)
+            clearInterval(youtubeTimer)
             stopRecorder()
             flushJournalFiles()
             server.close(() => {

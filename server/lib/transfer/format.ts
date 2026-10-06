@@ -35,6 +35,12 @@ export const CONTENT_TABLES = {
   gps_segments: content.gpsSegments,
   gps_trips: content.gpsTrips,
   activity_spans: content.activitySpans,
+  yt_playlists: content.ytPlaylists,
+  yt_videos: content.ytVideos,
+  yt_playlist_videos: content.ytPlaylistVideos,
+  yt_tags: content.ytTags,
+  yt_video_tags: content.ytVideoTags,
+  yt_images: content.ytImages,
 }
 export const EVENTS_TABLES = { events: events.events }
 

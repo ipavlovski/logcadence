@@ -18,10 +18,14 @@ interface Props {
   className?: string
   /** Primary tag that cannot be removed or demoted (the source tag of an imported AI chat). */
   locked?: string
+  /** Tag paths to suggest, for a tag set other than the journal's (the YouTube tab's). */
+  paths?: string[]
+  /** What a chip click does; by default it opens the tag in the tags pane. */
+  onOpen?: (tag: string, opts: { newTab: boolean }) => void
 }
 
 /** Tag chips + an input with autocomplete. The first chip is the primary tag. */
-export function TagInput({ value, onChange: setTags, placeholder = 'add tag…', autoFocus, single, onSubmit, onKeyDown, onFocus, className, locked }: Props) {
+export function TagInput({ value, onChange: setTags, placeholder = 'add tag…', autoFocus, single, onSubmit, onKeyDown, onFocus, className, locked, paths: ownPaths, onOpen = openTag }: Props) {
   const onChange = (tags: string[]) => setTags(locked ? [locked, ...tags.filter((t) => t !== locked)] : tags)
   const [text, setText] = useState('')
   const [open, setOpen] = useState(false)
@@ -29,7 +33,8 @@ export function TagInput({ value, onChange: setTags, placeholder = 'add tag…',
   const [sel, setSel] = useState(-1)
   const inputRef = useRef<HTMLInputElement>(null)
   const all = useAllTags()
-  const paths = useMemo(() => allTagPaths(all), [all])
+  const journalPaths = useMemo(() => allTagPaths(all), [all])
+  const paths = ownPaths ?? journalPaths
   const suggestions = useMemo(
     () =>
       open
@@ -96,7 +101,7 @@ export function TagInput({ value, onChange: setTags, placeholder = 'add tag…',
             title={chipTitle(t, i)}
             onClick={(e) => {
               e.stopPropagation()
-              openTag(t, { newTab: e.ctrlKey || e.metaKey })
+              onOpen(t, { newTab: e.ctrlKey || e.metaKey })
             }}
           >
             #{t}

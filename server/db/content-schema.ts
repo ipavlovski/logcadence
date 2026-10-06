@@ -199,6 +199,90 @@ export const gpsTrips = sqliteTable(
   (t) => [index('gps_trips_date_idx').on(t.date)],
 )
 
+// YouTube videos for the canvas YouTube tab, imported from playlists (see server/lib/youtube/). Their tags are a
+// set of their own, apart from the journal's.
+
+export const ytPlaylists = sqliteTable('yt_playlists', {
+  id: text('id').primaryKey(), // YouTube's list id (PL…)
+  title: text('title').notNull(),
+  channel: text('channel'),
+  createdAt: integer('created_at').notNull(),
+  lastImportAt: integer('last_import_at'),
+  lastError: text('last_error'),
+})
+
+export const ytVideos = sqliteTable(
+  'yt_videos',
+  {
+    id: text('id').primaryKey(), // YouTube's video id
+    title: text('title').notNull(),
+    channel: text('channel').notNull().default(''),
+    channelUrl: text('channel_url'),
+    channelAvatar: text('channel_avatar'),
+    duration: text('duration'), // "15:25", as YouTube shows it
+    views: text('views'), // "3.7M views", as of the last import
+    published: text('published'), // "4 years ago", as of the last import
+    // When the video was first imported from a playlist: the day it was discovered.
+    addedAt: integer('added_at').notNull(), // epoch ms
+    addedDate: text('added_date').notNull(), // local YYYY-MM-DD; can be changed by hand
+    notes: text('notes').notNull().default(''), // markdown
+    activeImageId: text('active_image_id'),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => [index('yt_videos_added_idx').on(t.addedDate, t.addedAt)],
+)
+
+export const ytPlaylistVideos = sqliteTable(
+  'yt_playlist_videos',
+  {
+    playlistId: text('playlist_id')
+      .notNull()
+      .references(() => ytPlaylists.id, { onDelete: 'cascade' }),
+    videoId: text('video_id')
+      .notNull()
+      .references(() => ytVideos.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(), // index in the playlist at the last import
+    addedAt: integer('added_at').notNull(), // first seen in this playlist
+  },
+  (t) => [primaryKey({ columns: [t.playlistId, t.videoId] }), index('yt_playlist_videos_video_idx').on(t.videoId)],
+)
+
+export const ytTags = sqliteTable('yt_tags', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  path: text('path').notNull().unique(), // "build:well:drilling"; ancestors are implicit
+  createdAt: integer('created_at').notNull(),
+})
+
+export const ytVideoTags = sqliteTable(
+  'yt_video_tags',
+  {
+    videoId: text('video_id')
+      .notNull()
+      .references(() => ytVideos.id, { onDelete: 'cascade' }),
+    tagId: integer('tag_id')
+      .notNull()
+      .references(() => ytTags.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(), // lowest is the primary tag
+  },
+  (t) => [primaryKey({ columns: [t.videoId, t.tagId] }), index('yt_video_tags_tag_idx').on(t.tagId)],
+)
+
+// Images and gifs pasted into a video's notes; files live under data/assets like the journal's.
+export const ytImages = sqliteTable(
+  'yt_images',
+  {
+    id: text('id').primaryKey(),
+    videoId: text('video_id')
+      .notNull()
+      .references(() => ytVideos.id, { onDelete: 'cascade' }),
+    file: text('file').notNull(),
+    mime: text('mime').notNull(),
+    position: real('position').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('yt_images_video_idx').on(t.videoId, t.position)],
+)
+
 // Computer activity for the canvas Activity tab (see server/lib/activity.ts). `input` spans are stretches of
 // keyboard/mouse input (pauses under a minute included); `tracked` spans are when the recorder was running
 // with the machine awake, so idle time can be told apart from time that was not recorded.
