@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type MouseEvent } from 'react'
 import { formatJournalDate, shiftDate, today, weekday } from '../../../shared/dates.ts'
 import { allTagPaths, isUnder } from '../../../shared/tags.ts'
-import type { UpdateYtVideoBody, YtLibraryDTO, YtVideoDTO, YtVideoSummary } from '../../../shared/types.ts'
+import type { ImageDTO, UpdateYtVideoBody, YtImageSection, YtLibraryDTO, YtVideoDTO, YtVideoSummary } from '../../../shared/types.ts'
 import { api, unwrap } from '../../api.ts'
 import type { CanvasPluginProps } from '../../canvas/plugins.ts'
 import { useFetch } from '../../hooks/useFetch.ts'
+import { mediaFiles, pasteMedia } from '../../media.ts'
 import { openDate, panesStore } from '../../state/panes.ts'
 import { useStore } from '../../state/store.ts'
 import { notify } from '../../state/ui.ts'
@@ -30,16 +31,29 @@ function useLibrary() {
   return useFetch<YtLibraryDTO>(`ytlib|${rev}`, (signal) => unwrap(api.youtube.library.$get({}, { init: { signal } })))
 }
 
-/** Videos the listing shows: the filter, then the search (title, channel, tags). */
+const squash = (s: string) => s.toLowerCase().replace(/\s+/g, '')
+/** "@WOT_utwente" from a channel link, when it has a handle. */
+const handleOf = (url: string | null) => url?.match(/\/(@[^/?#]+)/)?.[1] ?? null
+
+/** One search word: "@name" matches the channel (its name or @handle); others the title, channel or tags. */
+function matchesWord(v: YtVideoSummary, w: string): boolean {
+  if (w.startsWith('@')) {
+    const q = squash(w.slice(1))
+    return !q || squash(v.channel).includes(q) || !!handleOf(v.channelUrl)?.toLowerCase().includes(q)
+  }
+  const tag = w.replace(/^#/, '')
+  return v.title.toLowerCase().includes(w) || v.channel.toLowerCase().includes(w) || v.tags.some((t) => t.includes(tag))
+}
+
+/** Videos the listing shows: the filter, then the search. */
 function useShown(lib: YtLibraryDTO | undefined, filter: YtFilter, query: string): YtVideoSummary[] {
   return useMemo(() => {
     let list = lib?.videos ?? []
-    if (filter?.kind === 'playlist') list = list.filter((v) => v.playlistIds.includes(filter.id))
-    else if (filter?.kind === 'tag') list = list.filter((v) => v.tags.some((t) => isUnder(t, filter.path)))
+    if (filter?.kind === 'tag') list = list.filter((v) => v.tags.some((t) => isUnder(t, filter.path)))
     else if (filter?.kind === 'untagged') list = list.filter((v) => !v.tags.length)
-    else if (filter?.kind === 'notes') list = list.filter((v) => v.hasNotes)
+    else if (filter?.kind === 'channel') list = list.filter((v) => v.channel === filter.name)
     const words = query.toLowerCase().split(/\s+/).filter(Boolean)
-    if (words.length) list = list.filter((v) => words.every((w) => v.title.toLowerCase().includes(w) || v.channel.toLowerCase().includes(w) || v.tags.some((t) => t.includes(w.replace(/^#/, '')))))
+    if (words.length) list = list.filter((v) => words.every((w) => matchesWord(v, w)))
     return list
   }, [lib, filter, query])
 }
@@ -97,6 +111,7 @@ function Listing({ lib, loading, error, onImport }: { lib: YtLibraryDTO | undefi
       <TopBar onImport={onImport} />
       {lib && lib.videos.length > 0 && <Chips lib={lib} filter={filter} />}
       {filter?.kind === 'tag' && lib && <TagActions path={filter.path} count={shown.length} />}
+      {filter?.kind === 'channel' && lib && <ChannelBar name={filter.name} lib={lib} count={shown.length} />}
       {error && !lib ? (
         <p className={styles.empty}>{error.message}</p>
       ) : !lib ? (
@@ -119,7 +134,7 @@ function Listing({ lib, loading, error, onImport }: { lib: YtLibraryDTO | undefi
                   {dayLabel(d.date)}
                 </button>
                 <span>
-                  {perDay.get(d.date)} discovered
+                  {perDay.get(d.date)} added
                 </span>
               </h3>
               <div className={styles.grid}>
@@ -169,22 +184,45 @@ function TopBar({ onImport }: { onImport: () => void }) {
   )
 }
 
+/** The tags in use (not their implied ancestors) and "untagged"; clicking the selected chip shows everything again. */
 function Chips({ lib, filter }: { lib: YtLibraryDTO; filter: YtFilter }) {
-  const tagPaths = useMemo(() => allTagPaths(lib.tags), [lib.tags])
-  const is = (f: YtFilter) => JSON.stringify(f) === JSON.stringify(filter)
-  const chip = (f: YtFilter, label: string, title?: string, cls = '') => (
-    <button key={JSON.stringify(f)} className={`${styles.chip} ${cls} ${is(f) ? styles.chipOn : ''}`} title={title} onClick={() => setYtFilter(is(f) && f ? null : f)}>
+  const is = (f: NonNullable<YtFilter>) => JSON.stringify(f) === JSON.stringify(filter)
+  const chip = (f: NonNullable<YtFilter>, label: string, title: string, cls = '') => (
+    <button key={JSON.stringify(f)} className={`${styles.chip} ${cls} ${is(f) ? styles.chipOn : ''}`} title={title} onClick={() => setYtFilter(is(f) ? null : f)}>
       {label}
     </button>
   )
+  const active = lib.tags.filter((t) => t.active > 0)
   return (
     <nav className={styles.chips}>
-      {chip(null, 'All')}
-      {lib.playlists.map((p) => chip({ kind: 'playlist', id: p.id }, p.title, `Playlist · ${p.count} videos`))}
-      {chip({ kind: 'notes' }, 'With notes')}
-      {chip({ kind: 'untagged' }, 'Untagged')}
-      {tagPaths.map((t) => chip({ kind: 'tag', path: t }, `#${t}`, 'Videos with this tag or one under it', styles.tagChip))}
+      {chip({ kind: 'untagged' }, 'untagged', 'Videos without tags')}
+      {active.map((t) => chip({ kind: 'tag', path: t.path }, `#${t.path}`, `${t.active} video${t.active === 1 ? '' : 's'} (with the tags under it, when filtering)`, styles.tagChip))}
     </nav>
+  )
+}
+
+/** The channel filter: its avatar and name, and a way out. */
+function ChannelBar({ name, lib, count }: { name: string; lib: YtLibraryDTO; count: number }) {
+  const v = lib.videos.find((x) => x.channel === name)
+  return (
+    <div className={styles.channelBar}>
+      {v && <Avatar v={v} large />}
+      <div>
+        <div className={styles.channelName}>{name}</div>
+        <div className={styles.meta}>
+          {handleOf(v?.channelUrl ?? null) && <>{handleOf(v!.channelUrl)} • </>}
+          {count} video{count === 1 ? '' : 's'}
+        </div>
+      </div>
+      {v?.channelUrl && (
+        <a className={styles.watch} href={v.channelUrl} target="_blank" rel="noreferrer">
+          Channel ↗
+        </a>
+      )}
+      <button className={styles.clearFilter} onClick={() => setYtFilter(null)} title="Show every channel">
+        ×
+      </button>
+    </div>
   )
 }
 
@@ -227,13 +265,13 @@ function VideoCard({ v }: { v: YtVideoSummary }) {
         )}
       </div>
       <div className={styles.details}>
-        <Avatar v={v} />
+        <Avatar v={v} onClick={() => setYtFilter({ kind: 'channel', name: v.channel })} />
         <div className={styles.text}>
           <h4 className={styles.title} title={v.title}>
             {v.title}
           </h4>
           <div className={styles.meta}>{v.channel}</div>
-          <div className={styles.meta}>{[v.views, v.published].filter(Boolean).join(' • ')}</div>
+          <div className={styles.meta}>{[v.views, publishedText(v)].filter(Boolean).join(' • ')}</div>
           {v.tags.length > 0 && (
             <div className={styles.cardTags}>
               {v.tags.map((t) => (
@@ -255,14 +293,52 @@ function VideoCard({ v }: { v: YtVideoSummary }) {
   )
 }
 
-function Avatar({ v, large }: { v: YtVideoSummary; large?: boolean }) {
+/** The channel's icon; with onClick, a button that shows the channel's videos. */
+function Avatar({ v, large, onClick }: { v: YtVideoSummary; large?: boolean; onClick?: () => void }) {
   const [broken, setBroken] = useState(false)
   const cls = `${styles.avatar} ${large ? styles.avatarLarge : ''}`
-  if (!v.channelAvatar || broken) return <span className={`${cls} ${styles.avatarLetter}`}>{(v.channel || '?').slice(0, 1).toUpperCase()}</span>
-  return <img className={cls} src={v.channelAvatar} alt="" loading="lazy" onError={() => setBroken(true)} />
+  const icon =
+    !v.channelAvatar || broken ? (
+      <span className={`${cls} ${styles.avatarLetter}`}>{(v.channel || '?').slice(0, 1).toUpperCase()}</span>
+    ) : (
+      <img className={cls} src={v.channelAvatar} alt="" loading="lazy" onError={() => setBroken(true)} />
+    )
+  if (!onClick) return icon
+  return (
+    <button
+      className={styles.avatarButton}
+      title={`All videos by ${v.channel}`}
+      onClick={(e) => {
+        e.stopPropagation()
+        onClick()
+      }}
+    >
+      {icon}
+    </button>
+  )
+}
+
+const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
+  ['year', 365 * 864e5],
+  ['month', 30 * 864e5],
+  ['week', 7 * 864e5],
+  ['day', 864e5],
+  ['hour', 36e5],
+  ['minute', 6e4],
+]
+const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
+
+/** "4 years ago", from the publish date when the Data API gave one, else as YouTube's page said it. */
+function publishedText(v: YtVideoSummary): string | null {
+  if (!v.publishedAt) return v.published
+  const ms = Date.now() - v.publishedAt
+  const [unit, size] = UNITS.find(([, n]) => ms >= n) ?? UNITS.at(-1)!
+  return rtf.format(-Math.max(1, Math.floor(ms / size)), unit)
 }
 
 // ── video page ─────────────────────────────────────────────────────────────
+
+const fullDate = (ms: number) => new Date(ms).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
 
 function VideoPage({ id, lib }: { id: string; lib: YtLibraryDTO | undefined }) {
   const [bump, setBump] = useState(0)
@@ -278,7 +354,6 @@ function VideoPage({ id, lib }: { id: string; lib: YtLibraryDTO | undefined }) {
   const prev = i > 0 ? list[i - 1] : undefined
   const next = i >= 0 ? list[i + 1] : undefined
   const tagPaths = useMemo(() => allTagPaths(lib?.tags ?? []), [lib])
-  const playlists = lib?.playlists.filter((p) => v?.playlistIds.includes(p.id)) ?? []
 
   // Esc goes back to the listing (when not typing, and the canvas has focus).
   useEffect(() => {
@@ -296,26 +371,13 @@ function VideoPage({ id, lib }: { id: string; lib: YtLibraryDTO | undefined }) {
       setPatched(r)
       bumpYt()
     }, fail)
-
-  const upload = async (files: File[]) => {
-    for (const file of files) {
-      try {
-        await unwrap(api.youtube.videos[':id'].images.$post({ param: { id }, form: { file } }))
-      } catch (err) {
-        fail(err as Error)
-      }
-    }
+  const refresh = () => {
     setBump((b) => b + 1)
     bumpYt()
   }
-  const imageOp = (p: Promise<unknown>) =>
-    p.catch(fail).finally(() => {
-      setBump((b) => b + 1)
-      bumpYt()
-    })
 
   const remove = () => {
-    if (!v || !confirm(`Remove “${v.title}” from the catalog, with its notes and tags? An import brings it back while it is still in a playlist.`)) return
+    if (!v || !confirm(`Remove “${v.title}” from the catalog, with its notes, comments and tags? An import brings it back while it is still in a playlist.`)) return
     unwrap(api.youtube.videos[':id'].$delete({ param: { id } })).then(() => {
       openVideo(null)
       bumpYt()
@@ -340,10 +402,10 @@ function VideoPage({ id, lib }: { id: string; lib: YtLibraryDTO | undefined }) {
         error ? <p className={styles.empty}>{error.message}</p> : <div className={styles.loading} />
       ) : (
         <>
-          <Player id={v.id} title={v.title} />
+          <Thumbnail id={v.id} />
           <h1 className={styles.pageTitle}>{v.title}</h1>
           <div className={styles.owner}>
-            <Avatar v={v} large />
+            <Avatar v={v} large onClick={() => setYtFilter({ kind: 'channel', name: v.channel })} />
             <div>
               {v.channelUrl ? (
                 <a className={styles.channel} href={v.channelUrl} target="_blank" rel="noreferrer">
@@ -352,7 +414,7 @@ function VideoPage({ id, lib }: { id: string; lib: YtLibraryDTO | undefined }) {
               ) : (
                 <span className={styles.channel}>{v.channel}</span>
               )}
-              <div className={styles.meta}>{[v.views, v.published].filter(Boolean).join(' • ')}</div>
+              <div className={styles.meta}>{[v.views, publishedText(v)].filter(Boolean).join(' • ')}</div>
             </div>
             <a className={styles.watch} href={watchUrl(v.id)} target="_blank" rel="noreferrer">
               Open on YouTube ↗
@@ -361,28 +423,16 @@ function VideoPage({ id, lib }: { id: string; lib: YtLibraryDTO | undefined }) {
 
           <section className={styles.infoBox}>
             <div className={styles.infoRow}>
-              <span className={styles.label}>Discovered</span>
-              <input
-                type="date"
-                value={v.addedDate}
-                max={today()}
-                onChange={(e) => e.target.value && save({ addedDate: e.target.value })}
-                title="The day this video was added to a playlist (set on import; change it for videos imported later)"
-              />
-              <button className={styles.link} onClick={(e) => openDate(v.addedDate, { newTab: e.ctrlKey || e.metaKey })}>
-                open day
+              <span className={styles.label}>Added</span>
+              <button className={styles.link} onClick={(e) => openDate(v.addedDate, { newTab: e.ctrlKey || e.metaKey })} title="Open this day in the journal">
+                {formatJournalDate(v.addedDate)}
               </button>
+              <span className={styles.muted}>{v.addedAt === v.importedAt ? 'when it was imported (no API key)' : fullDate(v.addedAt)}</span>
             </div>
-            {playlists.length > 0 && (
-              <div className={styles.infoRow}>
-                <span className={styles.label}>Playlists</span>
-                {playlists.map((p) => (
-                  <button key={p.id} className={styles.link} onClick={() => setYtFilter({ kind: 'playlist', id: p.id })}>
-                    {p.title}
-                  </button>
-                ))}
-              </div>
-            )}
+            <div className={styles.infoRow}>
+              <span className={styles.label}>Imported</span>
+              <span>{fullDate(v.importedAt)}</span>
+            </div>
             <div className={styles.infoRow}>
               <span className={styles.label}>Tags</span>
               <TagInput
@@ -396,21 +446,35 @@ function VideoPage({ id, lib }: { id: string; lib: YtLibraryDTO | undefined }) {
             </div>
           </section>
 
-          <Notes v={v} onSave={(notes) => save({ notes })} onUpload={upload} />
-          {v.images.length > 0 && (
-            <div className={styles.gallery}>
-              <ImageGallery
-                images={v.images}
-                activeId={v.activeImageId}
-                onActivate={(activeImageId) => save({ activeImageId })}
-                onDelete={(imageId) => imageOp(unwrap(api.youtube.images[':id'].$delete({ param: { id: imageId } })))}
-                onReorder={(ids) => imageOp(unwrap(api.youtube.videos[':id'].images.order.$post({ param: { id }, json: { ids } })))}
-              />
-            </div>
-          )}
+          <TextSection
+            key={`notes|${v.id}`}
+            videoId={v.id}
+            section="notes"
+            title="Notes"
+            text={v.notes}
+            images={v.images}
+            activeId={v.activeImageId}
+            empty="Click to write notes… paste or drop images, gifs and videos."
+            onSave={(notes) => save({ notes })}
+            onActivate={(activeImageId) => save({ activeImageId })}
+            onImages={refresh}
+          />
+          <TextSection
+            key={`comments|${v.id}`}
+            videoId={v.id}
+            section="comments"
+            title="Comments"
+            text={v.comments}
+            images={v.commentImages}
+            activeId={v.commentsActiveImageId}
+            empty="Click to keep comments… paste or drop screenshots of them."
+            onSave={(comments) => save({ comments })}
+            onActivate={(commentsActiveImageId) => save({ commentsActiveImageId })}
+            onImages={refresh}
+          />
 
           <footer className={styles.pageFooter}>
-            <span className={styles.muted}>Imported {new Date(v.addedAt).toLocaleString()}</span>
+            <span />
             <button className={styles.link} onClick={remove}>
               Remove from catalog
             </button>
@@ -421,45 +485,45 @@ function VideoPage({ id, lib }: { id: string; lib: YtLibraryDTO | undefined }) {
   )
 }
 
-/** The thumbnail, large; a click plays the video in place. */
-function Player({ id, title }: { id: string; title: string }) {
-  const [playing, setPlaying] = useState(false)
-  // maxres isn't made for every video (YouTube answers 404): fall back to hq.
+/** The thumbnail, large (maxres isn't made for every video: YouTube answers 404, so fall back to hq). */
+function Thumbnail({ id }: { id: string }) {
   const [src, setSrc] = useState(thumb(id, 'maxres'))
-  if (playing)
-    return (
-      <div className={styles.player}>
-        <iframe
-          src={`https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0`}
-          title={title}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-          referrerPolicy="strict-origin-when-cross-origin"
-          allowFullScreen
-        />
-      </div>
-    )
   return (
-    <button className={styles.player} onClick={() => setPlaying(true)} title="Play here">
+    <div className={styles.player}>
       <img src={src} alt="" onError={() => setSrc(thumb(id))} />
-      <span className={styles.play} aria-hidden>
-        <PlayLogo />
-      </span>
-    </button>
+    </div>
   )
 }
 
-const imageFiles = (list: FileList | null | undefined) => [...(list ?? [])].filter((f) => f.type.startsWith('image/'))
+interface TextSectionProps {
+  videoId: string
+  section: YtImageSection
+  title: string
+  text: string
+  images: ImageDTO[]
+  activeId: string | null
+  empty: string
+  onSave: (text: string) => void
+  onActivate: (imageId: string) => void
+  /** After images were added, removed or reordered. */
+  onImages: () => void
+}
 
-/** Markdown notes: click to edit, saved when editing ends. Pasted or dropped images and gifs join the gallery. */
-function Notes({ v, onSave, onUpload }: { v: YtVideoDTO; onSave: (notes: string) => void; onUpload: (files: File[]) => void }) {
+/** Markdown text (click to edit, saved when editing ends) and its gallery: pasted or dropped images, gifs and videos join it. */
+function TextSection({ videoId, section, title, text, images, activeId, empty, onSave, onActivate, onImages }: TextSectionProps) {
   const [editing, setEditing] = useState(false)
   const [dragOver, setDragOver] = useState(false)
+  const imageOp = (p: Promise<unknown>) => p.catch(fail).finally(onImages)
+  const upload = async (files: File[]) => {
+    for (const file of files) await unwrap(api.youtube.videos[':id'].images[':section'].$post({ param: { id: videoId, section }, form: { file } })).catch(fail)
+    onImages()
+  }
   const onDrop = (e: DragEvent) => {
-    const files = imageFiles(e.dataTransfer.files)
+    const files = mediaFiles(e.dataTransfer.files)
     setDragOver(false)
     if (!files.length) return
     e.preventDefault()
-    onUpload(files)
+    void upload(files)
   }
   const open = (e: MouseEvent) => {
     if ((e.target as HTMLElement).closest('a, button') || window.getSelection()?.toString()) return
@@ -477,19 +541,30 @@ function Notes({ v, onSave, onUpload }: { v: YtVideoDTO; onSave: (notes: string)
       onDragLeave={() => setDragOver(false)}
       onDrop={onDrop}
     >
-      <h3>Notes</h3>
+      <h3>{title}</h3>
       {editing ? (
         <NotesEditor
-          initial={v.notes}
-          onDone={(notes) => {
+          initial={text}
+          onDone={(next) => {
             setEditing(false)
-            if (notes !== v.notes) onSave(notes)
+            if (next !== text) onSave(next)
           }}
-          onUpload={onUpload}
+          onUpload={(files) => void upload(files)}
         />
       ) : (
         <div className={styles.notesView} onClick={open}>
-          {v.notes.trim() ? <Markdown source={v.notes} /> : <span className={styles.placeholder}>Click to write notes… paste or drop images and gifs.</span>}
+          {text.trim() ? <Markdown source={text} /> : !images.length && <span className={styles.placeholder}>{empty}</span>}
+        </div>
+      )}
+      {images.length > 0 && (
+        <div className={styles.gallery}>
+          <ImageGallery
+            images={images}
+            activeId={activeId}
+            onActivate={onActivate}
+            onDelete={(imageId) => imageOp(unwrap(api.youtube.images[':id'].$delete({ param: { id: imageId } })))}
+            onReorder={(ids) => imageOp(unwrap(api.youtube.videos[':id'].images[':section'].order.$post({ param: { id: videoId, section }, json: { ids } })))}
+          />
         </div>
       )}
     </section>
@@ -511,19 +586,14 @@ function NotesEditor({ initial, onDone, onUpload }: { initial: string; onDone: (
   // Leaving the page (another video, the listing) while typing still saves.
   useEffect(() => finish, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const onPaste = (e: ClipboardEvent) => {
-    const files = imageFiles(e.clipboardData.files)
-    if (!files.length) return
-    e.preventDefault()
-    onUpload(files)
-  }
+  const onPaste = (e: ClipboardEvent) => pasteMedia(e, onUpload)
   return (
     <AutoTextarea
       className={styles.editor}
       value={draft}
       autoFocus
       spellCheck={false}
-      placeholder="Write… (markdown; paste or drop images and gifs; Esc to finish)"
+      placeholder="Write… (markdown; paste or drop images, gifs and videos; Esc to finish)"
       onChange={(e) => setDraft(e.target.value)}
       onPaste={onPaste}
       onKeyDown={(e) => {

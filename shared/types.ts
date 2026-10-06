@@ -288,8 +288,8 @@ export interface YtPlaylistDTO {
   id: string
   title: string
   channel: string | null
-  /** Videos of this playlist in the catalog (also ones since removed from it on YouTube). */
-  count: number
+  /** Videos in the playlist at the last import. */
+  count: number | null
   lastImportAt: number | null
   lastError: string | null
 }
@@ -303,32 +303,51 @@ export interface YtVideoSummary {
   channelAvatar: string | null
   /** "15:25", as YouTube shows it. */
   duration: string | null
-  /** "3.7M views" and "4 years ago", as of the last import. */
+  /** "3.7M views", as of the last import. */
   views: string | null
+  /** "4 years ago" as of an import without an API key; publishedAt (epoch ms) comes from the Data API. */
   published: string | null
-  /** First imported (epoch ms), and the day it counts as discovered (YYYY-MM-DD, can be changed by hand). */
+  publishedAt: number | null
+  /**
+   * When it was added to a playlist (epoch ms) and that local day: from the Data API, or without an API key,
+   * when an import first saw it.
+   */
   addedAt: number
   addedDate: string
+  /** First imported (epoch ms). */
+  importedAt: number
   /** Tag paths, primary first. These are YouTube tags, separate from the journal's. */
   tags: string[]
-  playlistIds: string[]
   /** Notes or images were added. */
   hasNotes: boolean
 }
 
+export type YtImageSection = 'notes' | 'comments'
+
 export interface YtVideoDTO extends YtVideoSummary {
   /** Markdown. */
   notes: string
-  /** Image shown large; `images[0]` is the first one added. */
+  /** Notes image shown large. */
   activeImageId: string | null
   images: ImageDTO[]
+  /** Comments worth keeping (markdown), with their screenshots. */
+  comments: string
+  commentsActiveImageId: string | null
+  commentImages: ImageDTO[]
 }
 
 export interface YtLibraryDTO {
   videos: YtVideoSummary[]
-  playlists: YtPlaylistDTO[]
   /** Videos tagged with exactly each path (as TagInfo, with `archived` always 0). */
   tags: TagInfo[]
+}
+
+export interface YtSettingsDTO {
+  auto: boolean
+  /** The key's last characters ("…x7Qa"), or null without one. */
+  apiKey: string | null
+  /** The key comes from YOUTUBE_API_KEY, not the settings window. */
+  apiKeyFromEnv: boolean
 }
 
 export interface YtImportResult {
@@ -336,16 +355,19 @@ export interface YtImportResult {
   title: string
   /** Videos in the playlist now. */
   found: number
-  /** Newly discovered (not in the catalog before). */
+  /** New to the catalog. */
   added: number
-  /** Already in the catalog, newly in this playlist. */
-  linked: number
+  /** Known videos whose added date moved earlier (a real date from the Data API). */
+  redated: number
+  /** Added dates came from the Data API (an API key is set). */
+  dated: boolean
   error: string | null
 }
 
 export interface UpdateYtVideoBody {
   notes?: string
+  comments?: string
   tags?: string[]
-  addedDate?: string
   activeImageId?: string | null
+  commentsActiveImageId?: string | null
 }

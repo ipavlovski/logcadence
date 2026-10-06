@@ -122,25 +122,56 @@ describe('playlist parsing', () => {
   })
 })
 
+// ── the Data API, as it answers with a key ──
+
+/** Fake Data API: the playlist's items (2 per page) with the times they were added, plus videos and channels. */
+function dataApi(items: { id: string; title: string; addedAt: string; status?: string; owner?: string | null }[]): typeof fetch {
+  return (async (input: string | URL | Request) => {
+    const url = new URL(String(input))
+    expect(url.searchParams.get('key')).toBe('AIzaTEST1234')
+    const q = (k: string) => url.searchParams.get(k)
+    const route = url.pathname.split('/').at(-1)
+    if (route === 'playlists') return Response.json({ items: q('id') === LIST ? [{ snippet: { title: 'BUILD - WELL', channelTitle: 'trickticklerschmoove' } }] : [] })
+    if (route === 'playlistItems') {
+      const start = Number(q('pageToken') ?? 0)
+      const page = items.slice(start, start + 2).map((it) => ({
+        snippet: { title: it.title, publishedAt: it.addedAt, resourceId: { videoId: it.id }, videoOwnerChannelTitle: it.owner === null ? undefined : (it.owner ?? 'WOT'), videoOwnerChannelId: 'UCwot' },
+        status: { privacyStatus: it.status ?? 'public' },
+      }))
+      return Response.json({ items: page, ...(start + 2 < items.length && { nextPageToken: String(start + 2) }) })
+    }
+    if (route === 'videos')
+      return Response.json({
+        items: q('id')!
+          .split(',')
+          .map((id) => ({ id, snippet: { title: `${id} (API)`, publishedAt: '2022-03-01T10:00:00Z' }, contentDetails: { duration: 'PT1H2M3S' }, statistics: { viewCount: '3712345' } })),
+      })
+    if (route === 'channels') return Response.json({ items: [{ id: 'UCwot', snippet: { customUrl: '@wot_utwente', thumbnails: { default: { url: 'https://yt3.ggpht.com/wot' } } } }] })
+    return new Response('', { status: 404 })
+  }) as typeof fetch
+}
+
 describe('importer', () => {
-  it('adds a playlist and discovers all its videos today, across pages and formats', async () => {
+  it('adds a playlist and imports all its videos, across pages and formats; without a key they are dated by the import', async () => {
     const r = await lib.addPlaylist(`https://www.youtube.com/playlist?list=${LIST}`, youtube([V(1), V(2), V(3)]))
-    expect(r).toMatchObject({ playlistId: LIST, title: 'BUILD - WELL', found: 3, added: 3, error: null })
-    const { videos, playlists } = await req<YtLibraryDTO>('GET', '/api/youtube/library')
-    expect(playlists).toMatchObject([{ id: LIST, title: 'BUILD - WELL', channel: 'trickticklerschmoove', count: 3 }])
+    expect(r).toMatchObject({ playlistId: LIST, title: 'BUILD - WELL', found: 3, added: 3, dated: false, error: null })
+    expect(lib.listPlaylists()).toMatchObject([{ id: LIST, title: 'BUILD - WELL', channel: 'trickticklerschmoove', count: 3 }])
+    const { videos } = await req<YtLibraryDTO>('GET', '/api/youtube/library')
     expect(videos.map((v) => v.title)).toEqual(['Well 1', 'Well 2', 'Well 3'])
-    expect(videos[2]).toMatchObject({ channel: 'Cypsmen', duration: '8:43', views: '1.5M views', published: '5 years ago', playlistIds: [LIST], tags: [] })
-    expect(new Set(videos.map((v) => v.addedDate)).size).toBe(1)
+    expect(videos[2]).toMatchObject({ channel: 'Cypsmen', duration: '8:43', views: '1.5M views', published: '5 years ago', publishedAt: null, tags: [] })
+    expect(videos[2]).not.toHaveProperty('playlistIds')
+    expect(videos.every((v) => v.addedAt === v.importedAt)).toBe(true)
   })
 
-  it('imports only what is new and keeps the discovery day of the rest', async () => {
-    await req('PATCH', `/api/youtube/videos/${V(1).id}`, { addedDate: '2026-09-01', notes: 'hand drill' })
+  it('imports only what is new and keeps the rest’s notes', async () => {
+    await req('PATCH', `/api/youtube/videos/${V(1).id}`, { notes: 'hand drill' })
+    await new Promise((r) => setTimeout(r, 5)) // a later import time
     const r = await lib.importPlaylist(LIST, youtube([{ ...V(1), title: 'Well 1 (renamed)' }, V(2), V(3), V(4)]))
-    expect(r).toMatchObject({ found: 4, added: 1, linked: 0 })
+    expect(r).toMatchObject({ found: 4, added: 1, redated: 0 })
     const { videos } = await req<YtLibraryDTO>('GET', '/api/youtube/library')
-    // Newest discovery first.
-    expect(videos.map((v) => v.title)).toEqual(['Well 4', 'Well 2', 'Well 3', 'Well 1 (renamed)'])
-    expect(videos.at(-1)).toMatchObject({ addedDate: '2026-09-01', hasNotes: true })
+    // Most recently added first; ones imported together keep playlist order.
+    expect(videos.map((v) => v.title)).toEqual(['Well 4', 'Well 1 (renamed)', 'Well 2', 'Well 3'])
+    expect(videos[1]).toMatchObject({ hasNotes: true })
   })
 
   it('records a failed import on the playlist', async () => {
@@ -155,9 +186,55 @@ describe('importer', () => {
     const res = await app.request('/api/youtube/playlists', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url: 'https://youtu.be/xyz' }) })
     expect(res.status).toBe(400)
   })
+
+  it('with an API key, takes each video’s real added date (moving earlier ones back) and the API’s details', async () => {
+    const { saveSettings, publicSettings } = await import('./lib/youtube/settings.ts')
+    saveSettings({ apiKey: 'AIzaTEST1234' })
+    expect(publicSettings()).toEqual({ auto: true, apiKey: '…1234', apiKeyFromEnv: false })
+    const before = (await req<YtVideoDTO>('GET', `/api/youtube/videos/${V(1).id}`)).importedAt
+    const r = await lib.importPlaylist(
+      LIST,
+      dataApi([
+        { ...V(1), addedAt: '2026-09-01T12:00:00Z' },
+        { ...V(2), addedAt: '2026-09-03T12:00:00Z' },
+        { id: 'private0000', title: 'Private video', addedAt: '2026-09-04T12:00:00Z', status: 'private' },
+        { id: 'deleted0000', title: 'Deleted video', addedAt: '2026-09-04T12:00:00Z', owner: null },
+        { ...V(5), addedAt: '2026-09-02T12:00:00Z' },
+      ]),
+    )
+    expect(r).toMatchObject({ found: 3, added: 1, redated: 2, dated: true, error: null })
+    const { videos } = await req<YtLibraryDTO>('GET', '/api/youtube/library')
+    expect(videos.filter((v) => [V(1).id, V(2).id, V(5).id].includes(v.id)).map((v) => [v.id, v.addedAt])).toEqual([
+      [V(2).id, Date.parse('2026-09-03T12:00:00Z')],
+      [V(5).id, Date.parse('2026-09-02T12:00:00Z')],
+      [V(1).id, Date.parse('2026-09-01T12:00:00Z')],
+    ])
+    const v1 = await req<YtVideoDTO>('GET', `/api/youtube/videos/${V(1).id}`)
+    expect(v1).toMatchObject({
+      title: `${V(1).id} (API)`,
+      importedAt: before,
+      duration: '1:02:03',
+      views: '3.7M views',
+      publishedAt: Date.parse('2022-03-01T10:00:00Z'),
+      channelUrl: 'https://www.youtube.com/@wot_utwente',
+      channelAvatar: 'https://yt3.ggpht.com/wot',
+      notes: 'hand drill',
+    })
+    // A later import with a later date (another playlist, say) never moves a video forward.
+    await lib.importPlaylist(LIST, dataApi([{ ...V(1), addedAt: '2026-09-20T12:00:00Z' }]))
+    expect((await req<YtVideoDTO>('GET', `/api/youtube/videos/${V(1).id}`)).addedAt).toBe(Date.parse('2026-09-01T12:00:00Z'))
+    saveSettings({ apiKey: undefined })
+    expect(publicSettings().apiKey).toBeNull()
+  })
+
+  it('formats API durations and views the way YouTube shows them', async () => {
+    const { formatDuration, formatViews } = await import('./lib/youtube/dataApi.ts')
+    expect([formatDuration('PT15M25S'), formatDuration('PT45S'), formatDuration('PT2H'), formatDuration('P0D')]).toEqual(['15:25', '0:45', '2:00:00', null])
+    expect([formatViews('1'), formatViews('950'), formatViews('45123'), formatViews(undefined)]).toEqual(['1 view', '950 views', '45.1K views', null])
+  })
 })
 
-describe('tags and notes', () => {
+describe('tags, notes and comments', () => {
   it('tags videos with their own hierarchical tags, apart from the journal', async () => {
     const v = await req<YtVideoDTO>('PATCH', `/api/youtube/videos/${V(1).id}`, { tags: ['Build:Well', '#build:well:drilling', 'build:well'] })
     expect(v.tags).toEqual(['build:well', 'build:well:drilling'])
@@ -181,24 +258,53 @@ describe('tags and notes', () => {
     expect(videos.every((v) => !v.tags.length)).toBe(true)
   })
 
-  it('keeps images and gifs with a video', async () => {
+  const upload = async (videoId: string, section: string, name: string, type: string) => {
     const form = new FormData()
-    form.set('file', new File([new Uint8Array([71, 73, 70])], 'loop.gif', { type: 'image/gif' }))
-    const res = await app.request(`/api/youtube/videos/${V(3).id}/images`, { method: 'POST', body: form })
-    expect(res.status).toBe(201)
-    const { image, activeImageId } = (await res.json()) as { image: { id: string; url: string }; activeImageId: string }
-    expect(activeImageId).toBe(image.id)
-    expect(image.url).toMatch(/\.gif$/)
-    const v = await req<YtVideoDTO>('GET', `/api/youtube/videos/${V(3).id}`)
-    expect(v).toMatchObject({ activeImageId: image.id, hasNotes: true, images: [{ id: image.id, mime: 'image/gif' }] })
-    expect(await req('DELETE', `/api/youtube/images/${image.id}`)).toEqual({ activeImageId: null })
+    form.set('file', new File([new Uint8Array([71, 73, 70])], name, { type }))
+    const res = await app.request(`/api/youtube/videos/${videoId}/images/${section}`, { method: 'POST', body: form })
+    if (res.status !== 201) throw new Error(`upload → ${res.status}`)
+    return (await res.json()) as { image: { id: string; url: string }; activeImageId: string }
+  }
+
+  it('keeps notes images and comment screenshots apart', async () => {
+    const gif = await upload(V(3).id, 'notes', 'loop.gif', 'image/gif')
+    expect(gif.activeImageId).toBe(gif.image.id)
+    expect(gif.image.url).toMatch(/\.gif$/)
+    const shot1 = await upload(V(3).id, 'comments', 'c1.png', 'image/png')
+    const shot2 = await upload(V(3).id, 'comments', 'c2.png', 'image/png')
+    expect(shot2.activeImageId).toBe(shot1.image.id)
+    await req('PATCH', `/api/youtube/videos/${V(3).id}`, { comments: 'top comment: use bentonite' })
+    let v = await req<YtVideoDTO>('GET', `/api/youtube/videos/${V(3).id}`)
+    expect(v).toMatchObject({
+      activeImageId: gif.image.id,
+      images: [{ id: gif.image.id, mime: 'image/gif' }],
+      comments: 'top comment: use bentonite',
+      commentsActiveImageId: shot1.image.id,
+      commentImages: [{ id: shot1.image.id }, { id: shot2.image.id }],
+      hasNotes: true,
+    })
+    await req('POST', `/api/youtube/videos/${V(3).id}/images/comments/order`, { ids: [shot2.image.id, shot1.image.id] })
+    expect(await req('DELETE', `/api/youtube/images/${shot1.image.id}`)).toEqual({ activeImageId: shot2.image.id })
+    expect(await req('DELETE', `/api/youtube/images/${gif.image.id}`)).toEqual({ activeImageId: null })
+    v = await req<YtVideoDTO>('GET', `/api/youtube/videos/${V(3).id}`)
+    expect(v).toMatchObject({ images: [], commentImages: [{ id: shot2.image.id }], commentsActiveImageId: shot2.image.id, hasNotes: false })
+    const bad = await app.request(`/api/youtube/videos/${V(3).id}/images/other`, { method: 'POST', body: new FormData() })
+    expect(bad.status).toBe(400)
+  })
+
+  it('takes pasted recordings into the notes', async () => {
+    const clip = await upload(V(3).id, 'notes', 'ShareX.mp4', 'video/mp4')
+    expect(clip.image.url).toMatch(/\.mp4$/)
+    expect((await req<YtVideoDTO>('GET', `/api/youtube/videos/${V(3).id}`)).images).toMatchObject([{ id: clip.image.id, mime: 'video/mp4' }])
+    await expect(upload(V(3).id, 'notes', 'notes.txt', 'text/plain')).rejects.toThrow('400')
+    await req('DELETE', `/api/youtube/images/${clip.image.id}`)
   })
 
   it('keeps a video’s notes when its playlist is removed', async () => {
     await req('DELETE', `/api/youtube/playlists/${LIST}`)
-    const { videos, playlists } = await req<YtLibraryDTO>('GET', '/api/youtube/library')
-    expect(playlists).toEqual([])
-    expect(videos).toHaveLength(4)
+    expect(lib.listPlaylists()).toEqual([])
+    const { videos } = await req<YtLibraryDTO>('GET', '/api/youtube/library')
+    expect(videos).toHaveLength(5)
     expect((await req<YtVideoDTO>('GET', `/api/youtube/videos/${V(1).id}`)).notes).toBe('hand drill')
   })
 })

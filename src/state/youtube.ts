@@ -3,8 +3,8 @@ import { createStore, persistedStore } from './store.ts'
 
 // YouTube canvas tab: the open video (null = the listing) and the listing's filter and search.
 
-/** A playlist id, a tag path (videos under it), videos without tags, or videos with notes. */
-export type YtFilter = { kind: 'playlist'; id: string } | { kind: 'tag'; path: string } | { kind: 'untagged' } | { kind: 'notes' } | null
+/** A tag path (videos with it or a tag under it), videos without tags, or one channel's videos; null = all. */
+export type YtFilter = { kind: 'tag'; path: string } | { kind: 'untagged' } | { kind: 'channel'; name: string } | null
 
 interface YtState {
   videoId: string | null
@@ -15,10 +15,10 @@ interface YtState {
 export const YOUTUBE_PLUGIN = 'youtube'
 
 const reviveFilter = (f: unknown): YtFilter => {
-  const o = f as { kind?: string; id?: unknown; path?: unknown } | null
-  if (o?.kind === 'playlist' && typeof o.id === 'string') return { kind: 'playlist', id: o.id }
+  const o = f as { kind?: string; path?: unknown; name?: unknown } | null
   if (o?.kind === 'tag' && typeof o.path === 'string') return { kind: 'tag', path: o.path }
-  if (o?.kind === 'untagged' || o?.kind === 'notes') return { kind: o.kind }
+  if (o?.kind === 'channel' && typeof o.name === 'string') return { kind: 'channel', name: o.name }
+  if (o?.kind === 'untagged') return { kind: o.kind }
   return null
 }
 

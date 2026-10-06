@@ -200,7 +200,7 @@ export const gpsTrips = sqliteTable(
 )
 
 // YouTube videos for the canvas YouTube tab, imported from playlists (see server/lib/youtube/). Their tags are a
-// set of their own, apart from the journal's.
+// set of their own, apart from the journal's. Which playlist a video came from is not kept.
 
 export const ytPlaylists = sqliteTable('yt_playlists', {
   id: text('id').primaryKey(), // YouTube's list id (PL…)
@@ -208,6 +208,7 @@ export const ytPlaylists = sqliteTable('yt_playlists', {
   channel: text('channel'),
   createdAt: integer('created_at').notNull(),
   lastImportAt: integer('last_import_at'),
+  lastImportCount: integer('last_import_count'), // videos in the playlist at the last import
   lastError: text('last_error'),
 })
 
@@ -221,30 +222,21 @@ export const ytVideos = sqliteTable(
     channelAvatar: text('channel_avatar'),
     duration: text('duration'), // "15:25", as YouTube shows it
     views: text('views'), // "3.7M views", as of the last import
-    published: text('published'), // "4 years ago", as of the last import
-    // When the video was first imported from a playlist: the day it was discovered.
+    published: text('published'), // "4 years ago", as of the last import (without an API key)
+    publishedAt: integer('published_at'), // when YouTube published it (epoch ms; from the Data API)
+    // When it was added to a playlist: from the Data API, or without a key, when an import first saw it. The
+    // earliest playlist wins when it is in several.
     addedAt: integer('added_at').notNull(), // epoch ms
-    addedDate: text('added_date').notNull(), // local YYYY-MM-DD; can be changed by hand
+    addedDate: text('added_date').notNull(), // local YYYY-MM-DD of addedAt
+    importedAt: integer('imported_at').notNull().default(0), // first imported (epoch ms)
     notes: text('notes').notNull().default(''), // markdown
     activeImageId: text('active_image_id'),
+    // Comments worth keeping (markdown, plus screenshots in yt_images under 'comments').
+    comments: text('comments').notNull().default(''),
+    commentsActiveImageId: text('comments_active_image_id'),
     updatedAt: integer('updated_at').notNull(),
   },
   (t) => [index('yt_videos_added_idx').on(t.addedDate, t.addedAt)],
-)
-
-export const ytPlaylistVideos = sqliteTable(
-  'yt_playlist_videos',
-  {
-    playlistId: text('playlist_id')
-      .notNull()
-      .references(() => ytPlaylists.id, { onDelete: 'cascade' }),
-    videoId: text('video_id')
-      .notNull()
-      .references(() => ytVideos.id, { onDelete: 'cascade' }),
-    position: integer('position').notNull(), // index in the playlist at the last import
-    addedAt: integer('added_at').notNull(), // first seen in this playlist
-  },
-  (t) => [primaryKey({ columns: [t.playlistId, t.videoId] }), index('yt_playlist_videos_video_idx').on(t.videoId)],
 )
 
 export const ytTags = sqliteTable('yt_tags', {
@@ -267,7 +259,7 @@ export const ytVideoTags = sqliteTable(
   (t) => [primaryKey({ columns: [t.videoId, t.tagId] }), index('yt_video_tags_tag_idx').on(t.tagId)],
 )
 
-// Images and gifs pasted into a video's notes; files live under data/assets like the journal's.
+// Images and gifs pasted into a video's notes or comments; files live under data/assets like the journal's.
 export const ytImages = sqliteTable(
   'yt_images',
   {
@@ -275,6 +267,7 @@ export const ytImages = sqliteTable(
     videoId: text('video_id')
       .notNull()
       .references(() => ytVideos.id, { onDelete: 'cascade' }),
+    section: text('section', { enum: ['notes', 'comments'] }).notNull().default('notes'),
     file: text('file').notNull(),
     mime: text('mime').notNull(),
     position: real('position').notNull(),

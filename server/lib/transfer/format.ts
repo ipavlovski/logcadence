@@ -37,7 +37,6 @@ export const CONTENT_TABLES = {
   activity_spans: content.activitySpans,
   yt_playlists: content.ytPlaylists,
   yt_videos: content.ytVideos,
-  yt_playlist_videos: content.ytPlaylistVideos,
   yt_tags: content.ytTags,
   yt_video_tags: content.ytVideoTags,
   yt_images: content.ytImages,
