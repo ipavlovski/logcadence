@@ -44,7 +44,7 @@ export const EDITOR_KEYS: [string, string][] = [
   ['Backspace at start', 'Merge into node above'],
   ['↑ / ↓ at edge', 'Move between nodes and titles'],
   ['Esc', 'Stop editing'],
-  ['Paste / drop image', 'Add to node gallery'],
+  ['Paste / drop image or video', 'Add to node gallery'],
   ['Ctrl+click', 'Open link / tag / date in a new tab'],
   ['Shift+click a title', 'Fold / unfold that entry'],
   ['Shift+click', 'Multi-select (tags pane)'],

@@ -1,7 +1,7 @@
 import { rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { formatJournalDate } from '../../shared/dates.ts'
-import type { EntryDTO } from '../../shared/types.ts'
+import { isVideo, type EntryDTO } from '../../shared/types.ts'
 import { JOURNALS_DIR } from '../db/client.ts'
 import { entriesForDate } from './content.ts'
 
@@ -43,7 +43,7 @@ export function renderJournal(date: string, list: EntryDTO[]): string {
     out.push(`id:: ${e.id}`, '')
     for (const n of e.nodes) {
       out.push(`- ${indent(n.content, '  ')}${n.archived ? ' <!-- archived -->' : ''}`)
-      for (const img of n.images) out.push(`  ![](..${img.url})`)
+      for (const img of n.images) out.push(isVideo(img) ? `  [video](..${img.url})` : `  ![](..${img.url})`)
     }
     out.push('')
   }

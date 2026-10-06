@@ -1,10 +1,13 @@
 // Domain types shared by the server and every client (web now; electron and react-native later).
 
+/** A gallery item: an image, gif or (in journal nodes) a video, told apart by `mime`. */
 export interface ImageDTO {
   id: string
   url: string
   mime: string
 }
+
+export const isVideo = (m: { mime: string }) => m.mime.startsWith('video/')
 
 export interface NodeDTO {
   id: string

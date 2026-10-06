@@ -3,6 +3,7 @@ import type { EntryDTO, NodeDTO } from '../../../shared/types.ts'
 import { AutoTextarea } from '../AutoTextarea/AutoTextarea.tsx'
 import { ImageGallery } from '../ImageGallery/ImageGallery.tsx'
 import { Markdown } from '../Markdown/Markdown.tsx'
+import { mediaFiles, pasteMedia } from '../../media.ts'
 import { openChat, SOURCE_LABEL } from '../../state/ai.ts'
 import { useDayApi, type FocusTarget } from './dayContext.ts'
 import styles from './Journal.module.css'
@@ -15,14 +16,12 @@ interface Props {
   flash: boolean
 }
 
-const imageFiles = (list: FileList | null | undefined) => [...(list ?? [])].filter((f) => f.type.startsWith('image/'))
-
 export const NodeBlock = memo(function NodeBlock({ node, editing, find, flash }: Props) {
   const day = useDayApi()
   const [dragOver, setDragOver] = useState(false)
 
   const onDrop = (e: DragEvent) => {
-    const files = imageFiles(e.dataTransfer.files)
+    const files = mediaFiles(e.dataTransfer.files)
     setDragOver(false)
     if (!files.length) return
     e.preventDefault()
@@ -168,12 +167,7 @@ function NodeEditor({ node, target }: { node: NodeDTO; target: Extract<FocusTarg
     }
   }
 
-  const onPaste = (e: ClipboardEvent) => {
-    const files = imageFiles(e.clipboardData.files)
-    if (!files.length) return
-    e.preventDefault()
-    day.uploadImages(node.id, files)
-  }
+  const onPaste = (e: ClipboardEvent) => pasteMedia(e, (files) => day.uploadImages(node.id, files))
 
   return (
     <AutoTextarea
@@ -181,7 +175,7 @@ function NodeEditor({ node, target }: { node: NodeDTO; target: Extract<FocusTarg
       className={styles.editor}
       value={draft}
       spellCheck={false}
-      placeholder="Write… (Enter: new node, Shift+Enter: line break, paste images)"
+      placeholder="Write… (Enter: new node, Shift+Enter: line break, paste images and videos)"
       onChange={(e) => setDraft(e.target.value)}
       onKeyDown={onKeyDown}
       onPaste={onPaste}

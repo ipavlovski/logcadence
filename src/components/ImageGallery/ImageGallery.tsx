@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import type { ImageDTO } from '../../../shared/types.ts'
+import { isVideo, type ImageDTO } from '../../../shared/types.ts'
 import styles from './ImageGallery.module.css'
+
+/** A small still of a gallery item: the image, or a video's first frame. */
+export function MediaThumb({ item, className }: { item: ImageDTO; className?: string }) {
+  return isVideo(item) ? (
+    <video className={className} src={item.url} preload="metadata" muted playsInline draggable={false} />
+  ) : (
+    <img className={className} src={item.url} alt="" loading="lazy" draggable={false} />
+  )
+}
 
 interface Props {
   images: ImageDTO[]
@@ -13,8 +22,41 @@ interface Props {
 }
 
 /**
- * Large preview of the active (selected) image, plus a strip of all images; the first one is the
- * node's thumbnail. Drag a thumbnail onto another to swap them; Delete removes the selected image.
+ * Plays muted and looping like a gif while on screen (paused off it); the controls show on hover, to
+ * unmute, seek or go fullscreen.
+ */
+function LargeVideo({ url }: { url: string }) {
+  const ref = useRef<HTMLVideoElement>(null)
+  const [hover, setHover] = useState(false)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const io = new IntersectionObserver(([e]) => {
+      if (e?.isIntersecting) void el.play().catch(() => {})
+      else el.pause()
+    })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
+  return (
+    <video
+      ref={ref}
+      className={styles.large}
+      src={url}
+      muted
+      loop
+      playsInline
+      preload="metadata"
+      controls={hover}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    />
+  )
+}
+
+/**
+ * Large preview of the active (selected) image or video, plus a strip of all items; the first one is
+ * the node's thumbnail. Drag a thumbnail onto another to swap them; Delete removes the selected image.
  */
 export function ImageGallery({ images, activeId, onActivate, onDelete, onReorder, compact }: Props) {
   const [zoom, setZoom] = useState(false)
@@ -70,9 +112,13 @@ export function ImageGallery({ images, activeId, onActivate, onDelete, onReorder
       onClick={(e) => e.stopPropagation()}
     >
       <div className={styles.largeWrap}>
-        <img className={styles.large} src={active.url} alt="" loading="lazy" onClick={() => setZoom(true)} />
+        {isVideo(active) ? (
+          <LargeVideo key={active.id} url={active.url} />
+        ) : (
+          <img className={styles.large} src={active.url} alt="" loading="lazy" onClick={() => setZoom(true)} />
+        )}
         {onDelete && (
-          <button className={styles.delete} title="Remove image (Delete)" onClick={() => remove(active.id)}>
+          <button className={styles.delete} title={isVideo(active) ? 'Remove video (Delete)' : 'Remove image (Delete)'} onClick={() => remove(active.id)}>
             ×
           </button>
         )}
@@ -113,13 +159,14 @@ export function ImageGallery({ images, activeId, onActivate, onDelete, onReorder
                 setOverId(null)
               }}
             >
-              <img src={img.url} alt="" loading="lazy" draggable={false} />
+              <MediaThumb item={img} />
+              {isVideo(img) && <span className={styles.play}>▶</span>}
               {i === 0 && <span className={styles.badge}>thumb</span>}
             </button>
           ))}
         </div>
       )}
-      {zoom && (
+      {zoom && !isVideo(active) && (
         <div className={styles.lightbox} onClick={() => setZoom(false)}>
           <img src={active.url} alt="" />
         </div>

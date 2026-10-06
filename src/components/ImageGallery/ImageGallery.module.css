@@ -21,6 +21,11 @@
   cursor: zoom-in;
 }
 
+video.large {
+  background: #000;
+  cursor: auto;
+}
+
 .compact .large {
   max-height: 320px;
 }
@@ -70,7 +75,8 @@
   cursor: grab;
 }
 
-.thumb img {
+.thumb img,
+.thumb video {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -93,6 +99,24 @@
 .dropTarget {
   border-color: var(--text);
   border-style: dashed;
+}
+
+/* Marks a video in the strip. */
+.play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  padding-left: 2px;
+  border-radius: 50%;
+  font-size: 11px;
+  background: rgb(0 0 0 / 0.6);
+  color: #fff;
+  pointer-events: none;
 }
 
 .badge {

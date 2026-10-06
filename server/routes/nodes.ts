@@ -12,7 +12,8 @@ import { logEvent } from '../lib/events.ts'
 import { touchDates } from '../lib/journalFiles.ts'
 import { bad, defined, notFound, num, obj, optBool, optNum, optStr, optStrArr, str } from '../lib/validate.ts'
 
-const MAX_UPLOAD = 50 * 1024 * 1024
+// Screen recordings are the big ones.
+const MAX_UPLOAD = 500 * 1024 * 1024
 
 function parseCreate(v: unknown): CreateNodeBody {
   const o = obj(v)
@@ -75,13 +76,13 @@ export const nodeRoutes = new Hono()
     touchDates(entryDate(before.entryId))
     return c.json({ ok: true })
   })
-  // Pasted/dropped image: stored under assets/, appended to the node's gallery.
+  // Pasted/dropped image or video: stored under assets/, appended to the node's gallery.
   .post(
     '/nodes/:id/images',
     validator('form', (v) => {
       const file = v.file
       if (!(file instanceof File)) bad('file is required')
-      if (!file.type.startsWith('image/')) bad('only images are supported')
+      if (!/^(image|video)\//.test(file.type)) bad('only images and videos are supported')
       if (file.size > MAX_UPLOAD) bad('file too large')
       return { file }
     }),

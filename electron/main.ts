@@ -1,8 +1,10 @@
-import { app, BrowserWindow, dialog, ipcMain, powerMonitor, session, shell, type WebContents } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, powerMonitor, session, shell, type WebContents } from 'electron'
 import { createWriteStream, rmSync } from 'node:fs'
+import { readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { today } from '../shared/dates.ts'
-import type { ActionResult, AppInfo, TransferProgress, UpdateStatus } from '../shared/desktop.ts'
+import type { ActionResult, AppInfo, ClipboardFile, TransferProgress, UpdateStatus } from '../shared/desktop.ts'
 import type { RunningServer } from '../server/start.ts'
 import { APP_NAME, BUILD_LABEL, IS_DEV_CHANNEL, PORT } from './channel.ts'
 import { configuredLibrary, readConfig, writeConfig } from './config.ts'
@@ -248,6 +250,54 @@ function registerIpc() {
     return { ok: true }
   })
   ipcMain.handle('import-library', () => importLibrary())
+  ipcMain.handle('clipboard-file', () => clipboardFile())
+}
+
+const MEDIA_TYPES: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  mp4: 'video/mp4',
+  webm: 'video/webm',
+  mov: 'video/quicktime',
+  mkv: 'video/x-matroska',
+}
+const MAX_CLIPBOARD_FILE = 500 * 1024 * 1024
+
+// Windows keeps a copied file's path as the raw FileNameW format (UTF-16, null-terminated); elsewhere a file:// uri-list.
+const FILE_NAME_W = 'electron application/osclipboard;format="FileNameW"'
+
+async function clipboardPath(): Promise<string> {
+  for (const item of await clipboard.read()) {
+    try {
+      if (process.platform === 'win32') {
+        const raw = Buffer.from(await ((await item.getType(FILE_NAME_W)) as Blob).arrayBuffer())
+        return raw.toString('utf16le').replace(/\0.*$/s, '')
+      }
+      if (item.types.includes('text/uri-list')) {
+        const uri = (await ((await item.getType('text/uri-list')) as Blob).text()).split(/\r?\n/)[0]?.trim() ?? ''
+        if (uri.startsWith('file:')) return fileURLToPath(uri)
+      }
+    } catch {
+      // Not on this item.
+    }
+  }
+  return ''
+}
+
+/** The file a copy in Explorer (or ShareX's "copy file to clipboard") left on the clipboard, if it is an image or video. */
+async function clipboardFile(): Promise<ClipboardFile | null> {
+  const file = await clipboardPath()
+  const type = MEDIA_TYPES[path.extname(file).slice(1).toLowerCase()]
+  if (!file || !type) return null
+  try {
+    if ((await stat(file)).size > MAX_CLIPBOARD_FILE) return null
+    return { name: path.basename(file), type, data: await readFile(file) }
+  } catch {
+    return null
+  }
 }
 
 function send(channel: string, value: UpdateStatus | TransferProgress) {

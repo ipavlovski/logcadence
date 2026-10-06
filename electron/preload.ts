@@ -18,6 +18,7 @@ const api: DesktopApi = {
   installUpdate: () => ipcRenderer.invoke('install-update'),
   onUpdate: (cb) => subscribe<UpdateStatus>('update-status', cb),
   onProgress: (cb) => subscribe<TransferProgress>('transfer-progress', cb),
+  clipboardFile: () => ipcRenderer.invoke('clipboard-file'),
   openLibrary: () => ipcRenderer.invoke('open-library'),
   importLibrary: () => ipcRenderer.invoke('import-library'),
 }

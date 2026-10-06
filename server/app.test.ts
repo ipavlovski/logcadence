@@ -148,4 +148,18 @@ describe('images', () => {
     expect(events[0]).toMatchObject({ entity: 'image', op: 'delete', payload: { nodeId: node.id, mime: 'image/png' } })
     expect(events[0]!.payload.file).toBeTruthy()
   })
+
+  it('takes pasted videos into the gallery but nothing else', async () => {
+    const entry = await req<EntryDTO>('POST', '/api/entries', { date: '2026-09-26', title: 'clip', nodes: [{ content: 'recording' }] })
+    const nodeId = entry.nodes[0]!.id
+    const post = (file: File) => {
+      const form = new FormData()
+      form.append('file', file)
+      return app.request(`/api/nodes/${nodeId}/images`, { method: 'POST', body: form })
+    }
+    expect((await post(new File([new Uint8Array([1, 2, 3])], 'ShareX.mp4', { type: 'video/mp4' }))).status).toBe(201)
+    expect((await post(new File(['x'], 'notes.txt', { type: 'text/plain' }))).status).toBe(400)
+    const [video] = (await day('2026-09-26'))[0]!.nodes[0]!.images
+    expect(video).toMatchObject({ mime: 'video/mp4', url: expect.stringMatching(/\.mp4$/) })
+  })
 })

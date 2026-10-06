@@ -10,6 +10,7 @@ import { openDate } from '../../state/panes.ts'
 import { useStore } from '../../state/store.ts'
 import { PROGRESS_TAG, groupProgress, progressLabels, progressRows, sortProjects } from '../../progress.ts'
 import { progressStore, setProgressScale, toggleProject } from '../../state/progress.ts'
+import { MediaThumb } from '../ImageGallery/ImageGallery.tsx'
 import { Markdown } from '../Markdown/Markdown.tsx'
 import styles from './Progress.module.css'
 
@@ -222,7 +223,7 @@ function DonePopover({ hover, label, color, entries, onEnter, onLeave }: { hover
           <article key={entry.id} className={styles.done} title="Open in journal" onClick={() => revealIn(entry)}>
             <div className={styles.doneHead}>
               <div className={styles.doneTitle}>{entry.title || <span className={styles.muted}>untitled</span>}</div>
-              {thumb && <img className={styles.thumb} src={thumb.url} alt="" loading="lazy" />}
+              {thumb && <MediaThumb item={thumb} className={styles.thumb} />}
             </div>
             {nodes.length > 0 && (
               <ul className={styles.nodes}>

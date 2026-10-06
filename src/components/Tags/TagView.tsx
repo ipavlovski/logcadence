@@ -11,7 +11,7 @@ import { requestReveal } from '../../state/journal.ts'
 import { openDate, openTag } from '../../state/panes.ts'
 import { useStore } from '../../state/store.ts'
 import { notify, prefsStore, setPref } from '../../state/ui.ts'
-import { ImageGallery } from '../ImageGallery/ImageGallery.tsx'
+import { ImageGallery, MediaThumb } from '../ImageGallery/ImageGallery.tsx'
 import { Markdown, mark } from '../Markdown/Markdown.tsx'
 import { TagChip } from '../TagChip/TagChip.tsx'
 import { startTagOp } from './tagOps.ts'
@@ -201,7 +201,7 @@ export function TagView({ tag, find }: { tag: string; find: string }) {
                       ))}
                     </div>
                   </div>
-                  {thumb && <img className={styles.thumb} src={thumb.url} alt="" loading="lazy" />}
+                  {thumb && <MediaThumb item={thumb} className={styles.thumb} />}
                 </div>
                 <ul className={styles.nodeList}>
                   {entry.nodes.map((n) => (

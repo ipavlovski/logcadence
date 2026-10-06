@@ -27,6 +27,12 @@ export interface AppInfo {
   channel: 'release' | 'dev'
 }
 
+export interface ClipboardFile {
+  name: string
+  type: string
+  data: Uint8Array
+}
+
 export interface DesktopApi {
   platform: string
   appInfo(): Promise<AppInfo>
@@ -39,6 +45,11 @@ export interface DesktopApi {
   installUpdate(): Promise<void>
   onUpdate(cb: (s: UpdateStatus) => void): () => void
   onProgress(cb: (p: TransferProgress) => void): () => void
+  /**
+   * The image or video file copied to the clipboard as a file (Explorer, ShareX), for pastes where the
+   * page sees no file; null when the clipboard holds no such file.
+   */
+  clipboardFile(): Promise<ClipboardFile | null>
 
   // First-run setup window.
   /** Picks a folder: an existing library is opened, an empty one becomes a new library. */
