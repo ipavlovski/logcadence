@@ -23,13 +23,6 @@
   font-weight: 600;
 }
 
-.locked .chipLabel::after {
-  content: '🔒︎';
-  margin-left: 4px;
-  font-size: 10px;
-  opacity: 0.6;
-}
-
 .chipLabel {
   border: none;
   background: none;
@@ -64,7 +57,7 @@
   padding-right: 6px;
 }
 
-.wrap:focus-within .chip:not(.locked) .chipLabel {
+.wrap:focus-within .chip .chipLabel {
   padding-right: 2px;
 }
 
@@ -121,8 +114,4 @@
 
 .selected {
   background: var(--selection);
-}
-
-.chip.locked .chipLabel {
-  padding-right: 6px;
 }

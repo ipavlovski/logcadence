@@ -1,6 +1,5 @@
 import { CHAT_SOURCES, type ChatSource } from '../../shared/types.ts'
-import { requestReveal } from './journal.ts'
-import { openDate, openLoc, pluginKey } from './panes.ts'
+import { openLoc, pluginKey } from './panes.ts'
 import { persistedStore } from './store.ts'
 
 // AI canvas tab: which chat is open (null = the chat list), the list's source filter, and a
@@ -43,11 +42,4 @@ export function clearChatTurn() {
 
 export function setChatSource(source: ChatSource | null) {
   aiStore.set((s) => ({ ...s, source }))
-}
-
-/** Opens the chat's journal day and highlights its entry. */
-export function revealChatEntry(chat: { date: string; entryId: string | null }, opts: { newTab?: boolean } = {}) {
-  if (!chat.entryId) return
-  openDate(chat.date, opts)
-  requestReveal({ date: chat.date, entryId: chat.entryId, mode: 'flash' })
 }

@@ -1,12 +1,10 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
-import { chatTag } from '../../../shared/tags.ts'
 import type { EntryDTO } from '../../../shared/types.ts'
 import { AutoTextarea } from '../AutoTextarea/AutoTextarea.tsx'
 import { mark } from '../Markdown/Markdown.tsx'
-import { openChat, SOURCE_LABEL } from '../../state/ai.ts'
 import { TagInput } from '../TagInput/TagInput.tsx'
 import { useDayApi, type FocusTarget } from './dayContext.ts'
-import { NodeBlock, PromptNode } from './NodeBlock.tsx'
+import { NodeBlock } from './NodeBlock.tsx'
 import styles from './Journal.module.css'
 
 interface Props {
@@ -29,8 +27,6 @@ export const EntryCard = memo(function EntryCard({ entry, focus, find, flashId, 
   const day = useDayApi()
   const titleFocus = focus?.kind === 'title' && focus.entryId === entry.id ? focus : null
   const isEmpty = !entry.title && !entry.tags.length && entry.nodes.every((n) => !n.content && !n.images.length)
-  // Imported AI chats are read-only apart from tags (their source tag is locked); each prompt links to the transcript.
-  const chat = entry.chat
   const toggleFold = () => day.toggleFold(entry.id)
 
   return (
@@ -40,30 +36,14 @@ export const EntryCard = memo(function EntryCard({ entry, focus, find, flashId, 
     >
       <header className={styles.entryHead}>
         <div className={styles.entryHeadMain}>
-          {chat ? (
-            <div className={`${styles.title} ${styles.readOnly}`} onMouseDown={(e) => foldOnShiftClick(e, toggleFold)}>
-              {mark(entry.title, find)}
-            </div>
-          ) : (
-            <EntryTitle entry={entry} focus={titleFocus} find={find} isEmpty={isEmpty} toggleFold={toggleFold} />
-          )}
+          <EntryTitle entry={entry} focus={titleFocus} find={find} isEmpty={isEmpty} toggleFold={toggleFold} />
           <TagInput
             className={styles.entryTags}
             value={entry.tags}
-            locked={chat ? chatTag(chat.source) : undefined}
             onChange={(tags) => day.updateEntry(entry.id, { tags })}
             onFocus={() => day.touch(entry.id)}
           />
         </div>
-        {chat && (
-          <button
-            className={styles.chatLink}
-            title={`Open the ${SOURCE_LABEL[chat.source]} transcript in the canvas AI tab (Ctrl+click: new tab)`}
-            onClick={(e) => openChat(chat.id, { newTab: e.ctrlKey || e.metaKey })}
-          >
-            transcript ↗
-          </button>
-        )}
         <div className={styles.rowActions}>
           <button title={entry.archived ? 'Unarchive entry' : 'Archive entry'} onClick={() => day.updateEntry(entry.id, { archived: !entry.archived })}>
             {entry.archived ? '↺' : '▣'}
@@ -85,22 +65,16 @@ export const EntryCard = memo(function EntryCard({ entry, focus, find, flashId, 
         </button>
       ) : (
         <div className={styles.nodes}>
-          {entry.nodes.map((n) =>
-            chat ? (
-              <PromptNode key={n.id} node={n} chat={chat} find={find} flash={flashId === n.id} />
-            ) : (
-              <NodeBlock key={n.id} node={n} editing={focus?.kind === 'node' && focus.nodeId === n.id ? focus : null} find={find} flash={flashId === n.id} />
-            ),
-          )}
-          {!chat && (
-            <button
-              className={styles.addNode}
-              title="Add a node"
-              onClick={() => day.focusTo({ kind: 'node', nodeId: day.insertNode(entry.id, entry.nodes.at(-1)?.id ?? null, ''), caret: 'start' })}
-            >
-              +
-            </button>
-          )}
+          {entry.nodes.map((n) => (
+            <NodeBlock key={n.id} node={n} editing={focus?.kind === 'node' && focus.nodeId === n.id ? focus : null} find={find} flash={flashId === n.id} />
+          ))}
+          <button
+            className={styles.addNode}
+            title="Add a node"
+            onClick={() => day.focusTo({ kind: 'node', nodeId: day.insertNode(entry.id, entry.nodes.at(-1)?.id ?? null, ''), caret: 'start' })}
+          >
+            +
+          </button>
         </div>
       )}
     </article>

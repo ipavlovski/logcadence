@@ -5,6 +5,7 @@ import type { EntryDTO } from '../../../shared/types.ts'
 import { api, unwrap } from '../../api.ts'
 import { useFetch } from '../../hooks/useFetch.ts'
 import { matches } from '../../markdown.ts'
+import { openChat } from '../../state/ai.ts'
 import { emitChange, useRevision } from '../../state/bus.ts'
 import { useCommand } from '../../state/commands.ts'
 import { requestReveal } from '../../state/journal.ts'
@@ -106,7 +107,12 @@ export function TagView({ tag, find }: { tag: string; find: string }) {
     })
   }
 
+  // AI chats are not in the journal: they open in the canvas AI tab, at the clicked prompt.
   const revealIn = (entry: EntryDTO, nodeId?: string) => {
+    if (entry.chat) {
+      const turn = nodeId ? entry.chat.nodeIds.indexOf(nodeId) : -1
+      return openChat(entry.chat.id, turn >= 0 ? { turn } : {})
+    }
     openDate(entry.date, { focus: true })
     requestReveal({ date: entry.date, entryId: entry.id, nodeId, mode: 'flash' })
   }

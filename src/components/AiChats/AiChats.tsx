@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
-import { formatJournalDate } from '../../../shared/dates.ts'
+import { formatJournalDate, toIsoDate } from '../../../shared/dates.ts'
 import { CHAT_SOURCES, type ChatDTO, type ChatMessage, type ChatSource, type ChatSummary, type ImportReport } from '../../../shared/types.ts'
 import { api, unwrap } from '../../api.ts'
 import type { CanvasPluginProps } from '../../canvas/plugins.ts'
 import { useFetch } from '../../hooks/useFetch.ts'
 import { matches } from '../../markdown.ts'
-import { aiStore, clearChatTurn, openChat, revealChatEntry, setChatSource, SOURCE_LABEL } from '../../state/ai.ts'
+import { aiStore, clearChatTurn, openChat, setChatSource, SOURCE_LABEL } from '../../state/ai.ts'
 import { emitChange, useRevision } from '../../state/bus.ts'
 import { useStore } from '../../state/store.ts'
 import { notify } from '../../state/ui.ts'
@@ -181,14 +181,9 @@ function ChatList() {
                 <SourceBadge source={c.source} />
                 <span className={styles.rowTitle}>{c.title}</span>
                 <span className={styles.rowMeta}>
-                  {c.turns} prompt{c.turns === 1 ? '' : 's'} · {time(c.startedAt)}
+                  {c.turns} prompt{c.turns === 1 ? '' : 's'}
                 </span>
               </button>
-              {c.entryId && (
-                <button className={styles.rowJump} title="Show entry in journal (Ctrl+click: new tab)" onClick={(e) => revealChatEntry(c, { newTab: e.ctrlKey || e.metaKey })}>
-                  ↗
-                </button>
-              )}
             </div>
           ))}
         </section>
@@ -258,13 +253,7 @@ function ChatView({ id }: { id: string }) {
         <h2>{chat.title}</h2>
         <div className={styles.chatMeta}>
           <SourceBadge source={chat.source} />
-          {chat.entryId ? (
-            <button className={styles.link} title="Show entry in journal (Ctrl+click: new tab)" onClick={(e) => revealChatEntry(chat, { newTab: e.ctrlKey || e.metaKey })}>
-              {formatJournalDate(chat.date)}
-            </button>
-          ) : (
-            <span title="The journal entry was deleted">{formatJournalDate(chat.date)}</span>
-          )}
+          <span>{formatJournalDate(chat.date)}</span>
           <span>
             {time(chat.startedAt)} · {chat.turns} prompt{chat.turns === 1 ? '' : 's'}
           </span>
@@ -273,17 +262,28 @@ function ChatView({ id }: { id: string }) {
       </header>
       <div className={styles.messages}>
         {chat.messages.map((m, i) => (
-          <Message key={i} m={m} turn={turnOf[i]} flash={flashTurn !== null && turnOf[i] === flashTurn} />
+          <Message key={i} m={m} date={chat.date} turn={turnOf[i]} flash={flashTurn !== null && turnOf[i] === flashTurn} />
         ))}
       </div>
     </div>
   )
 }
 
-function Message({ m, turn, flash }: { m: ChatMessage; turn?: number; flash: boolean }) {
+/** When a prompt was sent: the time, with the day too once the chat has run past the day it started. */
+function stamp(ts: number, chatDate: string) {
+  const day = toIsoDate(new Date(ts))
+  return day === chatDate ? time(ts) : `${formatJournalDate(day)} · ${time(ts)}`
+}
+
+function Message({ m, date, turn, flash }: { m: ChatMessage; date: string; turn?: number; flash: boolean }) {
   if (m.role === 'user')
     return (
       <div className={`${styles.user} ${flash ? styles.flash : ''}`} data-turn={turn}>
+        {m.ts != null && (
+          <time className={styles.stamp} dateTime={new Date(m.ts).toISOString()} title={new Date(m.ts).toLocaleString()}>
+            {stamp(m.ts, date)}
+          </time>
+        )}
         <ChatMarkdown source={m.text} />
       </div>
     )
