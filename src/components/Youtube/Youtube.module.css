@@ -1,7 +1,8 @@
 /* YouTube's own layout and type (a sans serif, round thumbnails, pill chips), in the app's colours. */
 
 .frame,
-.importer {
+.importer,
+.jumpLayer {
   --yt-font: Roboto, 'Segoe UI', Arial, sans-serif;
   --yt-chip: color-mix(in srgb, var(--text) 10%, transparent);
   --yt-chip-hover: color-mix(in srgb, var(--text) 18%, transparent);
@@ -14,6 +15,11 @@
   font-size: 14px;
   color: var(--text);
   container-type: inline-size;
+}
+
+/* The pane's scroller keeps room for its scrollbar, so the top bar is the same width on a short video page as on the listing. */
+*:has(> .frame) {
+  scrollbar-gutter: stable;
 }
 
 /* A narrow canvas pane: the logo without its name, a slimmer search button. */
@@ -105,9 +111,51 @@
   display: flex;
   align-items: center;
   gap: 4px;
+  border: none;
+  background: none;
+  padding: 0;
+  color: inherit;
   font: 600 18px/1 var(--yt-font);
   letter-spacing: -0.6px;
   flex-shrink: 0;
+  cursor: pointer;
+}
+
+/* The ctrl+j box: pinned over the top of the tab without taking room. */
+.jumpLayer {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  height: 0;
+}
+
+.jump {
+  position: absolute;
+  top: 56px;
+  left: 50%;
+  translate: -50% 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-2);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 25%);
+  font: 14px var(--yt-font);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.jump input {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  color-scheme: light dark;
 }
 
 .search {
@@ -167,21 +215,32 @@
   background: var(--yt-chip);
 }
 
-.importLink {
+.actions {
   flex-shrink: 0;
   display: flex;
-  align-items: center;
   gap: 4px;
-  height: 36px;
-  padding: 0 14px;
-  border: none;
-  border-radius: 18px;
-  background: var(--yt-chip);
-  font: 500 14px var(--yt-font);
 }
 
-.importLink:hover {
+.iconButton {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--yt-chip);
+  color: var(--text);
+}
+
+.iconButton:hover:not(:disabled) {
   background: var(--yt-chip-hover);
+}
+
+.iconButton:disabled {
+  color: var(--text-faint);
+  background: none;
+  cursor: default;
 }
 
 /* ── chips ── */
@@ -350,6 +409,30 @@
   background: var(--surface-2);
 }
 
+/* Hover and selection outline the thumbnail, keeping its rounded corners (no layout shift). */
+.thumb {
+  outline: 1px solid transparent;
+  outline-offset: 3px;
+  transition: outline-color 0.15s;
+}
+
+.card:hover .thumb {
+  outline-color: color-mix(in srgb, var(--text) 22%, transparent);
+}
+
+.selected .thumb,
+.selected:hover .thumb {
+  outline: 2px solid var(--accent);
+}
+
+.selected .thumb::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  pointer-events: none;
+}
+
 .thumb img {
   width: 100%;
   height: 100%;
@@ -358,13 +441,6 @@
   transition: transform 0.2s;
 }
 
-.card:hover .thumb {
-  border-radius: 0;
-}
-
-.thumb {
-  transition: border-radius 0.2s;
-}
 
 .duration {
   position: absolute;

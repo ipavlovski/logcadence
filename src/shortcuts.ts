@@ -2,6 +2,7 @@ import { newEntryAtCursor, newEntryWithDialog } from './actions.ts'
 import { runCommand } from './state/commands.ts'
 import { closeAllTabs, closeTab, cycleTab, goHistory, panesStore, type PaneId } from './state/panes.ts'
 import { openFind, openSpotlight, toggleHelp } from './state/ui.ts'
+import { openYtJump } from './state/youtube.ts'
 
 // Single source for keyboard shortcuts: drives both the global handler and the help overlay.
 // Browsers reserve ctrl+w / ctrl+n / ctrl+shift+n / ctrl+shift+w, so the web build also binds alt+ variants;
@@ -26,8 +27,10 @@ export const BINDINGS: Binding[] = [
   { keys: ['mod+shift+w', 'alt+shift+w'], label: 'Close all tabs', group: 'Navigation', run: (p) => closeAllTabs(p), inInputs: true },
   { keys: ['mod+['], label: 'Previous tab', group: 'Navigation', run: (p) => cycleTab(p, -1), inInputs: true },
   { keys: ['mod+]'], label: 'Next tab', group: 'Navigation', run: (p) => cycleTab(p, 1), inInputs: true },
-  { keys: ['alt+arrowleft'], label: 'Back', group: 'Navigation', run: (p) => goHistory(p, -1) },
-  { keys: ['alt+arrowright'], label: 'Forward', group: 'Navigation', run: (p) => goHistory(p, 1) },
+  // A canvas tab keeps its own history (the active plugin registers canvas.back/forward); other panes step through their tabs.
+  { keys: ['alt+arrowleft'], label: 'Back', group: 'Navigation', run: (p) => (p === 'canvas' ? runCommand('canvas.back') : goHistory(p, -1)) },
+  { keys: ['alt+arrowright'], label: 'Forward', group: 'Navigation', run: (p) => (p === 'canvas' ? runCommand('canvas.forward') : goHistory(p, 1)) },
+  { keys: ['mod+j'], label: 'YouTube: jump to date', group: 'Navigation', pane: 'canvas', run: () => openYtJump(), inInputs: true },
   { keys: ['mod+n', 'alt+n'], label: 'New entry at cursor', group: 'Journal', run: () => newEntryAtCursor(), inInputs: true },
   { keys: ['mod+shift+n', 'alt+shift+n'], label: 'New entry…', group: 'Journal', run: () => newEntryWithDialog(), inInputs: true },
   { keys: ['mod+.'], label: 'Fold / unfold all entries', group: 'Journal', run: () => runCommand('journal.toggleFoldAll'), inInputs: true },

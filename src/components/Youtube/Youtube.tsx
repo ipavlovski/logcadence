@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type MouseEvent } from 'react'
-import { formatJournalDate, shiftDate, today, weekday } from '../../../shared/dates.ts'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type MouseEvent, type Ref, type RefObject } from 'react'
+import { formatJournalDate, isIsoDate, shiftDate, today, weekday } from '../../../shared/dates.ts'
 import { allTagPaths, isUnder } from '../../../shared/tags.ts'
 import type { ImageDTO, UpdateYtVideoBody, YtImageSection, YtLibraryDTO, YtVideoDTO, YtVideoSummary } from '../../../shared/types.ts'
 import { api, unwrap } from '../../api.ts'
@@ -7,9 +7,27 @@ import type { CanvasPluginProps } from '../../canvas/plugins.ts'
 import { useFetch } from '../../hooks/useFetch.ts'
 import { mediaFiles, pasteMedia } from '../../media.ts'
 import { openDate, panesStore } from '../../state/panes.ts'
+import { useCommand } from '../../state/commands.ts'
 import { useStore } from '../../state/store.ts'
 import { notify } from '../../state/ui.ts'
-import { bumpYt, openVideo, setYtFilter, setYtQuery, youtubeStore, ytRevision, type YtFilter } from '../../state/youtube.ts'
+import {
+  backToListing,
+  bumpYt,
+  goYtHistory,
+  goYtHome,
+  jumpToDate,
+  openVideo,
+  registerAnchorCapture,
+  saveAnchor,
+  setYtFilter,
+  setYtQuery,
+  youtubeStore,
+  ytDateInView,
+  ytJumpOpen,
+  ytRevision,
+  type YtAnchor,
+  type YtFilter,
+} from '../../state/youtube.ts'
 import { AutoTextarea } from '../AutoTextarea/AutoTextarea.tsx'
 import { ImageGallery } from '../ImageGallery/ImageGallery.tsx'
 import { Markdown } from '../Markdown/Markdown.tsx'
@@ -60,13 +78,20 @@ function useShown(lib: YtLibraryDTO | undefined, filter: YtFilter, query: string
 
 export function Youtube(_: CanvasPluginProps) {
   const videoId = useStore(youtubeStore, (s) => s.videoId)
+  const jumpOpen = useStore(ytJumpOpen, (o) => o)
+  useCommand('canvas.back', () => goYtHistory(-1))
+  useCommand('canvas.forward', () => goYtHistory(1))
   const [importOpen, setImportOpen] = useState(false)
   const lib = useLibrary()
-  // The importer sits outside the frame: the frame is a size container, which would clip a fixed-position window.
+  // The top bar stays over both the listing and a video; the listing measures its scroll position from it.
+  const top = useRef<HTMLElement>(null)
+  // The importer and the jump box sit outside the frame: the frame is a size container, which would clip a fixed-position window.
   return (
     <>
+      {jumpOpen && <JumpBox lib={lib.data} />}
       <div className={styles.frame}>
-        {videoId ? <VideoPage key={videoId} id={videoId} lib={lib.data} /> : <Listing lib={lib.data} loading={lib.loading} error={lib.error} onImport={() => setImportOpen(true)} />}
+        <TopBar ref={top} onImport={() => setImportOpen(true)} />
+        {videoId ? <VideoPage key={videoId} id={videoId} lib={lib.data} /> : <Listing top={top} lib={lib.data} loading={lib.loading} error={lib.error} onImport={() => setImportOpen(true)} />}
       </div>
       {importOpen && <YoutubeImport onClose={() => setImportOpen(false)} />}
     </>
@@ -75,13 +100,85 @@ export function Youtube(_: CanvasPluginProps) {
 
 // ── listing ────────────────────────────────────────────────────────────────
 
-function Listing({ lib, loading, error, onImport }: { lib: YtLibraryDTO | undefined; loading: boolean; error: Error | undefined; onImport: () => void }) {
+interface ListingProps {
+  top: RefObject<HTMLElement | null>
+  lib: YtLibraryDTO | undefined
+  loading: boolean
+  error: Error | undefined
+  onImport: () => void
+}
+
+function Listing({ top, lib, loading, error, onImport }: ListingProps) {
   const filter = useStore(youtubeStore, (s) => s.filter)
   const query = useStore(youtubeStore, (s) => s.query)
+  const seq = useStore(youtubeStore, (s) => s.seq)
   const shown = useShown(lib, filter, query)
   const [limit, setLimit] = useState(PAGE)
   const more = useRef<HTMLDivElement>(null)
-  useEffect(() => setLimit(PAGE), [filter, query])
+  const listed = useRef({ filter, query })
+  useEffect(() => {
+    if (listed.current.filter === filter && listed.current.query === query) return
+    listed.current = { filter, query }
+    setLimit(PAGE)
+  }, [filter, query])
+
+  // Each history step (and each mount) scrolls to its step's anchor, once the cards up to it are rendered.
+  const restored = useRef(-1)
+  useLayoutEffect(() => {
+    if (restored.current === seq || !lib || !top.current) return
+    const s = youtubeStore.get()
+    const anchor = s.history[s.hIndex]?.anchor ?? null
+    const need = limitFor(shown, anchor)
+    if (need > limit) return setLimit(need)
+    scrollTo(top.current, anchor)
+    restored.current = seq
+  }, [seq, lib, shown, limit])
+
+  // Reports where the listing is scrolled: on each step away from it, and (debounced) as it scrolls, so a reload keeps it.
+  useLayoutEffect(() => {
+    const header = top.current
+    const scroller = header && scrollParent(header)
+    if (!header || !scroller) return
+    registerAnchorCapture(() => (restored.current === youtubeStore.get().seq ? anchorOf(header, scroller) : undefined))
+    let t: ReturnType<typeof setTimeout> | undefined
+    const onScroll = () => {
+      clearTimeout(t)
+      t = setTimeout(saveAnchor, 300)
+    }
+    scroller.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      clearTimeout(t)
+      scroller.removeEventListener('scroll', onScroll)
+      saveAnchor() // leaving the tab
+      registerAnchorCapture(null)
+    }
+  }, [])
+
+  // Shift+click selects several videos; a click elsewhere or Esc clears the selection.
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
+  const toggleSelected = (id: string) =>
+    setSelected((s) => {
+      const next = new Set(s)
+      if (!next.delete(id)) next.add(id)
+      return next
+    })
+  useEffect(() => {
+    if (!selected.size) return
+    const clear = () => setSelected(new Set())
+    const onDown = (e: PointerEvent) => !(e.target as HTMLElement | null)?.closest('[data-video]') && clear()
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || (e.target as HTMLElement | null)?.closest('input, textarea, select, [contenteditable]')) return
+      e.preventDefault()
+      clear()
+    }
+    window.addEventListener('pointerdown', onDown)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('pointerdown', onDown)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [selected])
+
   // Renders the next cards as the end of the grid scrolls into view.
   useEffect(() => {
     const el = more.current
@@ -108,7 +205,6 @@ function Listing({ lib, loading, error, onImport }: { lib: YtLibraryDTO | undefi
 
   return (
     <>
-      <TopBar onImport={onImport} />
       {lib && lib.videos.length > 0 && <Chips lib={lib} filter={filter} />}
       {filter?.kind === 'tag' && lib && <TagActions path={filter.path} count={shown.length} />}
       {filter?.kind === 'channel' && lib && <ChannelBar name={filter.name} lib={lib} count={shown.length} />}
@@ -128,7 +224,7 @@ function Listing({ lib, loading, error, onImport }: { lib: YtLibraryDTO | undefi
       ) : (
         <>
           {days.map((d) => (
-            <section key={d.date} className={styles.day}>
+            <section key={d.date} className={styles.day} data-day={d.date}>
               <h3 className={styles.dayTitle}>
                 <button onClick={(e) => openDate(d.date, { newTab: e.ctrlKey || e.metaKey })} title="Open this day in the journal">
                   {dayLabel(d.date)}
@@ -139,7 +235,7 @@ function Listing({ lib, loading, error, onImport }: { lib: YtLibraryDTO | undefi
               </h3>
               <div className={styles.grid}>
                 {d.videos.map((v) => (
-                  <VideoCard key={v.id} v={v} />
+                  <VideoCard key={v.id} v={v} selected={selected.has(v.id)} onSelect={toggleSelected} />
                 ))}
               </div>
             </section>
@@ -158,14 +254,58 @@ function dayLabel(date: string): string {
   return `${weekday(date)}, ${formatJournalDate(date)}`
 }
 
-function TopBar({ onImport }: { onImport: () => void }) {
+/** How many cards must be rendered for an anchor's place to exist, with a page below it to scroll into. */
+function limitFor(shown: YtVideoSummary[], anchor: YtAnchor): number {
+  if (!anchor) return PAGE
+  const i = 'video' in anchor ? shown.findIndex((v) => v.id === anchor.video) : shown.findIndex((v) => v.addedDate < anchor.date)
+  if (i < 0) return 'video' in anchor ? PAGE : shown.length
+  return i + PAGE
+}
+
+function scrollParent(el: HTMLElement): HTMLElement | null {
+  for (let p = el.parentElement; p; p = p.parentElement) if (/auto|scroll/.test(getComputedStyle(p).overflowY)) return p
+  return null
+}
+
+// Positions are measured from the bottom of the sticky top bar: what's under it is what's in view.
+const lineOf = (header: HTMLElement, scroller: HTMLElement) => scroller.getBoundingClientRect().top + header.offsetHeight
+const daysUnder = (header: HTMLElement) => [...(header.parentElement?.querySelectorAll<HTMLElement>('[data-day]') ?? [])]
+
+/** The day under the top bar, and how far into it the listing is scrolled; null at the top. */
+function anchorOf(header: HTMLElement, scroller: HTMLElement): YtAnchor {
+  if (scroller.scrollTop <= 0) return null
+  const line = lineOf(header, scroller)
+  const day = daysUnder(header).findLast((d) => d.getBoundingClientRect().top <= line + 1)
+  return day ? { date: day.dataset.day!, offset: Math.round(line - day.getBoundingClientRect().top) } : null
+}
+
+/** Scrolls the listing to an anchor: a day (or the nearest earlier one), a video's card, or the top. */
+function scrollTo(header: HTMLElement, anchor: YtAnchor) {
+  const scroller = scrollParent(header)
+  if (!scroller) return
+  if (!anchor) {
+    scroller.scrollTop = 0
+  } else if ('video' in anchor) {
+    header.parentElement?.querySelector(`[data-video="${CSS.escape(anchor.video)}"]`)?.scrollIntoView({ block: 'center' })
+  } else {
+    const days = daysUnder(header)
+    const day = days.find((d) => d.dataset.day! <= anchor.date) ?? days.at(-1)
+    if (!day) return
+    const offset = day.dataset.day === anchor.date ? anchor.offset : 0
+    scroller.scrollTop += day.getBoundingClientRect().top - lineOf(header, scroller) + offset
+  }
+}
+
+function TopBar({ ref, onImport }: { ref: Ref<HTMLElement>; onImport: () => void }) {
   const query = useStore(youtubeStore, (s) => s.query)
+  const canBack = useStore(youtubeStore, (s) => s.hIndex > 0)
+  const canForward = useStore(youtubeStore, (s) => s.hIndex < s.history.length - 1)
   return (
-    <header className={styles.top}>
-      <div className={styles.brand}>
+    <header ref={ref} className={styles.top}>
+      <button className={styles.brand} onClick={goYtHome} title="Back to the top (Alt+← returns)">
         <PlayLogo />
         <span>YouTube</span>
-      </div>
+      </button>
       <div className={styles.search}>
         <input value={query} placeholder="Search" spellCheck={false} onChange={(e) => setYtQuery(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && setYtQuery('')} />
         {query && (
@@ -177,9 +317,17 @@ function TopBar({ onImport }: { onImport: () => void }) {
           <SearchIcon />
         </span>
       </div>
-      <button className={styles.importLink} onClick={onImport} title="Import new videos from your playlists">
-        <PlusIcon /> Import
-      </button>
+      <div className={styles.actions}>
+        <button className={styles.iconButton} disabled={!canBack} onClick={() => goYtHistory(-1)} title="Back (Alt+←)">
+          <ArrowIcon dir={-1} />
+        </button>
+        <button className={styles.iconButton} disabled={!canForward} onClick={() => goYtHistory(1)} title="Forward (Alt+→)">
+          <ArrowIcon dir={1} />
+        </button>
+        <button className={styles.iconButton} onClick={onImport} title="Import new videos from your playlists">
+          <PlusIcon />
+        </button>
+      </div>
     </header>
   )
 }
@@ -252,9 +400,16 @@ function TagActions({ path, count }: { path: string; count: number }) {
   )
 }
 
-function VideoCard({ v }: { v: YtVideoSummary }) {
+/** A click opens the video; a shift+click adds it to (or takes it out of) the selection. */
+function VideoCard({ v, selected, onSelect }: { v: YtVideoSummary; selected: boolean; onSelect: (id: string) => void }) {
   return (
-    <article className={styles.card} onClick={() => openVideo(v.id)}>
+    <article
+      className={`${styles.card} ${selected ? styles.selected : ''}`}
+      data-video={v.id}
+      aria-selected={selected}
+      onMouseDown={(e) => e.shiftKey && e.preventDefault()} // no text selection on shift+click
+      onClick={(e) => (e.shiftKey ? onSelect(v.id) : openVideo(v.id))}
+    >
       <div className={styles.thumb}>
         <img src={v.thumbSmallUrl ?? thumb(v.id)} alt="" loading="lazy" decoding="async" draggable={false} />
         {v.duration && <span className={styles.duration}>{v.duration}</span>}
@@ -336,6 +491,43 @@ function publishedText(v: YtVideoSummary): string | null {
   return rtf.format(-Math.max(1, Math.floor(ms / size)), unit)
 }
 
+// ── jump to date (ctrl+j) ──────────────────────────────────────────────────
+
+/** A date field over the top of the tab: Enter scrolls the listing to that day (or the nearest earlier one with videos). */
+function JumpBox({ lib }: { lib: YtLibraryDTO | undefined }) {
+  const videos = lib?.videos ?? []
+  const [date, setDate] = useState(() => ytDateInView(videos) ?? today())
+  const close = () => ytJumpOpen.set(() => false)
+  const go = () => {
+    if (!isIsoDate(date)) return
+    close()
+    jumpToDate(date)
+  }
+  return (
+    <div className={styles.jumpLayer}>
+      <form
+        className={styles.jump}
+        onSubmit={(e) => {
+          e.preventDefault()
+          go()
+        }}
+        onKeyDown={(e) => {
+          if (e.key !== 'Escape') return
+          e.preventDefault()
+          close()
+        }}
+        onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && document.hasFocus() && close()}
+      >
+        <label htmlFor="yt-jump">Jump to date</label>
+        <input id="yt-jump" type="date" value={date} min={videos.at(-1)?.addedDate} max={videos[0]?.addedDate} autoFocus onChange={(e) => setDate(e.target.value)} />
+        <button type="submit" className={styles.primary} disabled={!isIsoDate(date)}>
+          Go
+        </button>
+      </form>
+    </div>
+  )
+}
+
 // ── video page ─────────────────────────────────────────────────────────────
 
 const fullDate = (ms: number) => new Date(ms).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
@@ -354,13 +546,19 @@ function VideoPage({ id, lib }: { id: string; lib: YtLibraryDTO | undefined }) {
   const prev = i > 0 ? list[i - 1] : undefined
   const next = i >= 0 ? list[i + 1] : undefined
   const tagPaths = useMemo(() => allTagPaths(lib?.tags ?? []), [lib])
+  const pageRef = useRef<HTMLDivElement>(null)
+  // A video opens at its top, not at the listing's scroll position.
+  useLayoutEffect(() => {
+    const scroller = pageRef.current && scrollParent(pageRef.current)
+    if (scroller) scroller.scrollTop = 0
+  }, [])
 
   // Esc goes back to the listing (when not typing, and the canvas has focus).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null
       if (e.key !== 'Escape' || e.defaultPrevented || t?.closest('input, textarea, select, [contenteditable]') || panesStore.get().focus !== 'canvas') return
-      openVideo(null)
+      backToListing()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -379,15 +577,15 @@ function VideoPage({ id, lib }: { id: string; lib: YtLibraryDTO | undefined }) {
   const remove = () => {
     if (!v || !confirm(`Remove “${v.title}” from the catalog, with its notes, comments and tags? An import brings it back while it is still in a playlist.`)) return
     unwrap(api.youtube.videos[':id'].$delete({ param: { id } })).then(() => {
-      openVideo(null)
+      backToListing()
       bumpYt()
     }, fail)
   }
 
   return (
-    <div className={styles.page}>
+    <div ref={pageRef} className={styles.page}>
       <nav className={styles.pageNav}>
-        <button onClick={() => openVideo(null)} title="Back to the videos (Esc)">
+        <button onClick={backToListing} title="Back to the videos, where you were (Esc)">
           ← Videos
         </button>
         <span className={styles.push} />
@@ -620,6 +818,14 @@ function PlayLogo() {
     <svg viewBox="0 0 28 20" width="28" height="20" aria-hidden>
       <rect width="28" height="20" rx="5" fill="#ff0033" />
       <path d="M11 5.5v9l8-4.5z" fill="#fff" />
+    </svg>
+  )
+}
+
+function ArrowIcon({ dir }: { dir: -1 | 1 }) {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d={dir < 0 ? 'M19 12H5M11 6l-6 6 6 6' : 'M5 12h14M13 6l6 6-6 6'} />
     </svg>
   )
 }
