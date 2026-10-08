@@ -4,12 +4,11 @@ import { formatJournalDate, shiftDate, today, weekday } from '../../../shared/da
 import { api, unwrap } from '../../api.ts'
 import type { CanvasPluginProps } from '../../canvas/plugins.ts'
 import { useFetch, useTicker } from '../../hooks/useFetch.ts'
-import { journalDateOf, openDate, panesStore } from '../../state/panes.ts'
-import { useStore } from '../../state/store.ts'
+import { useCanvasDay } from '../../state/canvasDay.ts'
 import { clock, duration } from '../Map/kinds.ts'
 import styles from './Activity.module.css'
 
-// Days shown in the overview, ending on the journal day.
+// Days shown in the overview, ending on the day shown.
 const OVERVIEW_DAYS = 14
 const REFRESH_MS = 60_000
 
@@ -42,9 +41,9 @@ function buildDay(date: string, data: ActivitySpansDTO): Day {
   }
 }
 
-/** Canvas "Activity" tab: keyboard/mouse activity of the journal day in 5-minute slots, grouped into sessions. */
+/** Canvas "Activity" tab: keyboard/mouse activity of a day in 5-minute slots, grouped into sessions. The day is the canvas's own, or the journal's (ctrl+l). */
 export function Activity(_: CanvasPluginProps) {
-  const date = useStore(panesStore, journalDateOf)
+  const [date, setDate] = useCanvasDay()
   const isToday = date === today()
   const tick = useTicker(REFRESH_MS)
   const first = shiftDate(date, -(OVERVIEW_DAYS - 1))
@@ -72,10 +71,10 @@ export function Activity(_: CanvasPluginProps) {
           </span>
         )}
         <div className={styles.actions}>
-          <button onClick={() => openDate(shiftDate(date, -1))} title="Previous day">
+          <button onClick={() => setDate(shiftDate(date, -1))} title="Previous day">
             ‹
           </button>
-          <button onClick={() => openDate(shiftDate(date, 1))} disabled={isToday} title="Next day">
+          <button onClick={() => setDate(shiftDate(date, 1))} disabled={isToday} title="Next day">
             ›
           </button>
         </div>
@@ -92,7 +91,7 @@ export function Activity(_: CanvasPluginProps) {
       ) : (
         <>
           {day && <DayView day={day} />}
-          <Overview days={days} />
+          <Overview days={days} onDate={setDate} />
         </>
       )}
     </div>
@@ -297,13 +296,13 @@ function Stat({ label, value }: { label: string; value: string }) {
   )
 }
 
-/** One strip per day: slot shade is input time, the line under it the sessions. Click a day to open it. */
-function Overview({ days }: { days: Day[] }) {
+/** One strip per day: slot shade is input time, the line under it the sessions. Click a day to show it. */
+function Overview({ days, onDate }: { days: Day[]; onDate: (date: string) => void }) {
   return (
     <section className={styles.overview}>
       <h3>Last {days.length} days</h3>
       {days.map((d) => (
-        <button key={d.date} className={styles.row} onClick={() => openDate(d.date)} title={`${formatJournalDate(d.date)}: ${duration(d.activeMs)} active`}>
+        <button key={d.date} className={styles.row} onClick={() => onDate(d.date)} title={`${formatJournalDate(d.date)}: ${duration(d.activeMs)} active`}>
           <span className={styles.rowDate}>
             {weekday(d.date).slice(0, 3)} {d.date.slice(5)}
           </span>

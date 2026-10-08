@@ -3,6 +3,7 @@ import { versionLabel } from '../../../shared/versions.ts'
 import { pluginIcon } from '../../canvas/icons.tsx'
 import { PLUGINS } from '../../canvas/plugins.ts'
 import { formatCombo, paneBindings } from '../../shortcuts.ts'
+import { setFollowJournal } from '../../state/canvasDay.ts'
 import { canvasTabsStore, moveCanvasTab, resetCanvasTabs, setCanvasTabShown } from '../../state/canvasTabs.ts'
 import { panesStore, setPaneOpen, type PaneId } from '../../state/panes.ts'
 import { useStore } from '../../state/store.ts'
@@ -159,6 +160,7 @@ function Canvas() {
       <Group title="Pane">
         <PaneToggle pane="canvas" label="Show the canvas pane" />
       </Group>
+      <FollowJournal />
       <CanvasTabs />
       <Shortcuts pane="canvas" />
     </>
@@ -188,6 +190,20 @@ function Tags() {
       </Group>
       <Shortcuts pane="tags" />
     </>
+  )
+}
+
+function FollowJournal() {
+  const follows = useStore(prefsStore, (s) => s.canvasFollowsJournal)
+  return (
+    <Group title="Days">
+      <Check
+        checked={follows}
+        onChange={setFollowJournal}
+        label={`Follow the journal’s day (${formatCombo('mod+l')})`}
+        hint="On, Map, Spotify and Activity show the day open in the journal and step it along, and YouTube, Reddit, Bookmarks, Progress and AI chats scroll to it. Off, the canvas browses days on its own."
+      />
+    </Group>
   )
 }
 

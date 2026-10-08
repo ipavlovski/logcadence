@@ -43,6 +43,24 @@
   color: var(--text-faint);
 }
 
+.date {
+  border: 1px solid transparent;
+  background: none;
+  color: var(--text-faint);
+  border-radius: var(--radius);
+  padding: 2px 6px;
+  font: inherit;
+  font-size: 12px;
+  color-scheme: inherit;
+}
+
+.date:hover,
+.date:focus {
+  color: var(--text);
+  border-color: var(--border);
+  outline: none;
+}
+
 .empty {
   padding: 18px;
   color: var(--text-muted);

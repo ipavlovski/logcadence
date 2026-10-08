@@ -5,7 +5,7 @@ import { api, unwrap } from '../../api.ts'
 import type { CanvasPluginProps } from '../../canvas/plugins.ts'
 import { useFetch, useTicker } from '../../hooks/useFetch.ts'
 import { useRevision } from '../../state/bus.ts'
-import { journalDateOf, openDate, panesStore } from '../../state/panes.ts'
+import { useCanvasDay } from '../../state/canvasDay.ts'
 import { useStore } from '../../state/store.ts'
 import { notify, prefsStore } from '../../state/ui.ts'
 import { clock, duration, isMove, isStay, KIND_CODE, KIND_LABEL, KIND_ORDER, kindColor, km, placeNamer, type Theme } from './kinds.ts'
@@ -13,9 +13,10 @@ import { MapSync } from './MapSync.tsx'
 import { MapView } from './MapView.tsx'
 import styles from './Map.module.css'
 
-/** Canvas "Map" tab: the journal day's GPS as stays and trips, on a map and as a timetable. */
+/** Canvas "Map" tab: a day's GPS as stays and trips, on a map and as a timetable. The day is the canvas's own, or the journal's (ctrl+l). */
 export function MapTab(_: CanvasPluginProps) {
-  const date = useStore(panesStore, journalDateOf)
+  const follows = useStore(prefsStore, (s) => s.canvasFollowsJournal)
+  const [date, goTo] = useCanvasDay()
   const theme = useStore(prefsStore, (s) => s.theme) as Theme
   const rev = useRevision()
   const [bump, setBump] = useState(0)
@@ -49,16 +50,23 @@ export function MapTab(_: CanvasPluginProps) {
     <div className={styles.frame}>
       <header className={styles.header}>
         <h2>Map</h2>
-        <span className={styles.muted}>{formatJournalDate(date)}</span>
+        <input
+          type="date"
+          className={styles.date}
+          value={date}
+          onChange={(e) => e.target.value && goTo(e.target.value)}
+          aria-label="Map date"
+          title={follows ? 'The journal’s day (Ctrl+L to browse separately)' : 'The canvas’s own day; the journal is browsed separately (Ctrl+L to follow it)'}
+        />
         <div className={styles.actions}>
           {near.before && (
-            <button onClick={() => openDate(near.before!)} title={`Previous day with GPS: ${formatJournalDate(near.before)}`}>
-              ‹ GPS
+            <button onClick={() => goTo(near.before!)} title={`Previous day with GPS: ${formatJournalDate(near.before)}`}>
+              ‹
             </button>
           )}
           {near.after && (
-            <button onClick={() => openDate(near.after!)} title={`Next day with GPS: ${formatJournalDate(near.after)}`}>
-              GPS ›
+            <button onClick={() => goTo(near.after!)} title={`Next day with GPS: ${formatJournalDate(near.after)}`}>
+              ›
             </button>
           )}
           <button onClick={scan} title="Process new or changed files in data/gps/">

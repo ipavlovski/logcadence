@@ -128,6 +128,8 @@ export interface CaptureNav {
   open(itemId: string): void
   home(): void
   backToListing(): void
+  /** The listing scrolled to a day (the nearest earlier one with captures, when that day has none). */
+  jumpToDate(date: string): void
   go(dir: -1 | 1): void
   setFilter(filter: CaptureFilter): void
   setQuery(query: string): void
@@ -161,6 +163,7 @@ function createNav(kind: CaptureKind, plugin: string): CaptureNav {
     },
     home: () => navigate((s) => pushStep(s, { itemId: null, anchor: null, filter: null })),
     backToListing: () => navigate(toListing),
+    jumpToDate: (date) => navigate((s) => pushStep(s, { itemId: null, anchor: { date, offset: 0 } })),
     go(dir) {
       if (!stepHistory(store.get(), dir)) return
       saveAnchor()

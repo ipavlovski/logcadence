@@ -73,9 +73,11 @@ interface Prefs {
   expanded: string[]
   /** A pane's focus shortcut (ctrl+1/2/3) restores it when minimized; off, the shortcut skips a minimized pane. */
   openHiddenPane: boolean
+  /** Canvas tabs show (or scroll to) the journal's day, instead of browsing days of their own (state/canvasDay.ts). */
+  canvasFollowsJournal: boolean
 }
 
-const DEFAULT_PREFS: Prefs = { theme: 'dark', showArchived: false, includeSubtags: true, expanded: [], openHiddenPane: true }
+const DEFAULT_PREFS: Prefs = { theme: 'dark', showArchived: false, includeSubtags: true, expanded: [], openHiddenPane: true, canvasFollowsJournal: false }
 
 export const prefsStore = persistedStore<Prefs>('prefs.v1', DEFAULT_PREFS, (s) => ({ ...DEFAULT_PREFS, ...(s as Partial<Prefs>) }))
 

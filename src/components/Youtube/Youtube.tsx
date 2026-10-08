@@ -10,6 +10,7 @@ import { openDate, panesStore } from '../../state/panes.ts'
 import { useCommand } from '../../state/commands.ts'
 import { useStore } from '../../state/store.ts'
 import { notify } from '../../state/ui.ts'
+import { useFollowJournal } from '../../state/canvasDay.ts'
 import {
   backToListing,
   bumpYt,
@@ -21,6 +22,7 @@ import {
   saveAnchor,
   setYtFilter,
   setYtQuery,
+  YOUTUBE_PLUGIN,
   youtubeStore,
   ytDateInView,
   ytJumpOpen,
@@ -81,6 +83,8 @@ export function Youtube(_: CanvasPluginProps) {
   const jumpOpen = useStore(ytJumpOpen, (o) => o)
   useCommand('canvas.back', () => goYtHistory(-1))
   useCommand('canvas.forward', () => goYtHistory(1))
+  // Following the journal's day (ctrl+l): the listing scrolls to it, leaving an open video alone.
+  useFollowJournal((d) => youtubeStore.get().videoId === null && jumpToDate(d), { key: YOUTUBE_PLUGIN })
   const [importOpen, setImportOpen] = useState(false)
   const lib = useLibrary()
   // The top bar stays over both the listing and a video; the listing measures its scroll position from it.

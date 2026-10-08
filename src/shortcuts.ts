@@ -1,5 +1,6 @@
 import { shiftDate } from '../shared/dates.ts'
 import { newEntryAtCursor, newEntryWithDialog } from './actions.ts'
+import { toggleFollowJournal } from './state/canvasDay.ts'
 import { runCommand } from './state/commands.ts'
 import { activeJournalDate, closeAllTabs, closeTab, cycleTab, focusPane, goHistory, openDate, openLoc, panesStore, PRIMARY, togglePane, type PaneId } from './state/panes.ts'
 import { openFind, openSettings, openSpotlight, prefsStore, toggleAppKeys, toggleHelp, uiStore } from './state/ui.ts'
@@ -51,6 +52,7 @@ export const BINDINGS: Binding[] = [
   { keys: ['mod+3', 'alt+3'], label: 'Focus tags pane', group: 'Navigation', run: focusOn('tags'), inInputs: true, about: 'tags' },
   { keys: ['mod+b'], label: 'Show / hide canvas pane', group: 'Navigation', run: toggle('canvas'), inInputs: true, about: 'canvas' },
   { keys: ['mod+t', 'alt+t'], label: 'Show / hide tags pane', group: 'Navigation', run: toggle('tags'), inInputs: true, about: 'tags' },
+  { keys: ['mod+l'], label: 'Canvas follows the journal’s day (on / off)', group: 'Navigation', run: () => toggleFollowJournal(), inInputs: true, about: 'canvas' },
   { keys: ['mod+h'], label: 'Home tab (dashboard / today / tag tree)', group: 'Navigation', run: (p) => openLoc(p, PRIMARY[p]), inInputs: true },
   // A canvas tab keeps its own history (the active plugin registers canvas.back/forward); other panes step through their tabs.
   { keys: ['alt+arrowleft'], label: 'Back', group: 'Navigation', run: (p) => (p === 'canvas' ? runCommand('canvas.back') : goHistory(p, -1)) },

@@ -77,6 +77,22 @@ export const HOME_ICON = (
   </Icon>
 )
 
+/** The canvas following the journal's day (ctrl+l): a chain, linked or broken. */
+export const LINK_ICON = (
+  <Icon>
+    <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" />
+    <path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
+  </Icon>
+)
+
+export const UNLINK_ICON = (
+  <Icon>
+    <path d="M15.7 14l3-3a4 4 0 0 0-5.7-5.7l-1 1" />
+    <path d="M8.3 10l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
+    <path d="M4 4l3 3M20 20l-3-3" />
+  </Icon>
+)
+
 /** A plugin without its own icon. */
 export const FALLBACK_ICON = (
   <Icon>

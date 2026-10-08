@@ -6,6 +6,7 @@ import type { CanvasPluginProps } from '../../canvas/plugins.ts'
 import { useFetch, useTicker } from '../../hooks/useFetch.ts'
 import { useRevision } from '../../state/bus.ts'
 import { notify } from '../../state/ui.ts'
+import { useCanvasDay } from '../../state/canvasDay.ts'
 import { Heatmap } from '../Heatmap/Heatmap.tsx'
 import styles from './Spotify.module.css'
 
@@ -99,7 +100,8 @@ function Connect({ status, onChange }: { status: SpotifyStatus; onChange: () => 
 
 function Connected({ status, onChange }: { status: SpotifyStatus; onChange: () => void }) {
   const rev = useRevision()
-  const [day, setDay] = useState(today())
+  // The day listed under the heatmaps: the canvas's own, or the journal's (ctrl+l).
+  const [day, setDay] = useCanvasDay()
   const [syncing, setSyncing] = useState(false)
   const key = `${status.lastSync}|${rev}`
   const end = today()

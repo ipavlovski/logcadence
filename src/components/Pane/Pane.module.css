@@ -251,3 +251,23 @@
   place-items: center;
   padding: 8px 0;
 }
+
+/* Canvas tab bar, right end: following the journal's day or not (ctrl+l). */
+.follow {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  border: none;
+  border-left: 1px solid var(--border);
+  background: none;
+  color: var(--text-faint);
+}
+
+.follow:hover {
+  color: var(--text);
+}
+
+.following {
+  color: var(--accent);
+}

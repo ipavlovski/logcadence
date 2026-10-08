@@ -1,11 +1,12 @@
 import { useEffect, useRef } from 'react'
 import { formatJournalDate, today } from '../../../shared/dates.ts'
-import { HOME_ICON, pluginIcon } from '../../canvas/icons.tsx'
+import { HOME_ICON, LINK_ICON, pluginIcon, UNLINK_ICON } from '../../canvas/icons.tsx'
 import { pluginByType } from '../../canvas/plugins.ts'
+import { toggleFollowJournal } from '../../state/canvasDay.ts'
 import { canvasTabsStore } from '../../state/canvasTabs.ts'
 import { activateTab, closeTab, paneTabs, parseKey, PRIMARY, setFocus, setPaneOpen, panesStore, type PaneId } from '../../state/panes.ts'
 import { useStore } from '../../state/store.ts'
-import { setFind, uiStore } from '../../state/ui.ts'
+import { prefsStore, setFind, uiStore } from '../../state/ui.ts'
 import { CanvasDashboard, CanvasPluginTab } from '../Canvas/Canvas.tsx'
 import { JournalDay } from '../Journal/JournalDay.tsx'
 import { TagTree } from '../Tags/TagTree.tsx'
@@ -133,12 +134,29 @@ export function Pane({ id }: { id: PaneId }) {
               )
             })}
         </div>
+        {id === 'canvas' && <FollowButton />}
       </div>
       {find !== undefined && <FindBar pane={id} query={find} />}
       <div className={styles.body}>
         <PaneContent pane={id} tabKey={pane.active} find={find ?? ''} />
       </div>
     </section>
+  )
+}
+
+/** End of the canvas tab bar: whether the canvas tabs follow the journal's day (ctrl+l). */
+function FollowButton() {
+  const follows = useStore(prefsStore, (s) => s.canvasFollowsJournal)
+  return (
+    <button
+      className={`${styles.follow} ${follows ? styles.following : ''}`}
+      onClick={toggleFollowJournal}
+      aria-pressed={follows}
+      aria-label="Follow the journal’s day"
+      title={follows ? 'Following the journal’s day (Ctrl+L to browse days separately)' : 'Browsing days separately from the journal (Ctrl+L to follow it)'}
+    >
+      {follows ? LINK_ICON : UNLINK_ICON}
+    </button>
   )
 }
 

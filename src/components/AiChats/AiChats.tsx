@@ -7,6 +7,7 @@ import { useFetch } from '../../hooks/useFetch.ts'
 import { matches } from '../../markdown.ts'
 import { aiStore, clearChatTurn, openChat, setChatSource, SOURCE_LABEL } from '../../state/ai.ts'
 import { emitChange, useRevision } from '../../state/bus.ts'
+import { useFollowJournal } from '../../state/canvasDay.ts'
 import { useStore } from '../../state/store.ts'
 import { notify } from '../../state/ui.ts'
 import { ChatMarkdown } from './ChatMarkdown.tsx'
@@ -104,6 +105,15 @@ function ChatList() {
     return [...m].sort(([a], [b]) => b.localeCompare(a))
   }, [all, source, q])
 
+  // Following the journal's day (ctrl+l): scroll to it, or to the nearest earlier day with chats.
+  useFollowJournal(
+    (d) => {
+      const days = [...document.querySelectorAll<HTMLElement>('[data-ai-list] [data-day]')]
+      ;(days.find((el) => el.dataset.day! <= d) ?? days.at(-1))?.scrollIntoView({ block: 'start' })
+    },
+    { ready: byDate.length > 0 },
+  )
+
   const errors = CHAT_SOURCES.flatMap((s) => report?.[s]?.errors.map((e) => `${SOURCE_LABEL[s]}: ${e}`) ?? [])
 
   const onDrop = (e: DragEvent) => {
@@ -115,6 +125,7 @@ function ChatList() {
   return (
     <div
       className={`${styles.frame} ${dragOver ? styles.dragOver : ''}`}
+      data-ai-list
       onDragOver={(e) => {
         if (!e.dataTransfer.types.includes('Files')) return
         e.preventDefault()
@@ -173,7 +184,7 @@ function ChatList() {
       {all && !byDate.length && <p className={styles.muted}>{all.length ? 'No chats match.' : 'No chats imported yet. Scan, or drop an export here.'}</p>}
 
       {byDate.map(([date, list]) => (
-        <section key={date} className={styles.day}>
+        <section key={date} className={styles.day} data-day={date}>
           <h3>{formatJournalDate(date)}</h3>
           {list.map((c) => (
             <div key={c.id} className={styles.row}>

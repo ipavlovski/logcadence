@@ -5,6 +5,7 @@ import { api, unwrap } from '../../api.ts'
 import type { CanvasPluginProps } from '../../canvas/plugins.ts'
 import { useFetch } from '../../hooks/useFetch.ts'
 import { useRevision } from '../../state/bus.ts'
+import { useFollowJournal } from '../../state/canvasDay.ts'
 import { requestReveal } from '../../state/journal.ts'
 import { openDate } from '../../state/panes.ts'
 import { useStore } from '../../state/store.ts'
@@ -82,6 +83,17 @@ export function Progress(_: CanvasPluginProps) {
     if (sc) sc.scrollTop = sc.scrollHeight
     updateFade()
   }, [rows, scale])
+
+  // Following the journal's day (ctrl+l): its row (or the nearest earlier one) in the middle of the view.
+  useFollowJournal(
+    (d) => {
+      const sc = scroller.current
+      const i = rows.findLastIndex((r) => r <= d)
+      if (!sc || !timeline.current) return
+      sc.scrollTop = timeline.current.offsetTop + Math.max(0, i) * ROW_H - sc.clientHeight / 2
+    },
+    { ready: rows.length > 0 },
+  )
 
   const width = DATE_W + visible.length * COL_W
   const y = (date: string) => rowOf.get(date)! * ROW_H + ROW_H / 2

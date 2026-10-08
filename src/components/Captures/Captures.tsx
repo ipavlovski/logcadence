@@ -6,6 +6,7 @@ import { api, unwrap } from '../../api.ts'
 import type { CanvasPluginProps } from '../../canvas/plugins.ts'
 import { useFetch } from '../../hooks/useFetch.ts'
 import { bookmarksNav, redditNav, type CaptureAnchor, type CaptureFilter, type CaptureNav } from '../../state/captures.ts'
+import { useFollowJournal } from '../../state/canvasDay.ts'
 import { useCommand } from '../../state/commands.ts'
 import { openDate, panesStore } from '../../state/panes.ts'
 import { useStore } from '../../state/store.ts'
@@ -97,6 +98,8 @@ function CapturesTab({ config }: { config: Config }) {
   useCommand('canvas.back', () => nav.go(-1))
   useCommand('canvas.forward', () => nav.go(1))
   useCaptureUpdates(nav)
+  // Following the journal's day (ctrl+l): the listing scrolls to it, leaving an open capture alone.
+  useFollowJournal((d) => nav.store.get().itemId === null && nav.jumpToDate(d), { key: nav.plugin })
   const lib = useLibrary(nav)
   const top = useRef<HTMLElement>(null)
   return (
