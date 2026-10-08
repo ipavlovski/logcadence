@@ -7,11 +7,13 @@ import { useDebounced, useFetch, useTicker } from '../../hooks/useFetch.ts'
 import { useRevision } from '../../state/bus.ts'
 import { openDate } from '../../state/panes.ts'
 import { Heatmap } from '../Heatmap/Heatmap.tsx'
+import { ChecklistsSection } from '../Checklists/Checklists.tsx'
 import { duration, km } from '../Map/kinds.ts'
 import styles from './Dashboard.module.css'
 
-// The canvas dashboard: today's report. Computer activity and travel for today and the 6 days before it, and up to
-// a year of journal entries and AI prompts as heatmaps (as many weeks as fit). Click a day to open it in the journal.
+// The canvas dashboard: today's report. Computer activity and travel for today and the 6 days before it, up to a year
+// of journal entries and AI prompts as heatmaps (as many weeks as fit), then the day's checklists. Click a day to open
+// it in the journal.
 
 const WEEK = 7
 const YEAR_DAYS = 371 // 53 weeks, the most a heatmap shows
@@ -41,6 +43,7 @@ export function Dashboard() {
         <TravelCard week={week} tick={tick} />
         <Heatmaps end={end} tick={tick} />
       </div>
+      <ChecklistsSection tick={tick} />
     </div>
   )
 }

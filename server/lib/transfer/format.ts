@@ -44,6 +44,9 @@ export const CONTENT_TABLES = {
   capture_tags: content.captureTags,
   capture_item_tags: content.captureItemTags,
   capture_images: content.captureImages,
+  checklists: content.checklists,
+  checklist_items: content.checklistItems,
+  checklist_marks: content.checklistMarks,
 }
 export const EVENTS_TABLES = { events: events.events }
 

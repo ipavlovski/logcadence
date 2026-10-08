@@ -1,0 +1,744 @@
+/* The dashboard's Checklists section (cards of checkboxes and counters) and the Manage checklists window. */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 18px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+
+.head h3 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.summary {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.summary.allDone {
+  color: var(--accent);
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.nav button,
+.nav input,
+.emptyActions button {
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 0 9px;
+}
+
+.nav input {
+  padding: 0 6px;
+  color-scheme: light dark;
+}
+
+.nav button:hover:not(:disabled),
+.emptyActions button:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.nav button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.error {
+  font-size: 12px;
+  color: var(--danger);
+}
+
+.muted {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.empty {
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.empty p {
+  margin: 0 0 10px;
+  max-width: 70ch;
+}
+
+.emptyActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.emptyActions button[data-primary] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+/* ── cards ── */
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  padding: 11px 12px 9px;
+}
+
+.card > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.card h4 {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status {
+  flex: none;
+  font-size: 11.5px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.cardDone {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.cardDone .status {
+  color: var(--accent);
+}
+
+.meter {
+  height: 3px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--text-faint) 15%, transparent);
+  overflow: hidden;
+}
+
+.meter span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+.items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.items li {
+  position: relative;
+  border-radius: var(--radius);
+  font-size: 12.5px;
+}
+
+/* A plain checkbox: the whole row is the button. */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  text-align: left;
+}
+
+.row:hover {
+  background: var(--surface-2);
+}
+
+.box {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1.5px solid var(--text-faint);
+  border-radius: 4px;
+  background: none;
+  color: var(--accent-text);
+}
+
+.itemDone .box {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.label {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.itemDone .label {
+  color: var(--text-muted);
+}
+
+/* A counter: the row fills up toward its target. */
+.counterItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 4px 3px 6px;
+  background: linear-gradient(to right, color-mix(in srgb, var(--accent) 13%, transparent) var(--fill), transparent var(--fill));
+}
+
+.auto {
+  margin-left: 6px;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 10px;
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  cursor: help;
+}
+
+.counter {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.counter > button:not(.count) {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.counter > button:not(.count):hover:not(:disabled) {
+  border-color: var(--border);
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.counter > button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.count {
+  min-width: 52px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--text-faint);
+  font-size: 12px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.count b {
+  font-weight: 500;
+  color: var(--text);
+}
+
+.count:hover {
+  background: var(--surface-2);
+}
+
+.countInput {
+  width: 52px;
+  height: 22px;
+  padding: 0 4px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* The last 7 days: a square per day, filled by how much was done. */
+.dots {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.dots button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-faint);
+}
+
+.dots button:hover {
+  background: var(--surface-2);
+}
+
+.dots span {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: linear-gradient(to top, color-mix(in srgb, var(--accent) 55%, transparent) var(--p, 0%), color-mix(in srgb, var(--text-faint) 18%, transparent) var(--p, 0%));
+}
+
+.dots .dotFull span {
+  background: var(--accent);
+}
+
+.dots .dotOff span {
+  background: none;
+  border: 1px dashed color-mix(in srgb, var(--text-faint) 60%, transparent);
+}
+
+.dots i {
+  font-style: normal;
+  font-size: 9.5px;
+  line-height: 1;
+}
+
+.dots .dotPicked i {
+  color: var(--text);
+}
+
+.dots .dotPicked span {
+  outline: 1.5px solid var(--text-muted);
+  outline-offset: 1.5px;
+}
+
+/* ── the Manage checklists window ── */
+
+.manager {
+  width: min(900px, 100%);
+  height: min(640px, 88vh);
+}
+
+.managerHead {
+  display: flex;
+  align-items: center;
+  padding: 12px 14px 12px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.managerHead h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.managerHead button {
+  margin-left: auto;
+  height: 26px;
+  padding: 2px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: none;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.managerHead button:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.managerBody {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 250px 1fr;
+}
+
+.managerNav {
+  overflow-y: auto;
+  padding: 8px;
+  border-right: 1px solid var(--border);
+  background: var(--bg-2);
+}
+
+.managerNav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.managerNav h3 {
+  margin: 16px 8px 4px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.managerNav li {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius);
+}
+
+.managerNav li:hover,
+.managerNav li.selected {
+  background: var(--surface-2);
+}
+
+.managerNav li.selected::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.navPick {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 7px 10px 7px 12px;
+  border: 0;
+  background: none;
+  text-align: left;
+  font-size: 13px;
+}
+
+.navPick small {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.move {
+  display: none;
+  flex-direction: column;
+  padding-right: 4px;
+}
+
+.managerNav li:hover .move,
+.managerNav li:focus-within .move {
+  display: flex;
+}
+
+.move button {
+  height: 16px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.move button:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--border);
+}
+
+.move button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.newButton,
+.starterButton {
+  width: 100%;
+  margin-bottom: 6px;
+  padding: 7px 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: none;
+  color: var(--text-muted);
+  text-align: left;
+  font-size: 13px;
+}
+
+.starterButton {
+  margin-top: 6px;
+}
+
+.newButton:hover,
+.starterButton:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.editor > .muted {
+  padding: 22px 28px;
+}
+
+.form {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 28px 20px;
+  font-size: 13px;
+}
+
+.form h3 {
+  margin: 20px 0 4px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.form input,
+.form select {
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color-scheme: light dark;
+}
+
+.form input:focus,
+.form select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.titleInput {
+  width: 100%;
+  height: 36px !important;
+  font-size: 17px;
+}
+
+.archivedNote {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--date);
+}
+
+.hint {
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+
+.itemEditor {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.itemEditor li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px 190px auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.itemHead span {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.targetInput {
+  width: 72px;
+}
+
+.itemTools {
+  display: flex;
+  gap: 1px;
+}
+
+.itemTools button,
+.link {
+  height: 26px;
+  min-width: 24px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.itemTools button:hover:not(:disabled),
+.link:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.itemTools button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.addItem {
+  margin-top: 6px;
+  padding: 4px 10px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: none;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.addItem:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.fieldRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.fieldRow label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+}
+
+.segmented,
+.weekdays {
+  display: flex;
+}
+
+.segmented button,
+.weekdays button {
+  height: 28px;
+  margin-left: -1px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: none;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.weekdays button {
+  min-width: 42px;
+}
+
+.segmented button:first-child,
+.weekdays button:first-child {
+  margin-left: 0;
+  border-radius: var(--radius) 0 0 var(--radius);
+}
+
+.segmented button:last-child,
+.weekdays button:last-child {
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+.segmented button.on,
+.weekdays button.on {
+  position: relative;
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.editorFoot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-top: 1px solid var(--border);
+}
+
+.editorFoot button {
+  height: 28px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  font-size: 12.5px;
+}
+
+.editorFoot button[data-primary] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.editorFoot button[data-danger] {
+  color: var(--danger);
+}
+
+.editorFoot button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.spacer {
+  flex: 1;
+}

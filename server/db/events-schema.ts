@@ -5,7 +5,7 @@ import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 export const EVENT_OPS = ['create', 'edit', 'delete', 'archive', 'unarchive'] as const
 export type EventOp = (typeof EVENT_OPS)[number]
 
-export const EVENT_ENTITIES = ['entry', 'node', 'tag', 'image', 'yt-video', 'yt-image', 'yt-tag', 'capture', 'capture-image', 'capture-tag'] as const
+export const EVENT_ENTITIES = ['entry', 'node', 'tag', 'image', 'yt-video', 'yt-image', 'yt-tag', 'capture', 'capture-image', 'capture-tag', 'checklist', 'checklist-mark'] as const
 export type EventEntity = (typeof EVENT_ENTITIES)[number]
 
 export const events = sqliteTable(

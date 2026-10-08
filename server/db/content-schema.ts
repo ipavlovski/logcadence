@@ -375,3 +375,51 @@ export const activitySpans = sqliteTable(
   },
   (t) => [index('activity_spans_end_idx').on(t.endAt)],
 )
+
+// Daily checklists for the dashboard (see shared/checklists.ts and server/lib/checklists.ts).
+
+export const checklists = sqliteTable('checklists', {
+  id: text('id').primaryKey(),
+  title: text('title').notNull(),
+  position: real('position').notNull(),
+  startDate: text('start_date').notNull(), // YYYY-MM-DD, first day it is due
+  endDate: text('end_date'), // last day it is due; null runs on
+  weekdays: integer('weekdays').notNull().default(127), // bit i = weekday i, Sunday first
+  archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+})
+
+// An item is part of its checklist on the days from addedDate up to (not including) removedDate, and on any earlier
+// day it was ticked. Items with ticks are kept when removed, so past days still show what they had.
+export const checklistItems = sqliteTable(
+  'checklist_items',
+  {
+    id: text('id').primaryKey(),
+    checklistId: text('checklist_id')
+      .notNull()
+      .references(() => checklists.id, { onDelete: 'cascade' }),
+    label: text('label').notNull(),
+    target: integer('target').notNull().default(1), // 1 = a checkbox, more = a counter
+    source: text('source'), // ChecklistSource: counts on its own from the app's data
+    position: real('position').notNull(),
+    addedDate: text('added_date').notNull(),
+    removedDate: text('removed_date'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('checklist_items_list_idx').on(t.checklistId, t.position)],
+)
+
+// What was done of an item on a day (by hand; a sourced item's automatic count is added when read).
+export const checklistMarks = sqliteTable(
+  'checklist_marks',
+  {
+    itemId: text('item_id')
+      .notNull()
+      .references(() => checklistItems.id, { onDelete: 'cascade' }),
+    date: text('date').notNull(),
+    count: integer('count').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.itemId, t.date] }), index('checklist_marks_date_idx').on(t.date)],
+)
