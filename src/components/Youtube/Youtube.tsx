@@ -247,7 +247,7 @@ function Listing({ top, lib, loading, error, onImport }: ListingProps) {
   )
 }
 
-function dayLabel(date: string): string {
+export function dayLabel(date: string): string {
   const t = today()
   if (date === t) return 'Today'
   if (date === shiftDate(t, -1)) return 'Yesterday'
@@ -262,7 +262,7 @@ function limitFor(shown: YtVideoSummary[], anchor: YtAnchor): number {
   return i + PAGE
 }
 
-function scrollParent(el: HTMLElement): HTMLElement | null {
+export function scrollParent(el: HTMLElement): HTMLElement | null {
   for (let p = el.parentElement; p; p = p.parentElement) if (/auto|scroll/.test(getComputedStyle(p).overflowY)) return p
   return null
 }
@@ -646,9 +646,8 @@ function VideoPage({ id, lib }: { id: string; lib: YtLibraryDTO | undefined }) {
 
           <TextSection
             key={`notes|${v.id}`}
-            videoId={v.id}
-            section="notes"
             title="Notes"
+            {...ytImageOps(v.id, 'notes')}
             text={v.notes}
             images={v.images}
             activeId={v.activeImageId}
@@ -659,9 +658,8 @@ function VideoPage({ id, lib }: { id: string; lib: YtLibraryDTO | undefined }) {
           />
           <TextSection
             key={`comments|${v.id}`}
-            videoId={v.id}
-            section="comments"
             title="Comments"
+            {...ytImageOps(v.id, 'comments')}
             text={v.comments}
             images={v.commentImages}
             activeId={v.commentsActiveImageId}
@@ -683,6 +681,13 @@ function VideoPage({ id, lib }: { id: string; lib: YtLibraryDTO | undefined }) {
   )
 }
 
+/** A video's image calls for one of its sections. */
+const ytImageOps = (id: string, section: YtImageSection) => ({
+  upload: (file: File) => unwrap(api.youtube.videos[':id'].images[':section'].$post({ param: { id, section }, form: { file } })),
+  deleteImage: (imageId: string) => unwrap(api.youtube.images[':id'].$delete({ param: { id: imageId } })),
+  reorder: (ids: string[]) => unwrap(api.youtube.videos[':id'].images[':section'].order.$post({ param: { id, section }, json: { ids } })),
+})
+
 /** The thumbnail, large: the downloaded one, or until then YouTube's (maxres isn't made for every video: on a 404, hq). */
 function Thumbnail({ v }: { v: YtVideoSummary }) {
   // The downloaded copy; until it's there, YouTube's own.
@@ -697,8 +702,6 @@ function Thumbnail({ v }: { v: YtVideoSummary }) {
 const THUMB_SIZE = { maxres: 'Thumbnail: 1280×720 (the largest YouTube makes)', sd: 'Thumbnail: 640×480', hq: 'Thumbnail: 480×360', none: 'YouTube has no thumbnail for this video' }
 
 interface TextSectionProps {
-  videoId: string
-  section: YtImageSection
   title: string
   text: string
   images: ImageDTO[]
@@ -706,17 +709,20 @@ interface TextSectionProps {
   empty: string
   onSave: (text: string) => void
   onActivate: (imageId: string) => void
+  upload: (file: File) => Promise<unknown>
+  deleteImage: (imageId: string) => Promise<unknown>
+  reorder: (ids: string[]) => Promise<unknown>
   /** After images were added, removed or reordered. */
   onImages: () => void
 }
 
 /** Markdown text (click to edit, saved when editing ends) and its gallery: pasted or dropped images, gifs and videos join it. */
-function TextSection({ videoId, section, title, text, images, activeId, empty, onSave, onActivate, onImages }: TextSectionProps) {
+export function TextSection({ title, text, images, activeId, empty, onSave, onActivate, upload: uploadOne, deleteImage, reorder, onImages }: TextSectionProps) {
   const [editing, setEditing] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const imageOp = (p: Promise<unknown>) => p.catch(fail).finally(onImages)
   const upload = async (files: File[]) => {
-    for (const file of files) await unwrap(api.youtube.videos[':id'].images[':section'].$post({ param: { id: videoId, section }, form: { file } })).catch(fail)
+    for (const file of files) await uploadOne(file).catch(fail)
     onImages()
   }
   const onDrop = (e: DragEvent) => {
@@ -763,8 +769,8 @@ function TextSection({ videoId, section, title, text, images, activeId, empty, o
             images={images}
             activeId={activeId}
             onActivate={onActivate}
-            onDelete={(imageId) => imageOp(unwrap(api.youtube.images[':id'].$delete({ param: { id: imageId } })))}
-            onReorder={(ids) => imageOp(unwrap(api.youtube.videos[':id'].images[':section'].order.$post({ param: { id: videoId, section }, json: { ids } })))}
+            onDelete={(imageId) => imageOp(deleteImage(imageId))}
+            onReorder={(ids) => imageOp(reorder(ids))}
           />
         </div>
       )}
@@ -822,7 +828,7 @@ function PlayLogo() {
   )
 }
 
-function ArrowIcon({ dir }: { dir: -1 | 1 }) {
+export function ArrowIcon({ dir }: { dir: -1 | 1 }) {
   return (
     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d={dir < 0 ? 'M19 12H5M11 6l-6 6 6 6' : 'M5 12h14M13 6l6 6-6 6'} />
@@ -830,7 +836,7 @@ function ArrowIcon({ dir }: { dir: -1 | 1 }) {
   )
 }
 
-function PlusIcon() {
+export function PlusIcon() {
   return (
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
       <path d="M12 5v14M5 12h14" />
@@ -838,7 +844,7 @@ function PlusIcon() {
   )
 }
 
-function SearchIcon() {
+export function SearchIcon() {
   return (
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
       <circle cx="10.5" cy="10.5" r="6.5" />

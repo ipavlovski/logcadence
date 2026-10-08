@@ -388,6 +388,94 @@ export interface YtThumbStatus {
   error: string | null
 }
 
+// ── Reddit and Bookmarks canvas tabs (pages captured by the Chrome extension) ──
+
+export type CaptureKind = 'reddit' | 'bookmark'
+export type CaptureSection = 'notes' | 'comments'
+
+/** A capture in the listing. */
+export interface CaptureSummary {
+  id: string
+  kind: CaptureKind
+  url: string
+  title: string
+  /** A bookmark's host ("example.com"); a Reddit post's subreddit ("r/selfhosted"). */
+  site: string
+  /** Favicon, or the subreddit's icon. */
+  iconUrl: string | null
+  /** The whole screenshot, and the top of it (480 px wide) for the grid. */
+  screenshotUrl: string
+  thumbUrl: string | null
+  width: number | null
+  height: number | null
+  /** Reddit posts, as the page showed them when captured. */
+  author: string | null
+  score: number | null
+  commentCount: number | null
+  postedAt: number | null
+  /** First captured (epoch ms) and that local day. */
+  capturedAt: number
+  capturedDate: string
+  /** Last edited or captured again. */
+  updatedAt: number
+  /** Tag paths, primary first: the tab's own tags. */
+  tags: string[]
+  /** Notes or note images were added. */
+  hasNotes: boolean
+  /** Comments or comment screenshots were added. */
+  hasComments: boolean
+}
+
+export interface CaptureDTO extends CaptureSummary {
+  notes: string
+  activeImageId: string | null
+  images: ImageDTO[]
+  comments: string
+  commentsActiveImageId: string | null
+  commentImages: ImageDTO[]
+}
+
+export interface CaptureLibraryDTO {
+  items: CaptureSummary[]
+  /** Captures tagged with exactly each path (as TagInfo, with `archived` always 0). */
+  tags: TagInfo[]
+}
+
+export interface UpdateCaptureBody {
+  notes?: string
+  comments?: string
+  tags?: string[]
+  activeImageId?: string | null
+  commentsActiveImageId?: string | null
+}
+
+/** What the extension sends to POST /api/capture. Images are data: urls (jpeg, png or webp). */
+export interface CaptureRequest {
+  /** reddit: a post; bookmark: any page; comment: a screenshot for the comments of a Reddit post already captured. */
+  target: CaptureKind | 'comment'
+  url: string
+  title: string
+  image: string
+  /** The top of the image, 480 px wide, for the grid. */
+  thumb?: string
+  width?: number
+  height?: number
+  /** Favicon, or the subreddit's icon. */
+  icon?: string
+  /** Read from a Reddit post's page. */
+  post?: { subreddit?: string; author?: string; score?: number; comments?: number; postedAt?: number }
+}
+
+export interface CaptureResult {
+  kind: CaptureKind
+  id: string
+  title: string
+  /** False when the page was captured before: its screenshot was replaced. */
+  created: boolean
+  /** The image went to the post's comments. */
+  comment: boolean
+}
+
 export interface UpdateYtVideoBody {
   notes?: string
   comments?: string

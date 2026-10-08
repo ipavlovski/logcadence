@@ -1,0 +1,55 @@
+/* The Reddit and Bookmarks tabs take the YouTube tab's look (Youtube.module.css); these are their own bits. */
+
+/* Screenshots are shown from their top: a post's title, a page's header. */
+.shotThumb img {
+  object-position: top;
+}
+
+/* Posts are taller than videos: a deeper card shows more of them. */
+.postGrid .shotThumb {
+  aspect-ratio: 4 / 3;
+}
+
+.siteIcon {
+  background: var(--surface-2);
+  object-fit: contain;
+}
+
+.ownerText {
+  min-width: 0;
+}
+
+.url {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The whole screenshot, at most its own width; a long post scrolls with the page. */
+.shot {
+  display: block;
+  margin-top: 16px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface-2);
+  cursor: zoom-in;
+}
+
+.shot img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+
+/* Notes and comments can both show. */
+.badge {
+  width: auto;
+  min-width: 22px;
+  padding: 0 5px;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+}

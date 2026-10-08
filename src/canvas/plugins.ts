@@ -1,6 +1,7 @@
 import { lazy, type ComponentType, type LazyExoticComponent } from 'react'
 import { Activity } from '../components/Activity/Activity.tsx'
 import { AiChats } from '../components/AiChats/AiChats.tsx'
+import { Bookmarks, Reddit } from '../components/Captures/Captures.tsx'
 import { Progress } from '../components/Progress/Progress.tsx'
 import { Shortcuts } from '../components/Shortcuts/Shortcuts.tsx'
 import { Spotify } from '../components/Spotify/Spotify.tsx'
@@ -33,6 +34,8 @@ export const PLUGINS: CanvasPlugin[] = [
   { type: 'shortcuts', title: 'Shortcuts', description: 'An app’s hotkeys from its shortcuts:<app> entries on a keyboard; hold a modifier to see its layer, clashes flagged.', Component: Shortcuts },
   { type: 'spotify', title: 'Spotify', description: 'What is playing, every song played per day and its playlist, continue yesterday’s playlist, play and like heatmaps.', Component: Spotify },
   { type: 'youtube', title: 'YouTube', description: 'Videos imported from your playlists, by the day they were discovered, with notes, images and tags of their own.', Component: Youtube },
+  { type: 'reddit', title: 'Reddit', description: 'Reddit posts captured with the Chrome extension: a screenshot of each whole post, by subreddit and day, with comments, notes and tags.', Component: Reddit },
+  { type: 'bookmarks', title: 'Bookmarks', description: 'Pages bookmarked with the Chrome extension, with a screenshot, title and favicon, by day, with notes and tags.', Component: Bookmarks },
   { type: 'images', title: 'Images', description: 'Browse every image pasted into the journal.' },
   { type: 'progress', title: 'Progress', description: 'Project progress over time: tasks:progress entries, one line per primary tag, one circle per day.', Component: Progress },
   { type: 'ai-prompts', title: 'AI', description: 'Chats imported from Claude, Claude Code, Gemini and Antigravity, with full transcripts.', Component: AiChats },

@@ -1,4 +1,4 @@
-import { index, integer, primaryKey, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 import type { ChatMessage } from '../../shared/types.ts'
 
 // content.db: the notes. Entries belong to a journal day; nodes are an entry's children.
@@ -281,6 +281,84 @@ export const ytImages = sqliteTable(
     createdAt: integer('created_at').notNull(),
   },
   (t) => [index('yt_images_video_idx').on(t.videoId, t.position)],
+)
+
+// Web pages captured by the Chrome extension (extension/) for the canvas Reddit and Bookmarks tabs (see
+// server/lib/captures.ts): a screenshot with the page's url, title and icon, plus notes, comments, images and tags
+// of their own. Each kind has its own tag set, apart from the journal's and from each other's.
+
+export const captures = sqliteTable(
+  'captures',
+  {
+    id: text('id').primaryKey(),
+    kind: text('kind', { enum: ['reddit', 'bookmark'] }).notNull(),
+    // What makes two captures the same page: a Reddit post's id ("1kq2x3v"), or a bookmark's url without its #fragment.
+    key: text('key').notNull(),
+    url: text('url').notNull(),
+    title: text('title').notNull(),
+    site: text('site').notNull().default(''), // a bookmark's host ("example.com"); a Reddit post's subreddit ("r/selfhosted")
+    icon: text('icon'), // favicon, or the subreddit's icon: a file under data/assets
+    // The screenshot (a whole Reddit post, stitched; a bookmark's visible page) and the top of it for the grid, jpegs under data/assets.
+    screenshot: text('screenshot').notNull(),
+    screenshotWidth: integer('screenshot_width'),
+    screenshotHeight: integer('screenshot_height'),
+    thumb: text('thumb'),
+    // Reddit posts: as the page showed them when captured.
+    author: text('author'),
+    score: integer('score'),
+    commentCount: integer('comment_count'),
+    postedAt: integer('posted_at'), // epoch ms
+    capturedAt: integer('captured_at').notNull(), // first captured (epoch ms); capturing again replaces the screenshot only
+    capturedDate: text('captured_date').notNull(), // local YYYY-MM-DD of capturedAt
+    notes: text('notes').notNull().default(''), // markdown
+    activeImageId: text('active_image_id'),
+    comments: text('comments').notNull().default(''), // markdown, plus screenshots in capture_images under 'comments'
+    commentsActiveImageId: text('comments_active_image_id'),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => [uniqueIndex('captures_kind_key_idx').on(t.kind, t.key), index('captures_date_idx').on(t.kind, t.capturedDate, t.capturedAt)],
+)
+
+export const captureTags = sqliteTable(
+  'capture_tags',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    kind: text('kind', { enum: ['reddit', 'bookmark'] }).notNull(),
+    path: text('path').notNull(), // ancestors are implicit
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [uniqueIndex('capture_tags_kind_path_idx').on(t.kind, t.path)],
+)
+
+export const captureItemTags = sqliteTable(
+  'capture_item_tags',
+  {
+    captureId: text('capture_id')
+      .notNull()
+      .references(() => captures.id, { onDelete: 'cascade' }),
+    tagId: integer('tag_id')
+      .notNull()
+      .references(() => captureTags.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(), // lowest is the primary tag
+  },
+  (t) => [primaryKey({ columns: [t.captureId, t.tagId] }), index('capture_item_tags_tag_idx').on(t.tagId)],
+)
+
+// Images pasted or dropped into a capture's notes or comments, and comment screenshots sent by the extension.
+export const captureImages = sqliteTable(
+  'capture_images',
+  {
+    id: text('id').primaryKey(),
+    captureId: text('capture_id')
+      .notNull()
+      .references(() => captures.id, { onDelete: 'cascade' }),
+    section: text('section', { enum: ['notes', 'comments'] }).notNull(),
+    file: text('file').notNull(),
+    mime: text('mime').notNull(),
+    position: real('position').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('capture_images_capture_idx').on(t.captureId, t.position)],
 )
 
 // Computer activity for the canvas Activity tab (see server/lib/activity.ts). `input` spans are stretches of

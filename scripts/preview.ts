@@ -81,6 +81,16 @@ if (WSL) {
   if (r.includes('ERROR')) throw new Error(r)
 }
 
+// The Chrome extension (extension/), where Chrome on Windows can load it unpacked (a WSL path doesn't load
+// reliably). After a change, its reload button on chrome://extensions picks it up.
+const extension = path.join(localAppData, 'LogcadenceChromeExtension')
+step(`copying the Chrome extension to ${WSL ? `${out('wslpath', ['-w', localAppData])}\\LogcadenceChromeExtension` : extension}`)
+if (WSL) run('rsync', ['-r', '--delete', 'extension/', `${extension}/`])
+else {
+  const r = out('robocopy', ['extension', extension, '/MIR', '/NFL', '/NDL', '/NJH', '/NJS', '/NP'], { ok: true })
+  if (r.includes('ERROR')) throw new Error(r)
+}
+
 step(wasRunning ? 'restarting' : 'starting')
 // Start menu shortcut, for reopening it without a rebuild (written every time, in case it was removed).
 const shortcutScript = (dir: string) => `$s = (New-Object -ComObject WScript.Shell).CreateShortcut("$env:APPDATA\\Microsoft\\Windows\\Start Menu\\Programs\\LogcadenceDev.lnk")

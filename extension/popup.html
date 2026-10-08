@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Logcadence capture</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <img src="icons/icon-32.png" alt="" width="20" height="20" />
+      <strong>Logcadence</strong>
+      <span id="status" class="status" title="">checking…</span>
+    </header>
+
+    <section class="page">
+      <img id="favicon" alt="" width="16" height="16" />
+      <div>
+        <div id="title" class="title"></div>
+        <div id="host" class="host"></div>
+      </div>
+    </section>
+
+    <section id="actions" class="actions">
+      <!-- On a Reddit post -->
+      <button id="reddit" class="primary" hidden>Capture post → Reddit</button>
+      <button id="comment" hidden title="What's on screen goes to the comments of this post (captured before)">Add as comment</button>
+      <!-- Anywhere -->
+      <button id="bookmark">Bookmark this page</button>
+    </section>
+
+    <p id="result" class="result" hidden></p>
+
+    <footer>
+      <label>Send to <select id="port"></select></label>
+      <span class="keys">Alt+Shift+D captures right away</span>
+    </footer>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

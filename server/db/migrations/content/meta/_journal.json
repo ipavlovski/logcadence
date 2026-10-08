@@ -64,6 +64,13 @@
       "when": 1791292709342,
       "tag": "0008_typical_echo",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1791421087731,
+      "tag": "0009_awesome_lucky_pierre",
+      "breakpoints": true
     }
   ]
 }

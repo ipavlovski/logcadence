@@ -40,6 +40,10 @@ export const CONTENT_TABLES = {
   yt_tags: content.ytTags,
   yt_video_tags: content.ytVideoTags,
   yt_images: content.ytImages,
+  captures: content.captures,
+  capture_tags: content.captureTags,
+  capture_item_tags: content.captureItemTags,
+  capture_images: content.captureImages,
 }
 export const EVENTS_TABLES = { events: events.events }
 

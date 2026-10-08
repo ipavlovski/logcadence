@@ -1,0 +1,140 @@
+:root {
+  color-scheme: dark;
+  --bg: #282c34;
+  --surface: #31353f;
+  --text: #e5e7eb;
+  --muted: #9aa1ad;
+  --accent: #61afef;
+  --ok: #98c379;
+  --error: #e06c75;
+}
+
+body {
+  width: 300px;
+  margin: 0;
+  padding: 12px;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.4 system-ui, sans-serif;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.status::before {
+  content: '●';
+  margin-right: 4px;
+}
+
+.status.ok::before {
+  color: var(--ok);
+}
+
+.status.off::before {
+  color: var(--error);
+}
+
+.page {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 12px 0;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.page img {
+  margin-top: 2px;
+  flex: none;
+}
+
+.page > div {
+  min-width: 0;
+}
+
+.title {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.host {
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+button {
+  padding: 7px 10px;
+  border: 1px solid #454b57;
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #1b1f24;
+  font-weight: 600;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.result {
+  margin: 10px 0 0;
+}
+
+.result.ok {
+  color: var(--ok);
+}
+
+.result.error {
+  color: var(--error);
+}
+
+footer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+select {
+  margin-left: 4px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid #454b57;
+  border-radius: 4px;
+  font: inherit;
+}

@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Logcadence capture",
+  "version": "0.1.0",
+  "description": "Sends a screenshot of the page (a whole Reddit post, stitched) with its url, title and favicon to Logcadence.",
+  "permissions": ["activeTab", "scripting", "storage", "favicon"],
+  "host_permissions": ["http://127.0.0.1/*", "https://*.reddit.com/*", "https://*.redditmedia.com/*", "https://*.redditstatic.com/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Capture to Logcadence (Alt+Shift+S)",
+    "default_icon": { "16": "icons/icon-16.png", "32": "icons/icon-32.png", "48": "icons/icon-48.png", "128": "icons/icon-128.png" }
+  },
+  "icons": { "16": "icons/icon-16.png", "32": "icons/icon-32.png", "48": "icons/icon-48.png", "128": "icons/icon-128.png" },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": { "default": "Alt+Shift+S" },
+      "description": "Open the capture popup"
+    },
+    "capture-now": {
+      "suggested_key": { "default": "Alt+Shift+D" },
+      "description": "Capture right away: a Reddit post to Reddit, any other page to Bookmarks"
+    }
+  }
+}

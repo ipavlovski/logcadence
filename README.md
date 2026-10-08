@@ -78,10 +78,37 @@ The canvas **Shortcuts** tab draws an app's hotkeys on a keyboard. They come fro
 
 Re-imports append new turns and refresh nodes and titles that still read as imported; anything edited by hand is left alone, and a deleted entry is not recreated. `LOGCADENCE_AI_HOMES` (path-delimited) overrides the home directories that are scanned.
 
+## Chrome extension: Reddit and Bookmarks
+
+The canvas **Reddit** and **Bookmarks** tabs are filled by the Chrome extension in `extension/`, which sends a screenshot of the page with its url, title and favicon to the running app. A Reddit post goes to **Reddit** as one screenshot of the whole post, scrolled through and stitched, with its subreddit, author, points, comment count and post date. Any other page goes to **Bookmarks** as what's on screen. Each capture gets tags and notes in the app, and Reddit posts also get comments. Capturing a page again replaces its screenshot and keeps the rest.
+
+**Install**
+
+1. Run `pnpm preview`. It copies `extension/` to `%LOCALAPPDATA%\LogcadenceChromeExtension`, since Chrome on Windows doesn't load an unpacked extension reliably from a WSL path.
+2. In Chrome, open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and pick `%LOCALAPPDATA%\LogcadenceChromeExtension`.
+3. Pin the extension to the toolbar (optional).
+4. In the popup, set **Send to** to the app that should receive captures: Logcadence (port 3002) or LogcadenceDev (port 3003). A green dot means that app is running.
+
+After `pnpm preview` brings a change to the extension, click its reload button on `chrome://extensions`.
+
+**Shortcuts**
+
+| keys | what it does |
+| --- | --- |
+| `Alt+Shift+S` | Opens the popup (same as the toolbar button). On a Reddit post it offers **Capture post → Reddit**, **Add as comment** and **Save as bookmark instead**; on any other page, **Bookmark this page** |
+| `Alt+Shift+D` | Captures right away: a Reddit post to Reddit, any other page to Bookmarks. The toolbar icon shows ✓ or !; hover it for the message |
+
+Both can be changed at `chrome://extensions/shortcuts`.
+
+**Add as comment** puts what's on screen into the Comments of a post captured before: scroll to a comment thread on the post, then capture it. Screenshots can also be pasted or dropped into a capture's Notes or Comments in the app.
+
+The extension POSTs to `http://127.0.0.1:<port>/api/capture` (body: `CaptureRequest` in `shared/types.ts`, images as jpeg `data:` urls) with an `x-logcadence-capture` header. A web page can't add that header to a request to another origin without a CORS preflight, which the server never answers, so pages open in the browser can't send captures. An open tab picks up new captures within a few seconds, or as soon as the app window gets focus.
+
 ## Layout
 
 ```
 electron/        desktop app: main process (runs the server), preload bridge, setup window, import worker, updater
+extension/       Chrome extension (Manifest V3, no build step) that captures pages for the Reddit and Bookmarks tabs
 shared/          domain types, tag paths, dates, ids, desktop bridge types (shared with the electron / future react-native apps)
 server/
   db/            schemas + migrations for content.db and events.db
@@ -91,7 +118,7 @@ server/
 src/
   state/         panes/tabs store, change bus, journal cursor, UI state
   components/    Journal, Tags, Canvas (frame only), Pane, Spotlight, dialogs
-  canvas/        canvas plugin registry (AI chats, Progress, Shortcuts, Spotify and Map are built; Images is a placeholder)
+  canvas/        canvas plugin registry (AI chats, Progress, Shortcuts, Spotify, Map, YouTube, Reddit and Bookmarks are built; Images is a placeholder)
   shortcuts.ts   every keyboard shortcut, used by the handler and the help overlay (press ?)
 ```
 
