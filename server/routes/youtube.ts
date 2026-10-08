@@ -5,7 +5,7 @@ import { Hono } from 'hono'
 import { validator } from 'hono/validator'
 import type { UpdateYtVideoBody, YtImageSection } from '../../shared/types.ts'
 import { ASSETS_DIR } from '../db/client.ts'
-import { addImage, addPlaylist, deleteImage, deleteTag, deleteVideo, getVideo, importAll, importPlaylist, library, listPlaylists, moveTag, removePlaylist, reorderImages, updateVideo } from '../lib/youtube/library.ts'
+import { addImage, addingPlaylists, addPlaylist, deleteImage, deleteTag, deleteVideo, getVideo, importAll, importPlaylist, library, listPlaylists, moveTag, removePlaylist, reorderImages, updateVideo } from '../lib/youtube/library.ts'
 import { checkKey } from '../lib/youtube/dataApi.ts'
 import { YoutubeError } from '../lib/youtube/playlist.ts'
 import { publicSettings, saveSettings } from '../lib/youtube/settings.ts'
@@ -105,7 +105,7 @@ export const youtubeRoutes = new Hono()
   )
 
   // ── playlists and the importer ──
-  .get('/youtube/playlists', (c) => c.json({ playlists: listPlaylists(), settings: publicSettings(), thumbs: thumbStatus() }))
+  .get('/youtube/playlists', (c) => c.json({ playlists: listPlaylists(), adding: addingPlaylists(), settings: publicSettings(), thumbs: thumbStatus() }))
   .post(
     '/youtube/playlists',
     validator('json', (v) => ({ url: str(obj(v), 'url') })),

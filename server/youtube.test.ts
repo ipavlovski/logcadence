@@ -309,6 +309,27 @@ describe('large imports: retries, failures, thumbnails', () => {
     expect(await req<YtLibraryDTO>('GET', '/api/youtube/library')).toEqual(before)
   })
 
+  it('reports the progress of a playlist being added, before it is in the list', async () => {
+    const { db } = await import('./db/client.ts')
+    const { ytPlaylists } = await import('./db/content-schema.ts')
+    db.delete(ytPlaylists).run()
+    let release!: () => void
+    const gate = new Promise<void>((r) => (release = r))
+    const yt = youtube([V(1), V(2), V(3)])
+    const held = (async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input).includes('youtubei')) await gate // hold the second page
+      return yt(input, init)
+    }) as typeof fetch
+    const adding = lib.addPlaylist(LIST, held)
+    await new Promise((r) => setTimeout(r, 20))
+    expect(lib.listPlaylists()).toEqual([])
+    expect(lib.addingPlaylists()).toEqual([{ id: LIST, progress: { phase: 'listing', done: 3, total: 4123 } }])
+    release()
+    await adding
+    expect(lib.addingPlaylists()).toEqual([])
+    expect(lib.listPlaylists()).toHaveLength(1)
+  })
+
   it('explains a network failure when adding a playlist (not an internal error)', async () => {
     const offline = (async () => {
       throw new TypeError('fetch failed')

@@ -313,6 +313,12 @@ export async function addPlaylist(input: string, fetchFn?: typeof fetch): Promis
   return store(playlist, fetchFn)
 }
 
+/** Playlists being added: their progress, until they are in the list (which happens once they are read). */
+export function addingPlaylists(): { id: string; progress: ImportProgress }[] {
+  const listed = new Set(db.select({ id: ytPlaylists.id }).from(ytPlaylists).all().map((r) => r.id))
+  return [...progress].filter(([id]) => !listed.has(id)).map(([id, p]) => ({ id, progress: p }))
+}
+
 /** Stops importing a playlist; its videos stay. */
 export function removePlaylist(id: string) {
   db.delete(ytPlaylists).where(eq(ytPlaylists.id, id)).run()

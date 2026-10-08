@@ -97,6 +97,12 @@ export function YoutubeImport({ onClose }: { onClose: () => void }) {
               {busy === 'add' ? 'Importing…' : 'Add'}
             </button>
           </div>
+          {/* A new playlist joins the list once it's read; until then its progress shows here. */}
+          {data?.adding.map((a) => (
+            <p key={a.id} className={styles.progress}>
+              {progressText(a.progress)}
+            </p>
+          ))}
         </section>
 
         <section>
