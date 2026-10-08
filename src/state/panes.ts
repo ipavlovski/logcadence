@@ -196,6 +196,18 @@ export function setPaneOpen(pane: PaneId, isOpen: boolean, weights: Partial<Reco
   }))
 }
 
+/** Focuses a pane (ctrl+1/2/3). A minimized side pane is restored first when `restore`, otherwise left as is. */
+export function focusPane(pane: PaneId, restore: boolean) {
+  panesStore.set((s) => (s.open[pane] ? (s.focus === pane ? s : { ...s, focus: pane }) : restore ? { ...s, open: { ...s.open, [pane]: true }, focus: pane } : s))
+}
+
+/** Minimizes a side pane or restores and focuses it (ctrl+b / ctrl+t). */
+export function togglePane(pane: PaneId) {
+  const isOpen = !panesStore.get().open[pane]
+  setPaneOpen(pane, isOpen)
+  if (isOpen) setFocus(pane)
+}
+
 export function setWeights(weights: Partial<Record<PaneId, number>>) {
   panesStore.set((s) => ({ ...s, weights: { ...s.weights, ...weights } }))
 }

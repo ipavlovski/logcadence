@@ -9,9 +9,11 @@ interface Props {
   spotlight?: boolean
   /** A window-sized dialog that lays out its own content (no padding or title). */
   large?: boolean
+  /** Extra class on the dialog, e.g. to size a large one. */
+  className?: string
 }
 
-export function Modal({ title, onClose, children, spotlight, large }: Props) {
+export function Modal({ title, onClose, children, spotlight, large, className }: Props) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -25,7 +27,7 @@ export function Modal({ title, onClose, children, spotlight, large }: Props) {
 
   return (
     <div className={`${styles.scrim} ${spotlight ? styles.top : ''}`} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className={`${styles.dialog} ${spotlight ? styles.wide : ''} ${large ? styles.large : ''}`} role="dialog" aria-label={title}>
+      <div className={`${styles.dialog} ${spotlight ? styles.wide : ''} ${large ? styles.large : ''} ${className ?? ''}`} role="dialog" aria-label={title}>
         {title && !large && <h2 className={styles.title}>{title}</h2>}
         {children}
       </div>

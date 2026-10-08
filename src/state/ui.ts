@@ -2,6 +2,7 @@ import type { PaneId } from './panes.ts'
 import { createStore, persistedStore } from './store.ts'
 
 export type SpotlightMode = 'tags' | 'search'
+export type SettingsSection = 'general' | PaneId
 
 export interface NewEntryDefaults {
   date: string
@@ -13,6 +14,8 @@ interface UiState {
   spotlight: SpotlightMode | null
   newEntry: NewEntryDefaults | null
   help: boolean
+  /** Open section of the Settings window; null = closed. */
+  settings: SettingsSection | null
   /** Per-pane find (ctrl+f) query; undefined = find bar closed. */
   find: Partial<Record<PaneId, string>>
   /** Bumped to re-focus an already open find bar. */
@@ -20,7 +23,7 @@ interface UiState {
   toast: { id: number; message: string } | null
 }
 
-export const uiStore = createStore<UiState>({ spotlight: null, newEntry: null, help: false, find: {}, findFocus: 0, toast: null })
+export const uiStore = createStore<UiState>({ spotlight: null, newEntry: null, help: false, settings: null, find: {}, findFocus: 0, toast: null })
 
 export function openSpotlight(mode: SpotlightMode | null) {
   uiStore.set((s) => ({ ...s, spotlight: mode }))
@@ -32,6 +35,10 @@ export function openNewEntry(defaults: NewEntryDefaults | null) {
 
 export function toggleHelp(open?: boolean) {
   uiStore.set((s) => ({ ...s, help: open ?? !s.help }))
+}
+
+export function openSettings(section: SettingsSection | null) {
+  uiStore.set((s) => ({ ...s, settings: section }))
 }
 
 export function openFind(pane: PaneId) {
@@ -58,15 +65,13 @@ interface Prefs {
   includeSubtags: boolean
   /** Expanded paths in the tag tree. */
   expanded: string[]
+  /** A pane's focus shortcut (ctrl+1/2/3) restores it when minimized; off, the shortcut skips a minimized pane. */
+  openHiddenPane: boolean
 }
 
-export const prefsStore = persistedStore<Prefs>('prefs.v1', { theme: 'dark', showArchived: false, includeSubtags: true, expanded: [] }, (s) => ({
-  theme: 'dark',
-  showArchived: false,
-  includeSubtags: true,
-  expanded: [],
-  ...(s as Partial<Prefs>),
-}))
+const DEFAULT_PREFS: Prefs = { theme: 'dark', showArchived: false, includeSubtags: true, expanded: [], openHiddenPane: true }
+
+export const prefsStore = persistedStore<Prefs>('prefs.v1', DEFAULT_PREFS, (s) => ({ ...DEFAULT_PREFS, ...(s as Partial<Prefs>) }))
 
 export function setPref<K extends keyof Prefs>(key: K, value: Prefs[K]) {
   prefsStore.set((s) => ({ ...s, [key]: value }))

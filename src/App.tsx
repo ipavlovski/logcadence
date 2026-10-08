@@ -5,6 +5,7 @@ import { newEntryWithDialog } from './actions.ts'
 import { Modal } from './components/Modal/Modal.tsx'
 import { NewEntryDialog } from './components/NewEntryDialog/NewEntryDialog.tsx'
 import { Pane } from './components/Pane/Pane.tsx'
+import { Settings } from './components/Settings/Settings.tsx'
 import { Splitter } from './components/Splitter/Splitter.tsx'
 import { Spotlight } from './components/Spotlight/Spotlight.tsx'
 import { TagOpDialog } from './components/Tags/TagOpDialog.tsx'
@@ -14,8 +15,8 @@ import { runCommand } from './state/commands.ts'
 import { dayFoldStore } from './state/fold.ts'
 import { journalDateOf, openDate, panesStore, PANES } from './state/panes.ts'
 import { useStore } from './state/store.ts'
-import { openSpotlight, prefsStore, setPref, toggleHelp, uiStore } from './state/ui.ts'
-import { openUpdates, updatesStore } from './state/updates.ts'
+import { openSettings, openSpotlight, prefsStore, toggleHelp, uiStore } from './state/ui.ts'
+import { updatesStore } from './state/updates.ts'
 import styles from './App.module.css'
 
 export function App() {
@@ -48,13 +49,7 @@ export function App() {
           <button onClick={newEntryWithDialog} title="New entry (Ctrl+Shift+N / Alt+Shift+N)">
             + entry
           </button>
-          <button onClick={() => setPref('theme', theme === 'dark' ? 'light' : 'dark')} title="Toggle theme">
-            {theme === 'dark' ? '☾' : '☀'}
-          </button>
-          <button onClick={() => toggleHelp(true)} title="Keyboard shortcuts (Ctrl+/)">
-            ?
-          </button>
-          {window.desktop && <UpdatesButton />}
+          <SettingsButton />
         </div>
       </header>
       <main className={styles.panes}>
@@ -73,6 +68,7 @@ export function App() {
       <TagOpDialog />
       <Help />
       <Toast />
+      <Settings />
       <Updates />
       <UpdatePrompt />
     </div>
@@ -101,11 +97,11 @@ function DayNav() {
   const nav = (e: MouseEvent, d: string) => openDate(d, { newTab: e.ctrlKey || e.metaKey })
   return (
     <nav className={styles.dayNav}>
-      <button title="Previous day (Ctrl+click: new tab)" onClick={(e) => nav(e, shiftDate(date, -1))}>
+      <button title="Previous day (Ctrl+[; Ctrl+click: new tab)" onClick={(e) => nav(e, shiftDate(date, -1))}>
         ‹
       </button>
       <input type="date" value={date} onChange={(e) => e.target.value && openDate(e.target.value)} aria-label="Journal date" />
-      <button title="Next day (Ctrl+click: new tab)" onClick={(e) => nav(e, shiftDate(date, 1))}>
+      <button title="Next day (Ctrl+]; Ctrl+click: new tab)" onClick={(e) => nav(e, shiftDate(date, 1))}>
         ›
       </button>
     </nav>
@@ -142,25 +138,27 @@ function Help() {
           </div>
         ))}
       </section>
-      <p className={styles.helpNote}>Browsers reserve Ctrl+W / Ctrl+N; use the Alt variants on the web. The desktop app gets the Ctrl ones.</p>
+      <p className={styles.helpNote}>Browsers reserve Ctrl+W / Ctrl+N / Ctrl+T / Ctrl+Tab / Ctrl+1…; use the Alt variants on the web where there are some. The desktop app gets the Ctrl ones.</p>
     </Modal>
   )
 }
 
-/** Desktop app only: offers a restart once an update has downloaded (it also installs on quit). */
-/** Opens the Updates window; the dot means an update is downloading or ready. */
-function UpdatesButton() {
+/** Opens Settings (theme, shortcuts, updates…); the dot means an update is downloading or ready. */
+function SettingsButton() {
   const state = useStore(updatesStore, (s) => s.status?.state)
   const pending = state === 'available' || state === 'downloading' || state === 'ready'
   return (
-    <button className={styles.iconButton} onClick={() => openUpdates(true)} title={pending ? 'Updates: an update is downloading or ready' : 'Updates and releases'} aria-label="Updates">
-      <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-        <path d="M8 2.5v7M5 6.75 8 9.75l3-3M3 12.5h10" />
+    <button className={styles.iconButton} onClick={() => openSettings('general')} title={pending ? 'Settings (Ctrl+,): an update is downloading or ready' : 'Settings (Ctrl+,)'} aria-label="Settings">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
       </svg>
       {pending && <i className={styles.badge} />}
     </button>
   )
 }
+
+/** Desktop app only: offers a restart once an update has downloaded (it also installs on quit). */
 
 function UpdatePrompt() {
   const status = useStore(updatesStore, (s) => s.status)
