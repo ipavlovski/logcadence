@@ -22,8 +22,9 @@
 
 .head {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 10px;
+  gap: 2px 10px;
   margin-bottom: 6px;
   font-size: 12.5px;
 }
@@ -77,9 +78,10 @@ rect.selected {
 
 .foot {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 4px 10px;
   margin-top: 4px;
   font-size: 11px;
   color: var(--text-faint);

@@ -42,6 +42,16 @@
   color: var(--text);
 }
 
+/* The canvas dashboard: a heavier icon with more room around it, set apart as the home tab. */
+.pinnedHome {
+  padding: 0 16px;
+}
+
+.pinnedHome svg {
+  width: 18px;
+  height: 18px;
+}
+
 .pinnedActive {
   background: var(--bg);
   color: var(--text);
@@ -206,4 +216,38 @@
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+}
+
+/* Canvas plugin tabs: just the plugin's icon (its name on hover). */
+.iconTab {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.iconTab:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--bg) 50%, transparent);
+}
+
+.iconTab.active {
+  background: var(--bg);
+  border-color: var(--border);
+  color: var(--accent);
+  margin-bottom: -1px;
+  height: 29px;
+}
+
+.vTab.vIcon {
+  writing-mode: horizontal-tb;
+  display: grid;
+  place-items: center;
+  padding: 8px 0;
 }

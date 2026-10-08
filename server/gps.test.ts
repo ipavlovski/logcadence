@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import type { GpsDayDTO } from '../shared/types.ts'
+import type { GpsDayDTO, TravelDay } from '../shared/types.ts'
 import { classifyDay, detectStays, simplify, totals, type Place } from './lib/gps/classify.ts'
 import { parseGpx, type GpsPoint } from './lib/gps/gpx.ts'
 
@@ -148,6 +148,18 @@ describe('GPS files', () => {
     expect(day.segments.map((s) => s.kind)).toEqual(['A', 'A->B', 'B', 'B->A', 'A', 'A->A', 'A', 'gap', 'A'])
     expect(day.places.map((p) => p.id).sort()).toEqual([day.homebaseId, day.segments[2]!.placeId].sort())
     expect((await req<{ days: { date: string }[] }>('GET', '/api/gps/days')).json.days.map((d) => d.date)).toEqual([DATE])
+  })
+
+  it('sums distance and time on the move per day for the dashboard', async () => {
+    const { json: day } = await req<GpsDayDTO>('GET', `/api/gps/day/${DATE}`)
+    const moving = day.segments.filter((s) => ['A->B', 'B->B', 'B->A', 'A->A'].includes(s.kind))
+    const { json } = await req<{ days: TravelDay[] }>('GET', `/api/gps/travel?from=2026-09-11&to=${DATE}`)
+    expect(json.days).toEqual([
+      { date: DATE, distanceM: moving.reduce((n, s) => n + s.distanceM, 0), movingMs: moving.reduce((n, s) => n + s.end - s.start, 0) },
+    ])
+    expect(json.days[0]!.distanceM).toBeGreaterThan(0)
+    expect((await req<{ days: TravelDay[] }>('GET', '/api/gps/travel?from=2026-09-18&to=2026-09-24')).json.days).toEqual([])
+    expect((await req('GET', '/api/gps/travel?from=2026-09-18&to=2026-09-11')).status).toBe(400)
   })
 
   it('names places and re-classifies a day around a hand-picked homebase', async () => {

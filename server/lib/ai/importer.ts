@@ -5,7 +5,7 @@ import path from 'node:path'
 import { and, desc, eq, inArray, like, sql } from 'drizzle-orm'
 import { toIsoDate } from '../../../shared/dates.ts'
 import { chatTag } from '../../../shared/tags.ts'
-import type { ChatDTO, ChatMessage, ChatSource, ChatSummary, ImportCounts, ImportReport } from '../../../shared/types.ts'
+import type { ChatDTO, ChatMessage, ChatSource, ChatSummary, DayCount, ImportCounts, ImportReport } from '../../../shared/types.ts'
 import { db } from '../../db/client.ts'
 import { chats, entries, nodes } from '../../db/content-schema.ts'
 import { entryPositionAfter, setEntryTags } from '../content.ts'
@@ -344,6 +344,22 @@ const toSummary = ({ entryDate, ...r }: SummaryRow): ChatSummary => ({
 
 export function listChats(): ChatSummary[] {
   return db.select(summaryCols).from(chats).leftJoin(entries, eq(entries.id, chats.entryId)).orderBy(desc(chats.startedAt)).all().map(toSummary)
+}
+
+/** Prompts sent per local day from `from` on, across all chats; a prompt without a time counts on its chat's start. */
+export function promptDays(from: string): DayCount[] {
+  const since = new Date(from + 'T00:00:00').getTime()
+  const rows = db.all<{ ts: number }>(sql`
+    SELECT coalesce(json_extract(m.value, '$.ts'), c.started_at) AS ts
+    FROM ${chats} c, json_each(c.messages) m
+    WHERE json_extract(m.value, '$.role') = 'user'`)
+  const counts = new Map<string, number>()
+  for (const { ts } of rows) {
+    if (ts < since) continue
+    const date = toIsoDate(new Date(ts))
+    counts.set(date, (counts.get(date) ?? 0) + 1)
+  }
+  return [...counts].map(([date, count]) => ({ date, count }))
 }
 
 export function getChat(id: string): ChatDTO | undefined {

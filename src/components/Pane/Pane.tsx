@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react'
 import { formatJournalDate, today } from '../../../shared/dates.ts'
+import { HOME_ICON, pluginIcon } from '../../canvas/icons.tsx'
 import { pluginByType } from '../../canvas/plugins.ts'
-import { activateTab, closeTab, parseKey, PRIMARY, setFocus, setPaneOpen, panesStore, type PaneId } from '../../state/panes.ts'
+import { canvasTabsStore } from '../../state/canvasTabs.ts'
+import { activateTab, closeTab, paneTabs, parseKey, PRIMARY, setFocus, setPaneOpen, panesStore, type PaneId } from '../../state/panes.ts'
 import { useStore } from '../../state/store.ts'
 import { setFind, uiStore } from '../../state/ui.ts'
 import { CanvasDashboard, CanvasPluginTab } from '../Canvas/Canvas.tsx'
@@ -35,28 +37,34 @@ export function Pane({ id }: { id: PaneId }) {
   const focused = useStore(panesStore, (s) => s.focus === id)
   const find = useStore(uiStore, (s) => s.find[id])
   const open = useStore(panesStore, (s) => s.open[id])
+  useStore(canvasTabsStore, (s) => s) // the canvas pane's tabs follow Settings → Canvas
   const primary = PRIMARY[id]
+  const tabs = paneTabs(id, pane)
 
   if (!open)
     return (
       <section className={`${styles.pane} ${styles.minimized}`} data-pane={id} aria-label={`${PANE_LABEL[id]} (minimized)`}>
         <div className={styles.vTabs} role="tablist" aria-orientation="vertical">
-          {pane.tabs.map((key) => (
-            <button
-              key={key}
-              role="tab"
-              aria-selected={key === pane.active}
-              className={`${styles.vTab} ${key === primary ? styles.vPinned : ''} ${key === pane.active ? styles.vActive : ''}`}
-              title={`${tabLabel(key)} · click to restore the pane`}
-              onClick={() => {
-                activateTab(id, key)
-                setPaneOpen(id, true)
-                setFocus(id)
-              }}
-            >
-              {tabLabel(key)}
-            </button>
-          ))}
+          {tabs.map((key) => {
+            const icon = parseKey(key).kind === 'plugin' || key === 'dashboard'
+            return (
+              <button
+                key={key}
+                role="tab"
+                aria-selected={key === pane.active}
+                aria-label={icon ? tabLabel(key) : undefined}
+                className={`${styles.vTab} ${key === primary ? styles.vPinned : ''} ${key === pane.active ? styles.vActive : ''} ${icon ? styles.vIcon : ''}`}
+                title={`${tabLabel(key)} · click to restore the pane`}
+                onClick={() => {
+                  activateTab(id, key)
+                  setPaneOpen(id, true)
+                  setFocus(id)
+                }}
+              >
+                {key === 'dashboard' ? HOME_ICON : icon ? pluginIcon((parseKey(key) as { type: string }).type) : tabLabel(key)}
+              </button>
+            )
+          })}
         </div>
       </section>
     )
@@ -73,16 +81,34 @@ export function Pane({ id }: { id: PaneId }) {
         <div
           role="tab"
           aria-selected={primary === pane.active}
-          className={`${styles.pinned} ${primary === pane.active ? styles.pinnedActive : ''}`}
+          className={`${styles.pinned} ${primary === pane.active ? styles.pinnedActive : ''} ${primary === 'dashboard' ? styles.pinnedHome : ''}`}
           onClick={() => activateTab(id, primary)}
-          title={primary === 'today' ? `Today · ${formatJournalDate(today())}` : tabLabel(primary)}
+          title={primary === 'today' ? `Today · ${formatJournalDate(today())}` : `${tabLabel(primary)} (Ctrl+H)`}
+          aria-label={primary === 'dashboard' ? tabLabel(primary) : undefined}
         >
-          {tabLabel(primary)}
+          {primary === 'dashboard' ? HOME_ICON : tabLabel(primary)}
         </div>
         <div className={styles.tabs}>
-          {pane.tabs
+          {tabs
             .filter((key) => key !== primary)
-            .map((key) => (
+            .map((key) => {
+              const loc = parseKey(key)
+              if (loc.kind === 'plugin')
+                return (
+                  <div
+                    key={key}
+                    role="tab"
+                    aria-selected={key === pane.active}
+                    aria-label={tabLabel(key)}
+                    className={`${styles.iconTab} ${key === pane.active ? styles.active : ''}`}
+                    onClick={() => activateTab(id, key)}
+                    onAuxClick={(e) => e.button === 1 && closeTab(id, key)}
+                    title={tabLabel(key)}
+                  >
+                    {pluginIcon(loc.type)}
+                  </div>
+                )
+              return (
               <div
                 key={key}
                 role="tab"
@@ -104,7 +130,8 @@ export function Pane({ id }: { id: PaneId }) {
                   ×
                 </button>
               </div>
-            ))}
+              )
+            })}
         </div>
       </div>
       {find !== undefined && <FindBar pane={id} query={find} />}

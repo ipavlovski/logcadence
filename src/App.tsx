@@ -6,6 +6,7 @@ import { Modal } from './components/Modal/Modal.tsx'
 import { NewEntryDialog } from './components/NewEntryDialog/NewEntryDialog.tsx'
 import { Pane } from './components/Pane/Pane.tsx'
 import { Settings } from './components/Settings/Settings.tsx'
+import { AppShortcuts } from './components/Shortcuts/Shortcuts.tsx'
 import { Splitter } from './components/Splitter/Splitter.tsx'
 import { Spotlight } from './components/Spotlight/Spotlight.tsx'
 import { TagOpDialog } from './components/Tags/TagOpDialog.tsx'
@@ -69,6 +70,7 @@ export function App() {
       <Help />
       <Toast />
       <Settings />
+      <AppShortcuts />
       <Updates />
       <UpdatePrompt />
     </div>

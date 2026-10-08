@@ -185,3 +185,114 @@ label.row {
 .keyRow kbd + kbd {
   margin-left: 4px;
 }
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  max-width: 55%;
+}
+
+.buttons a {
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: var(--radius);
+  padding: 4px 12px;
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.buttons a:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.tabList {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.tabList li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.tabList label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.tabList b {
+  font-weight: 500;
+}
+
+.tabList .hint {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tabList label > span:last-child {
+  min-width: 0;
+}
+
+.tabList li.off b,
+.tabList li.off .icon {
+  color: var(--text-faint);
+}
+
+.icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--accent);
+}
+
+.move {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+
+.move button,
+.reset {
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text-muted);
+  border-radius: var(--radius);
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+.move button:hover:not(:disabled),
+.reset:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.move button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.reset {
+  margin-top: 10px;
+  padding: 4px 12px;
+}

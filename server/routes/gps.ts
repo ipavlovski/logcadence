@@ -4,7 +4,7 @@ import { isIsoDate } from '../../shared/dates.ts'
 import { disconnect, forget, GoogleAuthError, handleCallback, loginUrl, setClient } from '../lib/gdrive/auth.ts'
 import { DriveError } from '../lib/gdrive/drive.ts'
 import { importNew, importRange, setFolder, status, updateSettings } from '../lib/gps/drive.ts'
-import { addTrip, deleteTrip, getDay, listDays, renamePlace, scanGps, setHomebase } from '../lib/gps/scan.ts'
+import { addTrip, deleteTrip, getDay, listDays, renamePlace, scanGps, setHomebase, travelDays } from '../lib/gps/scan.ts'
 import { bad, notFound, num, obj, optBool, str } from '../lib/validate.ts'
 
 const dateParam = (date: string) => (isIsoDate(date) ? date : bad('invalid date'))
@@ -29,6 +29,13 @@ export const gpsRoutes = new Hono()
   .post('/gps/scan', async (c) => c.json(await scanGps()))
   // Days with GPS data, with time per kind (for a later heatmap/overview).
   .get('/gps/days', (c) => c.json({ days: listDays() }))
+  // Distance and time moving per day in [from, to] (dashboard).
+  .get('/gps/travel', (c) => {
+    const from = c.req.query('from') ?? ''
+    const to = c.req.query('to') ?? ''
+    if (!isIsoDate(from) || !isIsoDate(to) || to < from) bad('from and to must be YYYY-MM-DD, from <= to')
+    return c.json({ days: travelDays(from, to) })
+  })
   .get('/gps/day/:date', (c) => c.json(getDay(dateParam(c.req.param('date'))) ?? notFound('GPS day')))
   .patch(
     '/gps/places/:id',

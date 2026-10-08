@@ -1,9 +1,12 @@
 import { isIsoDate, today } from '../../shared/dates.ts'
 import { isUnder, normalizeTag } from '../../shared/tags.ts'
+import { visibleCanvasTabs } from './canvasTabs.ts'
 import { persistedStore } from './store.ts'
 
 // Three panes (canvas | journal | tags), each with tabs. A tab is identified by its location key;
 // the first tab of each pane is its primary tab, which always exists and cannot be closed.
+// The canvas pane's tabs are fixed instead: the dashboard and one per plugin shown (state/canvasTabs.ts), plus
+// a hidden plugin's tab while it is active.
 
 export type PaneId = 'canvas' | 'journal' | 'tags'
 export const PANES: PaneId[] = ['canvas', 'journal', 'tags']
@@ -43,6 +46,7 @@ export const tagKey = (tag: string) => `tag:${tag}`
 export const pluginKey = (type: string) => `plugin:${type}`
 
 interface PaneState {
+  /** Unused by the canvas pane (see paneTabs). */
   tabs: string[]
   active: string
   /** Visited locations for alt+left/right. */
@@ -82,8 +86,8 @@ function validKey(pane: PaneId, key: string): boolean {
   }
 }
 
-// Tabs saved under a plugin's former name.
-const RENAMED: Record<string, string> = { 'plugin:threads': 'plugin:progress' }
+// Tabs saved under a plugin's former name; the Shortcuts plugin became a window (ctrl+shift+?).
+const RENAMED: Record<string, string> = { 'plugin:threads': 'plugin:progress', 'plugin:shortcuts': 'dashboard' }
 const renamed = (k: unknown) => (typeof k === 'string' ? (RENAMED[k] ?? k) : k)
 
 function revive(stored: unknown): PanesState {
@@ -116,9 +120,19 @@ function update(pane: PaneId, fn: (p: PaneState) => PaneState) {
   })
 }
 
+/** The canvas pane's fixed tabs: the dashboard and the plugins shown. */
+const canvasTabs = () => [PRIMARY.canvas, ...visibleCanvasTabs().map(pluginKey)]
+
+/** Tabs of a pane, in tab-bar order. */
+export function paneTabs(pane: PaneId, p: PaneState): string[] {
+  if (pane !== 'canvas') return p.tabs
+  const tabs = canvasTabs()
+  return tabs.includes(p.active) ? tabs : [...tabs, p.active]
+}
+
 /** Shows `key`: activates its tab if open, otherwise opens it in place of the active tab (or a new one). */
 function place(pane: PaneId, p: PaneState, key: string, newTab: boolean): PaneState {
-  if (p.tabs.includes(key)) return p.active === key ? p : { ...p, active: key }
+  if (pane === 'canvas' || p.tabs.includes(key)) return p.active === key ? p : { ...p, active: key }
   const i = p.tabs.indexOf(p.active)
   const tabs = [...p.tabs]
   if (newTab || p.active === PRIMARY[pane]) tabs.splice(i + 1, 0, key)
@@ -152,12 +166,14 @@ export function openDate(date: string, opts: { newTab?: boolean; focus?: boolean
 }
 
 export function activateTab(pane: PaneId, key: string) {
-  update(pane, (p) => (p.tabs.includes(key) ? pushHistory({ ...p, active: key }) : p))
+  update(pane, (p) => (paneTabs(pane, p).includes(key) ? pushHistory({ ...p, active: key }) : p))
 }
 
 export function closeTab(pane: PaneId, key?: string) {
   update(pane, (p) => {
     const k = key ?? p.active
+    // Only a hidden plugin's tab closes, back to the dashboard.
+    if (pane === 'canvas') return k === p.active && !canvasTabs().includes(k) ? pushHistory({ ...p, active: PRIMARY.canvas }) : p
     if (k === PRIMARY[pane] || !p.tabs.includes(k)) return p
     const i = p.tabs.indexOf(k)
     const tabs = p.tabs.filter((t) => t !== k)
@@ -171,8 +187,9 @@ export function closeAllTabs(pane: PaneId) {
 
 export function cycleTab(pane: PaneId, dir: 1 | -1) {
   update(pane, (p) => {
-    const i = p.tabs.indexOf(p.active)
-    return pushHistory({ ...p, active: p.tabs[(i + dir + p.tabs.length) % p.tabs.length]! })
+    const tabs = paneTabs(pane, p)
+    const i = tabs.indexOf(p.active)
+    return pushHistory({ ...p, active: tabs[(i + dir + tabs.length) % tabs.length]! })
   })
 }
 

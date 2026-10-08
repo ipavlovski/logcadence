@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties, type MouseEvent } from 'react'
 import type { EntryDTO } from '../../../shared/types.ts'
 import { api, unwrap } from '../../api.ts'
-import type { CanvasPluginProps } from '../../canvas/plugins.ts'
 import { useFetch } from '../../hooks/useFetch.ts'
 import { matches } from '../../markdown.ts'
 import {
@@ -25,6 +24,8 @@ import { requestReveal } from '../../state/journal.ts'
 import { openDate } from '../../state/panes.ts'
 import { setShortcutApp, setShortcutMods, shortcutsStore, toggleShortcutMod } from '../../state/shortcuts.ts'
 import { useStore } from '../../state/store.ts'
+import { toggleAppKeys, uiStore } from '../../state/ui.ts'
+import { Modal } from '../Modal/Modal.tsx'
 import styles from './Shortcuts.module.css'
 
 const PALETTE = ['#6d9df0', '#5fb878', '#d9a25f', '#a48be0', '#e08a74', '#7fb4ad', '#d77fb0', '#e0c36b']
@@ -50,14 +51,28 @@ function useHeldMods(): Mod[] {
   return held
 }
 
+/** Closes the window and shows the entry in the journal. */
 function reveal(e: MouseEvent, entry: EntryDTO, nodeId?: string) {
   e.stopPropagation()
+  toggleAppKeys(false)
   openDate(entry.date, { newTab: e.ctrlKey || e.metaKey })
   requestReveal({ date: entry.date, entryId: entry.id, nodeId, mode: 'flash' })
 }
 
-/** Canvas "Shortcuts" tab: an app's hotkeys from its shortcuts:<app> entries, on a keyboard. */
-export function Shortcuts(_: CanvasPluginProps) {
+/** The app-shortcuts window (ctrl+shift+?): an app's hotkeys from its shortcuts:<app> entries, on a keyboard. */
+export function AppShortcuts() {
+  const open = useStore(uiStore, (s) => s.appKeys)
+  if (!open) return null
+  return (
+    <Modal large title="App shortcuts" onClose={() => toggleAppKeys(false)}>
+      <div className={styles.window}>
+        <ShortcutsView />
+      </div>
+    </Modal>
+  )
+}
+
+function ShortcutsView() {
   const rev = useRevision()
   const { data, error } = useFetch(`shortcuts|${rev}`, (signal) =>
     unwrap(api.tags.entries.$get({ query: { tag: SHORTCUTS_TAG, archived: '0', sub: '1' } }, { init: { signal } })),
@@ -97,7 +112,7 @@ export function Shortcuts(_: CanvasPluginProps) {
   return (
     <div className={styles.frame}>
       <header className={styles.header}>
-        <h2>Shortcuts</h2>
+        <h2>App shortcuts</h2>
         <div className={styles.apps}>
           {names.map((n) => (
             <button key={n} className={n === app ? styles.on : ''} onClick={() => setShortcutApp(n)}>
@@ -110,6 +125,9 @@ export function Shortcuts(_: CanvasPluginProps) {
             {e.title || 'untitled'} ↗
           </button>
         ))}
+        <button className={styles.close} onClick={() => toggleAppKeys(false)} title="Close (Esc)" aria-label="Close">
+          ✕
+        </button>
       </header>
 
       {!app ? (

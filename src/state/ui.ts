@@ -14,6 +14,8 @@ interface UiState {
   spotlight: SpotlightMode | null
   newEntry: NewEntryDefaults | null
   help: boolean
+  /** The app-shortcuts window (shortcuts:<app> entries on a keyboard). */
+  appKeys: boolean
   /** Open section of the Settings window; null = closed. */
   settings: SettingsSection | null
   /** Per-pane find (ctrl+f) query; undefined = find bar closed. */
@@ -23,7 +25,7 @@ interface UiState {
   toast: { id: number; message: string } | null
 }
 
-export const uiStore = createStore<UiState>({ spotlight: null, newEntry: null, help: false, settings: null, find: {}, findFocus: 0, toast: null })
+export const uiStore = createStore<UiState>({ spotlight: null, newEntry: null, help: false, appKeys: false, settings: null, find: {}, findFocus: 0, toast: null })
 
 export function openSpotlight(mode: SpotlightMode | null) {
   uiStore.set((s) => ({ ...s, spotlight: mode }))
@@ -35,6 +37,10 @@ export function openNewEntry(defaults: NewEntryDefaults | null) {
 
 export function toggleHelp(open?: boolean) {
   uiStore.set((s) => ({ ...s, help: open ?? !s.help }))
+}
+
+export function toggleAppKeys(open?: boolean) {
+  uiStore.set((s) => ({ ...s, appKeys: open ?? !s.appKeys }))
 }
 
 export function openSettings(section: SettingsSection | null) {

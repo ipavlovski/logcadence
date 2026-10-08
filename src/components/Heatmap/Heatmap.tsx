@@ -7,6 +7,7 @@ const CELL = 11
 const STEP = 14 // cell + 3px gap
 const LEFT = 28 // weekday labels
 const TOP = 16 // month labels
+const MIN_WEEKS = 4
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 interface Props {
@@ -20,10 +21,12 @@ interface Props {
   tone: 'green' | 'pink'
   selected?: string | null
   onSelect?: (date: string) => void
+  /** Footer text while no day is hovered or selected. */
+  hint?: string
 }
 
 /** GitHub-style calendar heatmap; as many weeks as fit (up to a year), most recent on the right. */
-export function Heatmap({ title, counts, end, describe, tone, selected, onSelect }: Props) {
+export function Heatmap({ title, counts, end, describe, tone, selected, onSelect, hint = 'Hover a day; click to list it' }: Props) {
   const wrap = useRef<HTMLDivElement>(null)
   const [weeks, setWeeks] = useState(53)
   const [hover, setHover] = useState<string | null>(null)
@@ -31,7 +34,8 @@ export function Heatmap({ title, counts, end, describe, tone, selected, onSelect
   useLayoutEffect(() => {
     const el = wrap.current
     if (!el) return
-    const ro = new ResizeObserver(([e]) => setWeeks(Math.max(12, Math.min(53, Math.floor((e!.contentRect.width - LEFT) / STEP)))))
+    // Down to MIN_WEEKS (about a month, room for one month label) so a narrow card isn't clipped.
+    const ro = new ResizeObserver(([e]) => setWeeks(Math.max(MIN_WEEKS, Math.min(53,Math.floor((e!.contentRect.width - LEFT) / STEP)))))
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
@@ -97,7 +101,7 @@ export function Heatmap({ title, counts, end, describe, tone, selected, onSelect
         </svg>
       </div>
       <div className={styles.foot}>
-        <span className={styles.readout}>{readout ? `${formatJournalDate(readout)} · ${describe(counts.get(readout) ?? 0)}` : 'Hover a day; click to list it'}</span>
+        <span className={styles.readout}>{readout ? `${formatJournalDate(readout)} · ${describe(counts.get(readout) ?? 0)}` : hint}</span>
         <span className={styles.legend} aria-hidden>
           Less
           {[0, 1, 2, 3, 4].map((l) => (

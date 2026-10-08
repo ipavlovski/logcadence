@@ -75,6 +75,12 @@ describe('entries and nodes', () => {
     expect(all.entries[0]!.id).toBe(e.id) // newest day first
     expect((await tagList()).find((t) => t.path === 'dev:old')).toEqual({ path: 'dev:old', active: 0, archived: 1 })
   })
+
+  it('counts entries per day for the dashboard, leaving out archived ones', async () => {
+    const days = (d: string) => req<{ days: { date: string; count: number }[] }>('GET', `/api/journal-activity?from=${d}`).then((r) => r.days)
+    expect(await days('2026-09-01')).toEqual([{ date: '2026-09-20', count: 3 }])
+    expect(await days('2026-09-21')).toEqual([])
+  })
 })
 
 describe('tag operations', () => {

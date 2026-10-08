@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
-import { and, asc, eq, gt, inArray, lt } from 'drizzle-orm'
-import type { GpsDayDTO, GpsKind, GpsPlaceDTO } from '../../../shared/types.ts'
+import { and, asc, between, eq, gt, inArray, lt } from 'drizzle-orm'
+import type { GpsDayDTO, GpsKind, GpsPlaceDTO, TravelDay } from '../../../shared/types.ts'
 import { DATA_DIR, db } from '../../db/client.ts'
 import { gpsDays, gpsPlaces, gpsSegments, gpsTrips } from '../../db/content-schema.ts'
 import { bad, notFound } from '../validate.ts'
@@ -117,6 +117,25 @@ export function listDays(): { date: string; totals: Record<GpsKind, number> }[] 
   const byDate = new Map<string, { kind: GpsKind; start: number; end: number }[]>()
   for (const s of segs) byDate.set(s.date, [...(byDate.get(s.date) ?? []), { ...s, kind: s.kind as GpsKind }])
   return [...byDate].sort(([a], [b]) => a.localeCompare(b)).map(([date, list]) => ({ date, totals: totals(list) }))
+}
+
+const MOVING: GpsKind[] = ['A->B', 'B->B', 'B->A', 'A->A']
+
+/** Distance and time on the move per day in [from, to], for days with GPS data. */
+export function travelDays(from: string, to: string): TravelDay[] {
+  const segs = db
+    .select({ date: gpsSegments.date, start: gpsSegments.startAt, end: gpsSegments.endAt, distanceM: gpsSegments.distanceM })
+    .from(gpsSegments)
+    .where(and(between(gpsSegments.date, from, to), inArray(gpsSegments.kind, MOVING)))
+    .all()
+  const days = new Map(db.select({ date: gpsDays.date }).from(gpsDays).where(between(gpsDays.date, from, to)).all().map(({ date }) => [date, { date, distanceM: 0, movingMs: 0 }]))
+  for (const s of segs) {
+    const d = days.get(s.date)
+    if (!d) continue
+    d.distanceM += s.distanceM
+    d.movingMs += s.end - s.start
+  }
+  return [...days.values()].sort((a, b) => a.date.localeCompare(b.date))
 }
 
 export function getDay(date: string): GpsDayDTO | null {

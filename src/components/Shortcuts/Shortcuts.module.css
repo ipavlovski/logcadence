@@ -5,6 +5,29 @@
   font-size: 13px;
 }
 
+/* The window's scrolling body (the dialog itself doesn't scroll). */
+.window {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.close {
+  margin-left: auto;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text-muted);
+  border-radius: var(--radius);
+  padding: 2px 10px;
+  height: 26px;
+  font-size: 12px;
+}
+
+.close:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
 .header {
   display: flex;
   align-items: center;

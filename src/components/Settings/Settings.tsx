@@ -1,6 +1,9 @@
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { versionLabel } from '../../../shared/versions.ts'
+import { pluginIcon } from '../../canvas/icons.tsx'
+import { PLUGINS } from '../../canvas/plugins.ts'
 import { formatCombo, paneBindings } from '../../shortcuts.ts'
+import { canvasTabsStore, moveCanvasTab, resetCanvasTabs, setCanvasTabShown } from '../../state/canvasTabs.ts'
 import { panesStore, setPaneOpen, type PaneId } from '../../state/panes.ts'
 import { useStore } from '../../state/store.ts'
 import { openSettings, prefsStore, setPref, toggleHelp, uiStore, type SettingsSection } from '../../state/ui.ts'
@@ -86,7 +89,46 @@ function General() {
           </button>
         </Row>
       </Group>
+      <Group title="Data">
+        <Row label="Export the library" hint="Entries, chats, Spotify and GPS history, media. An export can be imported into an empty library, e.g. the desktop app.">
+          <DataExport />
+        </Row>
+      </Group>
     </>
+  )
+}
+
+const PHASES = { tables: 'Exporting entries', assets: 'Exporting media', gps: 'Exporting GPS files' }
+
+/** Browser: plain downloads. Desktop app: a save dialog, with progress (a full library is many GB). */
+function DataExport() {
+  const desktop = window.desktop
+  const [status, setStatus] = useState('')
+  useEffect(() => desktop?.onProgress((p) => setStatus(`${PHASES[p.phase]}… ${p.done.toLocaleString()} / ${p.total.toLocaleString()}`)), [desktop])
+
+  if (!desktop)
+    return (
+      <div className={styles.buttons}>
+        <a href="/api/export" download>
+          Everything
+        </a>
+        <a href="/api/export?assets=0&gps=0" download>
+          Without media and GPS files
+        </a>
+      </div>
+    )
+
+  const run = async (opts: { assets: boolean; gps: boolean }) => {
+    setStatus('')
+    const r = await desktop.exportData(opts)
+    setStatus(r.ok ? 'Export written.' : (r.error ?? ''))
+  }
+  return (
+    <div className={styles.buttons}>
+      <button onClick={() => run({ assets: true, gps: true })}>Everything…</button>
+      <button onClick={() => run({ assets: false, gps: false })}>Without media and GPS files…</button>
+      {status && <span className={styles.hint}>{status}</span>}
+    </div>
   )
 }
 
@@ -117,6 +159,7 @@ function Canvas() {
       <Group title="Pane">
         <PaneToggle pane="canvas" label="Show the canvas pane" />
       </Group>
+      <CanvasTabs />
       <Shortcuts pane="canvas" />
     </>
   )
@@ -145,6 +188,46 @@ function Tags() {
       </Group>
       <Shortcuts pane="tags" />
     </>
+  )
+}
+
+/** Which plugins have a tab in the canvas tab bar, and their order. */
+function CanvasTabs() {
+  const { order, hidden } = useStore(canvasTabsStore, (s) => s)
+  return (
+    <Group title="Tabs">
+      <p className={styles.note}>Each shown tab is an icon in the canvas tab bar, in this order, after the dashboard.</p>
+      <ul className={styles.tabList}>
+        {order.map((type, i) => {
+          const p = PLUGINS.find((x) => x.type === type)
+          if (!p) return null
+          const shown = !hidden.includes(type)
+          return (
+            <li key={type} className={shown ? '' : styles.off}>
+              <label>
+                <input type="checkbox" checked={shown} onChange={(e) => setCanvasTabShown(type, e.target.checked)} />
+                <span className={styles.icon}>{pluginIcon(type)}</span>
+                <span>
+                  <b>{p.title}</b>
+                  <span className={styles.hint}>{p.description}</span>
+                </span>
+              </label>
+              <span className={styles.move}>
+                <button onClick={() => moveCanvasTab(type, -1)} disabled={i === 0} title="Move up (left in the tab bar)" aria-label={`Move ${p.title} up`}>
+                  ↑
+                </button>
+                <button onClick={() => moveCanvasTab(type, 1)} disabled={i === order.length - 1} title="Move down (right in the tab bar)" aria-label={`Move ${p.title} down`}>
+                  ↓
+                </button>
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+      <button className={styles.reset} onClick={() => resetCanvasTabs(PLUGINS.map((p) => p.type))}>
+        Show all, in the default order
+      </button>
+    </Group>
   )
 }
 

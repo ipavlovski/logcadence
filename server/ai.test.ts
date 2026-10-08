@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { deflateRawSync } from 'node:zlib'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import type { ChatDTO, ChatSummary, EntryDTO, ImportReport, NodeDTO } from '../shared/types.ts'
+import type { ChatDTO, ChatSummary, DayCount, EntryDTO, ImportReport, NodeDTO } from '../shared/types.ts'
 
 // A fake machine: one home with Claude Code, Antigravity and a Claude export in Downloads.
 const root = mkdtempSync(path.join(os.tmpdir(), 'logcadence-ai-'))
@@ -193,6 +193,14 @@ describe('AI chat import', () => {
       ['antigravity', 'Build Revit House', '2026-09-21', 1],
       ['claude-code', 'Fix flaky test', '2026-09-20', 1],
     ])
+  })
+
+  it('counts prompts per day for the dashboard, and keeps chats out of the journal heatmap', async () => {
+    const days = (await req<{ days: DayCount[] }>('GET', '/api/ai/prompt-days?from=2026-09-01')).days
+    const chats = await chatList()
+    expect(days.sort((a, b) => a.date.localeCompare(b.date))).toEqual(chats.map((c) => ({ date: c.date, count: 1 })).reverse())
+    expect((await req<{ days: DayCount[] }>('GET', '/api/ai/prompt-days?from=2026-09-22')).days.map((d) => d.date)).toEqual([chats[0]!.date])
+    expect((await req<{ days: DayCount[] }>('GET', '/api/journal-activity?from=2026-09-01')).days).toEqual([])
   })
 
   it('makes one node per prompt, leaving the replies to the transcript', async () => {

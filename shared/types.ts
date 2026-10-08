@@ -207,6 +207,21 @@ export interface SpotifyResume {
   plays: number
 }
 
+// ── Canvas dashboard ────────────────────────────────────────────────────────
+
+/** A count for one journal day (heatmaps). */
+export interface DayCount {
+  date: string
+  count: number
+}
+
+/** GPS movement on one day: the A->B, B->B, B->A and A->A rows. */
+export interface TravelDay {
+  date: string
+  distanceM: number
+  movingMs: number
+}
+
 // ── Map canvas tab (GPS) ────────────────────────────────────────────────────
 
 /** A = homebase, B = a place, X->Y = moving between them, A->A = a round trip from home, gap = no data. */
