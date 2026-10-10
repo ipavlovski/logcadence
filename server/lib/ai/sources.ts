@@ -127,7 +127,7 @@ export function describeSources(): ChatSourceInfo[] {
     {
       source: 'claude',
       paths: exportsIn,
-      hint: 'claude.ai → Settings → Privacy → Export data. Leave the zip in Downloads (or drop it here).',
+      hint: 'In the desktop app, connect claude.ai to sync every chat (Claude Desktop’s too). Or: claude.ai → Settings → Privacy → Export data, and leave the zip in Downloads (or drop it here).',
     },
     {
       source: 'claude-code',

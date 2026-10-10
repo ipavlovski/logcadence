@@ -1,4 +1,4 @@
-import type { ChatMessage, ChatSource, ChatTool } from '../../../shared/types.ts'
+import type { ChatAttachment, ChatMessage, ChatSource, ChatTool } from '../../../shared/types.ts'
 
 // What every source parser produces; importer.ts turns it into a journal entry.
 
@@ -21,9 +21,10 @@ export interface ParsedChat {
 export class Transcript {
   readonly messages: ChatMessage[] = []
 
-  user(text: string, ts: number | null) {
+  user(text: string, ts: number | null, attachments: ChatAttachment[] = []) {
     const t = text.trim()
-    if (t) this.messages.push({ role: 'user', text: t, ts })
+    if (attachments.length) this.messages.push({ role: 'user', text: t, ts, attachments })
+    else if (t) this.messages.push({ role: 'user', text: t, ts })
   }
 
   text(text: string, ts: number | null) {

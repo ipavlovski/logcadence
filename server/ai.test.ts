@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { deflateRawSync } from 'node:zlib'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import type { ChatDTO, ChatSummary, DayCount, EntryDTO, ImportReport, NodeDTO } from '../shared/types.ts'
+import type { ChatDTO, ChatSourceInfo, ChatSummary, DayCount, EntryDTO, ImportReport, NodeDTO } from '../shared/types.ts'
 
 // A fake machine: one home with Claude Code, Antigravity and a Claude export in Downloads.
 const root = mkdtempSync(path.join(os.tmpdir(), 'logcadence-ai-'))
@@ -324,5 +324,109 @@ describe('AI chat import', () => {
     form.append('file', new File(['{"hello": 1}'], 'notes.json'))
     const res = await app.request('/api/ai/import', { method: 'POST', body: form })
     expect(res.status).toBe(400)
+  })
+})
+
+describe('claude.ai live sync', () => {
+  const calls: string[] = []
+  let org: string | null = 'org-1'
+  let expired = false
+  const day = 2 * 24 * 60
+  const msg = (uuid: string, parent: string, sender: string, content: object[], min: number) => ({ uuid, parent_message_uuid: parent, sender, content, created_at: iso(day + min) })
+  // conv-1 is the chat already imported from the export in Downloads; claude.ai has it with a later turn.
+  const details: Record<string, object> = {
+    'conv-1': {
+      uuid: 'conv-1',
+      name: 'Battery pack layout',
+      model: 'claude-opus-5-5',
+      created_at: iso(day),
+      updated_at: iso(day + 30),
+      current_leaf_message_uuid: 'm5',
+      chat_messages: [
+        msg('m1', '00000000-0000-4000-8000-000000000000', 'human', [{ type: 'text', text: 'Design a 20s6p pack' }], 0),
+        msg('m2', 'm1', 'assistant', [{ type: 'text', text: 'An abandoned answer' }], 1),
+        msg('m3', 'm1', 'assistant', [{ type: 'text', text: 'Here is a **layout**.' }], 2),
+        msg('m4', 'm3', 'human', [{ type: 'text', text: 'Add a BMS' }], 20),
+        msg('m5', 'm4', 'assistant', [{ type: 'tool_use', name: 'artifacts', input: { command: 'create', id: 'b', title: 'BMS', type: 'text/markdown', content: '# BMS', version_uuid: 'v1' } }], 21),
+      ],
+    },
+    'conv-2': {
+      uuid: 'conv-2',
+      name: 'Hinges',
+      created_at: iso(day + 60),
+      updated_at: iso(day + 61),
+      chat_messages: [msg('n1', '', 'human', [{ type: 'text', text: 'Which hinge?' }], 60), msg('n2', 'n1', 'assistant', [{ type: 'text', text: 'Strap.' }], 61)],
+    },
+    'conv-3': { uuid: 'conv-3', name: 'Broken', created_at: iso(day), updated_at: iso(day) },
+  }
+  const listed = () => Object.values(details).map((d) => ({ uuid: (d as { uuid: string }).uuid, name: (d as { name: string }).name, updated_at: (d as { updated_at: string }).updated_at }))
+  const detailCalls = () => calls.filter((c) => /chat_conversations\/[^?]+\?tree=true/.test(c)).length
+
+  beforeAll(async () => {
+    const { NotSignedInError, setClaudeWeb } = await import('./lib/ai/claudeWeb.ts')
+    setClaudeWeb({
+      org: async () => org,
+      getJson: async (url) => {
+        calls.push(url)
+        if (expired) throw new NotSignedInError()
+        const list = /chat_conversations\?limit=\d+&offset=(\d+)$/.exec(url)
+        if (list) {
+          const off = Number(list[1])
+          return { data: listed().slice(off, off + 2), has_more: off + 2 < listed().length }
+        }
+        return details[/chat_conversations\/([^?]+)/.exec(url)![1]!]
+      },
+    })
+  })
+  afterAll(async () => (await import('./lib/ai/claudeWeb.ts')).setClaudeWeb(undefined))
+
+  const claudeSource = async () => (await req<{ sources: ChatSourceInfo[] }>('GET', '/api/ai/sources')).sources.find((s) => s.source === 'claude')!
+
+  it('syncs every conversation, updating the one imported from the export', async () => {
+    expect((await claudeSource()).connected).toBe(true)
+    const report = (await scan()).claude!
+    expect(report).toMatchObject({ created: 1, updated: 1 })
+    expect(report.errors).toEqual(['Broken: unexpected answer: no chat_messages (claude.ai’s API may have changed)'])
+    expect(detailCalls()).toBe(3)
+
+    const chats = (await chatList()).filter((c) => c.source === 'claude')
+    expect(chats.map((c) => [c.title, c.turns])).toEqual([
+      ['Hinges', 1],
+      ['Battery pack layout', 2],
+    ])
+    const conv1 = chats[1]!
+    expect((await entryOf(conv1)).nodes.map((n) => n.content)).toEqual(['Design a 20s6p pack', 'Add a BMS'])
+    const chat = await req<ChatDTO>('GET', `/api/ai/chats/${conv1.id}`)
+    expect(chat.meta.model).toBe('claude-opus-5-5')
+    expect(chat.messages.at(-1)!.text).toBe('**Artifact: BMS · Markdown**\n\n```markdown\n# BMS\n```')
+  })
+
+  it('fetches nothing unchanged on rescan, and the older export does not win back', async () => {
+    calls.length = 0
+    const report = (await scan()).claude!
+    expect(report).toMatchObject({ created: 0, updated: 0 })
+    expect(detailCalls()).toBe(1) // only the broken one, which never imported
+    expect((await chatList()).find((c) => c.id === 'claude:conv-1')!.turns).toBe(2)
+  })
+
+  it('refetches a conversation claude.ai changed', async () => {
+    const c2 = details['conv-2'] as { updated_at: string; chat_messages: object[] }
+    c2.updated_at = iso(day + 90)
+    c2.chat_messages.push(msg('n3', 'n2', 'human', [{ type: 'text', text: 'And screws?' }], 90))
+    ;(details['conv-2'] as { current_leaf_message_uuid?: string }).current_leaf_message_uuid = 'n3'
+    calls.length = 0
+    expect((await scan()).claude).toMatchObject({ updated: 1 })
+    expect((await chatList()).find((c) => c.id === 'claude:conv-2')!.turns).toBe(2)
+  })
+
+  it('reports an expired session, and nothing when signed out', async () => {
+    expired = true
+    expect((await scan()).claude!.errors).toContain('claude.ai: claude.ai session expired: connect claude.ai again')
+    expired = false
+    org = null
+    expect((await claudeSource()).connected).toBe(false)
+    calls.length = 0
+    await scan()
+    expect(calls).toEqual([])
   })
 })

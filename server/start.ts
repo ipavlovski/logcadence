@@ -7,6 +7,7 @@ import { app } from './app.ts'
 import { closeDbs, db, JOURNALS_DIR } from './db/client.ts'
 import { entries } from './db/content-schema.ts'
 import { startRecorder, stopRecorder, type ActivityRecorder } from './lib/activity.ts'
+import { setClaudeWeb, type ClaudeWebClient } from './lib/ai/claudeWeb.ts'
 import { autoReady, importNew } from './lib/gps/drive.ts'
 import { scanGps } from './lib/gps/scan.ts'
 import { flushJournalFiles, touchDates } from './lib/journalFiles.ts'
@@ -32,6 +33,8 @@ export interface StartOptions {
   staticDir?: string
   /** Seconds since the last keyboard/mouse input; given (by the desktop app), activity is recorded. */
   idleSeconds?: () => number
+  /** The claude.ai session the desktop app signs in to; given, the AI scan syncs claude.ai chats. */
+  claudeWeb?: ClaudeWebClient
 }
 
 export interface RunningServer {
@@ -42,7 +45,8 @@ export interface RunningServer {
   stop(): Promise<void>
 }
 
-export function startServer({ port, staticDir, idleSeconds }: StartOptions): Promise<RunningServer> {
+export function startServer({ port, staticDir, idleSeconds, claudeWeb }: StartOptions): Promise<RunningServer> {
+  setClaudeWeb(claudeWeb)
   if (staticDir) {
     const root = path.relative(process.cwd(), staticDir)
     // Built files under static/ have content hashes in their names, so they never change. Everything else (the

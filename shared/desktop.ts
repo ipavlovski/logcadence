@@ -50,6 +50,10 @@ export interface DesktopApi {
    * page sees no file; null when the clipboard holds no such file.
    */
   clipboardFile(): Promise<ClipboardFile | null>
+  /** Opens claude.ai's sign-in for live chat sync; true once signed in, false if the window was closed first. */
+  connectClaude(): Promise<boolean>
+  /** Signs the app out of claude.ai. */
+  disconnectClaude(): Promise<void>
 
   // First-run setup window.
   /** Picks a folder: an existing library is opened, an empty one becomes a new library. */

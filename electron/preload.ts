@@ -21,6 +21,8 @@ const api: DesktopApi = {
   clipboardFile: () => ipcRenderer.invoke('clipboard-file'),
   openLibrary: () => ipcRenderer.invoke('open-library'),
   importLibrary: () => ipcRenderer.invoke('import-library'),
+  connectClaude: () => ipcRenderer.invoke('claude-connect'),
+  disconnectClaude: () => ipcRenderer.invoke('claude-disconnect'),
 }
 
 contextBridge.exposeInMainWorld('desktop', api)

@@ -13,7 +13,8 @@ import { logEvent } from '../events.ts'
 import { touchDates } from '../journalFiles.ts'
 import { listAntigravity, parseAntigravity } from './antigravity.ts'
 import { oneLine, type ParsedChat } from './chat.ts'
-import { isClaudeExport, parseClaudeExport } from './claudeExport.ts'
+import { CLAUDE_RENDER_VERSION, isClaudeExport, parseClaudeConversation, parseClaudeExport } from './claudeConversation.ts'
+import { fetchConversation, listConversations, NotSignedInError } from './claudeWeb.ts'
 import { desktopTitles, parseClaudeCode } from './claudeCode.ts'
 import { isGeminiActivity, parseGeminiActivity } from './geminiTakeout.ts'
 import { antigravityRoots, claudeCodeFiles, claudeDesktopSessionFiles, exportFiles } from './sources.ts'
@@ -49,8 +50,11 @@ function clipMarkdown(text: string, max: number): string {
   return fences % 2 ? `${cut.trimEnd()}\n\`\`\`\n…` : `${cut.trimEnd()}…`
 }
 
-/** A node for one turn: just the prompt. */
-export const turnContent = (t: Turn): string => clipMarkdown(t.prompt.text, PROMPT_MAX)
+/** A node for one turn: just the prompt, and the names of the files sent with it. */
+export function turnContent(t: Turn): string {
+  const files = (t.prompt.attachments ?? []).map((a) => `📎 ${a.name}`).join('\n')
+  return clipMarkdown([t.prompt.text, files].filter(Boolean).join('\n\n'), PROMPT_MAX)
+}
 
 /** Earlier imports appended a "→ reply preview" line to each prompt node; drop it. */
 export function stripReplyPreviews() {
@@ -75,6 +79,9 @@ export function stripReplyPreviews() {
 const titleOf = (p: ParsedChat, turns: Turn[]) => oneLine(p.title || turns[0]!.prompt.text, 120)
 
 type Outcome = 'created' | 'updated' | 'unchanged' | 'skipped'
+
+/** sourceStamp prefix of chats synced live from claude.ai (the render version and the conversation's updated_at follow). */
+const LIVE_STAMP = 'live:'
 
 export function upsertChat(p: ParsedChat, stamp: string | null = null): Outcome {
   const id = `${p.source}:${p.externalId}`
@@ -112,7 +119,9 @@ export function upsertChat(p: ParsedChat, stamp: string | null = null): Outcome 
   }
 
   const same = existing.title === title && existing.turns === turns.length && JSON.stringify(existing.messages) === JSON.stringify(p.messages)
-  if (same || p.updatedAt < existing.updatedAt) {
+  // An export never replaces a live sync of the same moment: it lacks the current branch and the model.
+  const outdated = p.updatedAt < existing.updatedAt || (!stamp && !!existing.sourceStamp?.startsWith(LIVE_STAMP) && p.updatedAt <= existing.updatedAt)
+  if (same || outdated) {
     if (stamp && stamp !== existing.sourceStamp) db.update(chats).set({ sourceStamp: stamp }).where(eq(chats.id, id)).run()
     return 'unchanged'
   }
@@ -186,8 +195,20 @@ function tally(report: ImportReport, source: ChatSource, outcome: Outcome) {
   c[outcome]++
 }
 
+function fail(report: ImportReport, source: ChatSource, what: string, err: unknown) {
+  counts(report, source).errors.push(`${what}: ${(err as Error).message}`)
+}
+
+/** Imports one chat; what went wrong rebuilding it is reported when it is new or changed. */
+function record(report: ImportReport, p: ParsedChat, stamp: string | null = null) {
+  const outcome = upsertChat(p, stamp)
+  tally(report, p.source, outcome)
+  if ((outcome === 'created' || outcome === 'updated') && p.meta.warnings)
+    for (const w of p.meta.warnings.split('\n')) counts(report, p.source).errors.push(`${oneLine(p.title || p.externalId, 60)}: ${w}`)
+}
+
 function importParsed(report: ImportReport, list: ParsedChat[]) {
-  for (const p of [...list].sort((a, b) => a.startedAt - b.startedAt)) tally(report, p.source, upsertChat(p))
+  for (const p of [...list].sort((a, b) => a.startedAt - b.startedAt)) record(report, p)
 }
 
 const stampOf = (file: string) => {
@@ -268,7 +289,6 @@ export function scanLocal(): Promise<ImportReport> {
 
 async function doScan(): Promise<ImportReport> {
   const report: ImportReport = {}
-  const fail = (source: ChatSource, what: string, err: unknown) => counts(report, source).errors.push(`${what}: ${(err as Error).message}`)
 
   // Claude Code: skip transcripts whose file has not changed since the last import.
   const files = claudeCodeFiles()
@@ -284,7 +304,7 @@ async function doScan(): Promise<ImportReport> {
       const p = await parseClaudeCode(f.file, titles, f.origin)
       if (p) tally(report, 'claude-code', upsertChat(p, stamp))
     } catch (err) {
-      fail('claude-code', path.basename(f.file), err)
+      fail(report, 'claude-code', path.basename(f.file), err)
     }
   }
 
@@ -302,11 +322,11 @@ async function doScan(): Promise<ImportReport> {
           const p = parseAntigravity(c)
           if (p) tally(report, 'antigravity', upsertChat(p, stamp))
         } catch (err) {
-          fail('antigravity', c.title || c.id, err)
+          fail(report, 'antigravity', c.title || c.id, err)
         }
       }
     } catch (err) {
-      fail('antigravity', root, err)
+      fail(report, 'antigravity', root, err)
     }
   }
 
@@ -315,10 +335,39 @@ async function doScan(): Promise<ImportReport> {
       if (file.endsWith('.json')) importJson(report, readFileSync(file, 'utf8'))
       else withZip(file, (members) => importMembers(report, members, path.basename(file)))
     } catch (err) {
-      fail(/takeout/i.test(file) ? 'gemini' : 'claude', path.basename(file), err)
+      fail(report, /takeout/i.test(file) ? 'gemini' : 'claude', path.basename(file), err)
     }
   }
+
+  // After the exports, so a chat in both ends up as claude.ai has it now.
+  await syncClaudeWeb(report)
   return report
+}
+
+/** claude.ai, when the desktop app is signed in: fetches the conversations changed since the last sync. */
+async function syncClaudeWeb(report: ImportReport) {
+  let listed: Awaited<ReturnType<typeof listConversations>>
+  try {
+    listed = await listConversations()
+  } catch (err) {
+    return fail(report, 'claude', 'claude.ai', err)
+  }
+  if (!listed) return
+  const known = storedStamps(listed.list.map((c) => `claude:${c.uuid}`))
+  for (const c of listed.list) {
+    const stamp = `${LIVE_STAMP}v${CLAUDE_RENDER_VERSION}:${c.updatedAt}`
+    if (c.updatedAt && known.get(`claude:${c.uuid}`) === stamp) {
+      tally(report, 'claude', 'unchanged')
+      continue
+    }
+    try {
+      const p = parseClaudeConversation(await fetchConversation(listed.org, c.uuid))
+      if (p) record(report, p, stamp)
+    } catch (err) {
+      if (err instanceof NotSignedInError) return fail(report, 'claude', 'claude.ai', err)
+      fail(report, 'claude', c.name || c.uuid, err)
+    }
+  }
 }
 
 // ── queries ────────────────────────────────────────────────────────────────

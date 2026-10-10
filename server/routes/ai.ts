@@ -2,13 +2,17 @@ import { Hono } from 'hono'
 import { isIsoDate } from '../../shared/dates.ts'
 import { validator } from 'hono/validator'
 import { getChat, importUpload, listChats, promptDays, scanLocal } from '../lib/ai/importer.ts'
+import { claudeWebConnected } from '../lib/ai/claudeWeb.ts'
 import { describeSources } from '../lib/ai/sources.ts'
 import { bad, notFound } from '../lib/validate.ts'
 
 const MAX_UPLOAD = 2 * 1024 * 1024 * 1024
 
 export const aiRoutes = new Hono()
-  .get('/ai/sources', (c) => c.json({ sources: describeSources() }))
+  .get('/ai/sources', async (c) => {
+    const connected = await claudeWebConnected()
+    return c.json({ sources: describeSources().map((s) => (s.source === 'claude' && connected !== undefined ? { ...s, connected } : s)) })
+  })
   .get('/ai/chats', (c) => c.json({ chats: listChats() }))
   // Prompts per day from `from` on (dashboard heatmap).
   .get('/ai/prompt-days', (c) => {

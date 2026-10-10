@@ -59,6 +59,16 @@ export interface ChatMessage {
   /** Epoch ms, when the source records it. */
   ts: number | null
   tools?: ChatTool[]
+  /** Files sent with a prompt. */
+  attachments?: ChatAttachment[]
+}
+
+export interface ChatAttachment {
+  name: string
+  /** Kind, type, size or pages, e.g. "document · 3 pages". */
+  meta?: string
+  /** Text the AI app extracted from the file (.md, .docx, .txt…). */
+  text?: string
 }
 
 export interface ChatSummary {
@@ -96,6 +106,8 @@ export interface ChatSourceInfo {
   paths: string[]
   /** How to get chats from this source into the app. */
   hint: string
+  /** Signed in for live sync (claude.ai, desktop app only); absent when the source has no live sync. */
+  connected?: boolean
 }
 
 export interface TagInfo {

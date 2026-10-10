@@ -8,6 +8,7 @@ import type { ActionResult, AppInfo, ClipboardFile, TransferProgress, UpdateStat
 import type { RunningServer } from '../server/start.ts'
 import { APP_NAME, BUILD_LABEL, IS_DEV_CHANNEL, PORT } from './channel.ts'
 import { configuredLibrary, readConfig, writeConfig } from './config.ts'
+import { claudeWebClient, connectClaude, disconnectClaude } from './claudeWeb.ts'
 import { chooseImport, chooseLibrary, runImport } from './library.ts'
 import { setMenu } from './menu.ts'
 import { checkForUpdates, initUpdater, installRelease, installUpdate, updateStatus } from './updater.ts'
@@ -56,6 +57,7 @@ async function main() {
       port: PORT,
       staticDir: DEV_URL ? undefined : path.join(RESOURCES, 'dist'),
       idleSeconds: () => powerMonitor.getSystemIdleTime(),
+      claudeWeb: claudeWebClient,
     })
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'EADDRINUSE')
@@ -251,6 +253,8 @@ function registerIpc() {
   })
   ipcMain.handle('import-library', () => importLibrary())
   ipcMain.handle('clipboard-file', () => clipboardFile())
+  ipcMain.handle('claude-connect', () => connectClaude(win))
+  ipcMain.handle('claude-disconnect', () => disconnectClaude())
 }
 
 const MEDIA_TYPES: Record<string, string> = {

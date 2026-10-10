@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { formatJournalDate, toIsoDate } from '../../../shared/dates.ts'
-import { CHAT_SOURCES, type ChatDTO, type ChatMessage, type ChatSource, type ChatSummary, type ImportReport } from '../../../shared/types.ts'
+import { CHAT_SOURCES, type ChatAttachment, type ChatDTO, type ChatMessage, type ChatSource, type ChatSummary, type ImportReport } from '../../../shared/types.ts'
 import { api, unwrap } from '../../api.ts'
 import type { CanvasPluginProps } from '../../canvas/plugins.ts'
 import { useFetch } from '../../hooks/useFetch.ts'
@@ -82,7 +82,17 @@ function ChatList() {
   const { busy, report, scan, upload } = useImport(() => setTick((t) => t + 1))
 
   const { data, error } = useFetch(`${rev}|${tick}`, (signal) => unwrap(api.ai.chats.$get({}, { init: { signal } })))
-  const { data: sources } = useFetch('sources', (signal) => unwrap(api.ai.sources.$get({}, { init: { signal } })))
+  const { data: sources } = useFetch(`sources|${tick}`, (signal) => unwrap(api.ai.sources.$get({}, { init: { signal } })))
+  // Live claude.ai sync: undefined outside the desktop app.
+  const claudeLive = window.desktop ? sources?.sources.find((s) => s.source === 'claude')?.connected : undefined
+  const connectClaude = async () => {
+    if (await window.desktop?.connectClaude()) scan()
+    else setTick((t) => t + 1)
+  }
+  const disconnectClaude = async () => {
+    await window.desktop?.disconnectClaude()
+    setTick((t) => t + 1)
+  }
 
   // Keep the list current without a click: a rescan of unchanged sources is cheap.
   useEffect(() => {
@@ -137,7 +147,12 @@ function ChatList() {
       <header className={styles.toolbar}>
         <h2>AI chats</h2>
         <div className={styles.actions}>
-          <button onClick={scan} disabled={!!busy} title="Import chats from Claude Code, Antigravity and exports in Downloads">
+          {claudeLive === false && (
+            <button onClick={() => void connectClaude()} disabled={!!busy} title="Sign in to claude.ai, so Scan imports your claude.ai and Claude Desktop chats">
+              Connect claude.ai
+            </button>
+          )}
+          <button onClick={scan} disabled={!!busy} title="Import chats from Claude Code, Antigravity, claude.ai and exports in Downloads">
             Scan
           </button>
           <button onClick={() => fileRef.current?.click()} disabled={!!busy} title="Claude export zip, Google Takeout zip, or a Claude Code .jsonl">
@@ -207,6 +222,14 @@ function ChatList() {
             <div key={s.source} className={styles.source}>
               <SourceBadge source={s.source} />
               <p>{s.hint}</p>
+              {s.source === 'claude' && claudeLive !== undefined && (
+                <p>
+                  {claudeLive ? 'Connected to claude.ai. ' : 'Not connected to claude.ai. '}
+                  <button className={styles.link} onClick={() => void (claudeLive ? disconnectClaude() : connectClaude())}>
+                    {claudeLive ? 'Disconnect' : 'Connect'}
+                  </button>
+                </p>
+              )}
               {s.paths.map((p) => (
                 <code key={p}>{p}</code>
               ))}
@@ -286,6 +309,22 @@ function stamp(ts: number, chatDate: string) {
   return day === chatDate ? time(ts) : `${formatJournalDate(day)} · ${time(ts)}`
 }
 
+function Attachment({ a }: { a: ChatAttachment }) {
+  const label = (
+    <>
+      📎 {a.name}
+      {a.meta && <span> · {a.meta}</span>}
+    </>
+  )
+  if (!a.text) return <div className={styles.attachment}>{label}</div>
+  return (
+    <details className={styles.attachment}>
+      <summary>{label}</summary>
+      <ChatMarkdown source={a.text} />
+    </details>
+  )
+}
+
 function Message({ m, date, turn, flash }: { m: ChatMessage; date: string; turn?: number; flash: boolean }) {
   if (m.role === 'user')
     return (
@@ -295,7 +334,8 @@ function Message({ m, date, turn, flash }: { m: ChatMessage; date: string; turn?
             {stamp(m.ts, date)}
           </time>
         )}
-        <ChatMarkdown source={m.text} />
+        {m.text && <ChatMarkdown source={m.text} />}
+        {m.attachments?.map((a, i) => <Attachment key={i} a={a} />)}
       </div>
     )
   return (
