@@ -2,7 +2,7 @@
   "name": "logcadence",
   "productName": "Logcadence",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A journaling knowledge base: canvas, journal and tags panes",
   "author": "IP",
   "main": "dist-electron/main.js",
