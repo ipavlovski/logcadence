@@ -11,7 +11,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { createInterface } from 'node:readline/promises'
 import { git, run, uncommitted } from './lib/run.ts'
-import { bump, devSeries, nextDevNumber, sortDevTags, sortTags, versionLabel, type Bump } from '../shared/versions.ts'
+import { bump, devSeries, nextDevNumber, sortDevTags, sortTags, tagVersion, versionLabel, type Bump } from '../shared/versions.ts'
 
 const args = process.argv.slice(2)
 const devBuild = args.includes('--dev')
@@ -29,9 +29,12 @@ if (git('merge-base', 'main', 'dev') !== git('rev-parse', 'main')) fail('main ha
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as { version: string }
 const lines = (s: string) => s.split('\n').filter(Boolean)
-const onHead = sortTags(lines(git('tag', '--points-at', 'HEAD')))
+// A dev build follows the previous build of either kind; a release follows the previous release, so a release can
+// promote the dev build at HEAD (as scripts/release-notes.ts counts them).
+const counted = (tags: string[]) => (devBuild ? sortTags(tags) : sortTags(tags).filter((t) => !tagVersion(t)!.includes('-')))
+const onHead = counted(lines(git('tag', '--points-at', 'HEAD')))
 if (onHead.length) fail(`HEAD is already released as ${onHead.join(', ')}.`)
-const previous = sortTags(lines(git('tag', '--merged', 'HEAD'))).at(-1)
+const previous = counted(lines(git('tag', '--merged', 'HEAD'))).at(-1)
 const log = git('log', '--oneline', previous ? `${previous}..HEAD` : 'HEAD', '-n', '40')
 if (!log) fail(`Nothing new since ${previous}.`)
 
