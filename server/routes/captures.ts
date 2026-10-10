@@ -6,6 +6,7 @@ import { validator } from 'hono/validator'
 import { normalizeTag } from '../../shared/tags.ts'
 import type { CaptureKind, CaptureRequest, CaptureSection, UpdateCaptureBody } from '../../shared/types.ts'
 import { ASSETS_DIR } from '../db/client.ts'
+import { extension } from '../lib/content.ts'
 import { addImage, capture, captureRevision, deleteCapture, deleteImage, deleteTag, getCapture, library, moveTag, reorderImages, updateCapture } from '../lib/captures.ts'
 import { bad, defined, notFound, obj, optNum, optStr, optStrArr, str, type Obj } from '../lib/validate.ts'
 
@@ -57,11 +58,6 @@ function parseUpdate(v: unknown): UpdateCaptureBody {
   })
 }
 
-function extension(file: File): string {
-  const fromName = path.extname(file.name).slice(1).toLowerCase()
-  const ext = /^[a-z0-9]{1,5}$/.test(fromName) ? fromName : (file.type.split('/')[1] ?? 'bin').replace(/[^a-z0-9]/g, '').slice(0, 5)
-  return ext || 'bin'
-}
 
 export const captureRoutes = new Hono()
   // ── from the extension ──

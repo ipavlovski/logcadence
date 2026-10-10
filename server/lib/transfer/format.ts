@@ -47,6 +47,7 @@ export const CONTENT_TABLES = {
   checklists: content.checklists,
   checklist_items: content.checklistItems,
   checklist_marks: content.checklistMarks,
+  board_items: content.boardItems,
 }
 export const EVENTS_TABLES = { events: events.events }
 

@@ -5,6 +5,7 @@ import { Hono } from 'hono'
 import { validator } from 'hono/validator'
 import type { UpdateYtVideoBody, YtImageSection } from '../../shared/types.ts'
 import { ASSETS_DIR } from '../db/client.ts'
+import { extension } from '../lib/content.ts'
 import { addImage, addingPlaylists, addPlaylist, deleteImage, deleteTag, deleteVideo, getVideo, importAll, importPlaylist, library, listPlaylists, moveTag, removePlaylist, reorderImages, updateVideo } from '../lib/youtube/library.ts'
 import { checkKey } from '../lib/youtube/dataApi.ts'
 import { YoutubeError } from '../lib/youtube/playlist.ts'
@@ -37,11 +38,6 @@ const section = (v: string | undefined): YtImageSection => (SECTIONS.includes(v 
 
 const tagPath = (o: Record<string, unknown>, k: string) => normalizeTag(str(o, k)) || bad(`${k} must be a tag`)
 
-function extension(file: File): string {
-  const fromName = path.extname(file.name).slice(1).toLowerCase()
-  const ext = /^[a-z0-9]{1,5}$/.test(fromName) ? fromName : (file.type.split('/')[1] ?? 'bin').replace(/[^a-z0-9]/g, '').slice(0, 5)
-  return ext || 'bin'
-}
 
 export const youtubeRoutes = new Hono()
   .get('/youtube/library', (c) => c.json(library()))

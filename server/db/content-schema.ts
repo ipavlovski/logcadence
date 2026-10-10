@@ -423,3 +423,21 @@ export const checklistMarks = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.itemId, t.date] }), index('checklist_marks_date_idx').on(t.date)],
 )
+
+// The image board (Images tab): pasted images, gifs and videos kept as a scratchpad, in rows under a day.
+export const boardItems = sqliteTable(
+  'board_items',
+  {
+    id: text('id').primaryKey(),
+    date: text('date').notNull(), // YYYY-MM-DD day it's shown under
+    row: real('row').notNull(), // fractional order of the item's row within the day
+    position: real('position').notNull(), // fractional order within the row
+    file: text('file').notNull(), // file name under data/assets
+    thumb: text('thumb'), // smaller still (a video's poster) under data/assets; none for gifs and small images
+    mime: text('mime').notNull(),
+    width: integer('width').notNull(),
+    height: integer('height').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('board_items_day_idx').on(t.date, t.row, t.position)],
+)

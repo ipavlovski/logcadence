@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { and, asc, eq, inArray, sql, type SQL } from 'drizzle-orm'
 import type { ChatSource, EntryDTO, ImageDTO, NodeDTO } from '../../shared/types.ts'
 import { chatTag, cleanTags, holdsChatTag, isChatTag, isUnder } from '../../shared/tags.ts'
@@ -9,6 +10,13 @@ type NodeRow = typeof nodes.$inferSelect
 type ImageRow = typeof images.$inferSelect
 
 export const imageUrl = (file: string) => `/assets/${file}`
+
+/** Extension for an uploaded file's name under assets/: its own, or one from its type. */
+export function extension(file: File): string {
+  const fromName = path.extname(file.name).slice(1).toLowerCase()
+  const ext = /^[a-z0-9]{1,5}$/.test(fromName) ? fromName : (file.type.split('/')[1] ?? 'bin').replace(/[^a-z0-9]/g, '').slice(0, 5)
+  return ext || 'bin'
+}
 
 const toImage = (r: ImageRow): ImageDTO => ({ id: r.id, url: imageUrl(r.file), mime: r.mime })
 

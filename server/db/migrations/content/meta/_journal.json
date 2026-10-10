@@ -78,6 +78,13 @@
       "when": 1791462775989,
       "tag": "0010_lush_mesmero",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1791637440415,
+      "tag": "0011_perfect_dagger",
+      "breakpoints": true
     }
   ]
 }

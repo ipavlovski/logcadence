@@ -1,6 +1,7 @@
 import { lazy, type ComponentType, type LazyExoticComponent } from 'react'
 import { Activity } from '../components/Activity/Activity.tsx'
 import { AiChats } from '../components/AiChats/AiChats.tsx'
+import { Board } from '../components/Board/Board.tsx'
 import { Bookmarks, Reddit } from '../components/Captures/Captures.tsx'
 import { Progress } from '../components/Progress/Progress.tsx'
 import { Spotify } from '../components/Spotify/Spotify.tsx'
@@ -35,7 +36,7 @@ export const PLUGINS: CanvasPlugin[] = [
   { type: 'youtube', title: 'YouTube', description: 'Videos imported from your playlists, by the day they were discovered, with notes, images and tags of their own.', Component: Youtube },
   { type: 'reddit', title: 'Reddit', description: 'Reddit posts captured with the Chrome extension: a screenshot of each whole post, by subreddit and day, with comments, notes and tags.', Component: Reddit },
   { type: 'bookmarks', title: 'Bookmarks', description: 'Pages bookmarked with the Chrome extension, with a screenshot, title and favicon, by day, with notes and tags.', Component: Bookmarks },
-  { type: 'images', title: 'Images', description: 'Browse every image pasted into the journal.' },
+  { type: 'images', title: 'Images', description: 'A scratchpad board, like PureRef: paste images, gifs and videos under today, and drag them into rows.', Component: Board },
   { type: 'progress', title: 'Progress', description: 'Project progress over time: tasks:progress entries, one line per primary tag, one circle per day.', Component: Progress },
   { type: 'ai-prompts', title: 'AI', description: 'Chats imported from Claude, Claude Code, Gemini and Antigravity, with full transcripts.', Component: AiChats },
   { type: 'activity', title: 'Activity', description: 'Keyboard and mouse activity in 5-minute slots, grouped into sessions of computer use (desktop app).', Component: Activity },

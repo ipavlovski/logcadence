@@ -7,6 +7,37 @@ export interface ImageDTO {
   mime: string
 }
 
+/** An image, gif or video on the image board, in a row under a day. */
+export interface BoardItemDTO {
+  id: string
+  date: string
+  row: number
+  position: number
+  url: string
+  /** A smaller still (a video's poster); null when the original is shown as is (gifs, small images). */
+  thumbUrl: string | null
+  mime: string
+  width: number
+  height: number
+}
+
+export interface BoardDayDTO {
+  date: string
+  items: BoardItemDTO[]
+}
+
+export interface BoardPageDTO {
+  days: BoardDayDTO[]
+  /** Pass as `before` for older days; null when there are none. */
+  next: string | null
+}
+
+export interface MoveBoardItemBody {
+  date: string
+  row: number
+  position: number
+}
+
 export const isVideo = (m: { mime: string }) => m.mime.startsWith('video/')
 
 export interface NodeDTO {

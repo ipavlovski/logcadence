@@ -7,7 +7,7 @@ import { validator } from 'hono/validator'
 import type { CreateNodeBody, UpdateNodeBody } from '../../shared/types.ts'
 import { ASSETS_DIR, db } from '../db/client.ts'
 import { entries, images, nodes } from '../db/content-schema.ts'
-import { imageUrl, loadNode } from '../lib/content.ts'
+import { extension, imageUrl, loadNode } from '../lib/content.ts'
 import { logEvent } from '../lib/events.ts'
 import { touchDates } from '../lib/journalFiles.ts'
 import { bad, defined, notFound, num, obj, optBool, optNum, optStr, optStrArr, str } from '../lib/validate.ts'
@@ -36,11 +36,6 @@ function entryDate(entryId: string): string {
   return db.select({ date: entries.date }).from(entries).where(eq(entries.id, entryId)).get()?.date ?? notFound('entry')
 }
 
-function extension(file: File): string {
-  const fromName = path.extname(file.name).slice(1).toLowerCase()
-  const ext = /^[a-z0-9]{1,5}$/.test(fromName) ? fromName : (file.type.split('/')[1] ?? 'bin').replace(/[^a-z0-9]/g, '').slice(0, 5)
-  return ext || 'bin'
-}
 
 export const nodeRoutes = new Hono()
   .post('/nodes', validator('json', parseCreate), (c) => {
