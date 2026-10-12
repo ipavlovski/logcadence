@@ -1,12 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import { writeFileSync } from 'node:fs'
-import path from 'node:path'
 import { Hono } from 'hono'
 import { validator } from 'hono/validator'
 import type { UpdateYtVideoBody, YtImageSection } from '../../shared/types.ts'
-import { ASSETS_DIR } from '../db/client.ts'
-import { extension } from '../lib/content.ts'
 import { addImage, addingPlaylists, addPlaylist, deleteImage, deleteTag, deleteVideo, getVideo, importAll, importPlaylist, library, listPlaylists, moveTag, removePlaylist, reorderImages, updateVideo } from '../lib/youtube/library.ts'
+import { saveUpload } from '../lib/media.ts'
 import { checkKey } from '../lib/youtube/dataApi.ts'
 import { YoutubeError } from '../lib/youtube/playlist.ts'
 import { publicSettings, saveSettings } from '../lib/youtube/settings.ts'
@@ -63,9 +60,7 @@ export const youtubeRoutes = new Hono()
       getVideo(videoId) ?? notFound('video')
       const { file } = c.req.valid('form')
       const id = randomUUID()
-      const name = `${id}.${extension(file)}`
-      writeFileSync(path.join(ASSETS_DIR, name), Buffer.from(await file.arrayBuffer()))
-      return c.json(addImage(videoId, sec, { id, file: name, mime: file.type }), 201)
+      return c.json(addImage(videoId, sec, { id, ...(await saveUpload(id, file)) }), 201)
     },
   )
   .post(

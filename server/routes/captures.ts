@@ -1,13 +1,10 @@
 import { randomUUID } from 'node:crypto'
-import { writeFileSync } from 'node:fs'
-import path from 'node:path'
 import { Hono } from 'hono'
 import { validator } from 'hono/validator'
 import { normalizeTag } from '../../shared/tags.ts'
 import type { CaptureKind, CaptureRequest, CaptureSection, UpdateCaptureBody } from '../../shared/types.ts'
-import { ASSETS_DIR } from '../db/client.ts'
-import { extension } from '../lib/content.ts'
 import { addImage, capture, captureRevision, deleteCapture, deleteImage, deleteTag, getCapture, library, moveTag, reorderImages, updateCapture } from '../lib/captures.ts'
+import { saveUpload } from '../lib/media.ts'
 import { bad, defined, notFound, obj, optNum, optStr, optStrArr, str, type Obj } from '../lib/validate.ts'
 
 // The Reddit and Bookmarks tabs, and POST /capture, where the Chrome extension (extension/) sends a page.
@@ -101,9 +98,7 @@ export const captureRoutes = new Hono()
       getCapture(id) ?? notFound('capture')
       const { file } = c.req.valid('form')
       const imageId = randomUUID()
-      const name = `${imageId}.${extension(file)}`
-      writeFileSync(path.join(ASSETS_DIR, name), Buffer.from(await file.arrayBuffer()))
-      return c.json(addImage(id, sec, { id: imageId, file: name, mime: file.type }), 201)
+      return c.json(addImage(id, sec, { id: imageId, ...(await saveUpload(imageId, file)) }), 201)
     },
   )
   .post(

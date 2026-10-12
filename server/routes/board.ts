@@ -10,6 +10,7 @@ import { ASSETS_DIR, db } from '../db/client.ts'
 import { boardItems } from '../db/content-schema.ts'
 import { extension, imageUrl } from '../lib/content.ts'
 import { logEvent } from '../lib/events.ts'
+import { saveUpload } from '../lib/media.ts'
 import { bad, date, notFound, num, obj, optDate } from '../lib/validate.ts'
 
 // The image board (Images tab): a scratchpad of pasted images, gifs and videos, in rows under a day.
@@ -96,8 +97,8 @@ export const boardRoutes = new Hono()
   .post('/board', validator('form', parseUpload), async (c) => {
     const b = c.req.valid('form')
     const id = randomUUID()
-    const file = `${id}.${extension(b.file)}`
-    writeFileSync(path.join(ASSETS_DIR, file), Buffer.from(await b.file.arrayBuffer()))
+    // An animated gif comes back as an mp4 (with no thumbnail, the board plays it like the gif).
+    const { file, mime } = await saveUpload(id, b.file)
     const thumb = b.thumb ? `${id}-thumb.${extension(b.thumb)}` : null
     if (b.thumb && thumb) writeFileSync(path.join(ASSETS_DIR, thumb), Buffer.from(await b.thumb.arrayBuffer()))
     const row =
@@ -115,7 +116,7 @@ export const boardRoutes = new Hono()
         .from(boardItems)
         .where(and(eq(boardItems.date, b.date), eq(boardItems.row, row)))
         .get()?.p ?? 0) + 1
-    const values = { id, date: b.date, row, position, file, thumb, mime: b.file.type, width: b.width, height: b.height, createdAt: Date.now() }
+    const values = { id, date: b.date, row, position, file, thumb, mime, width: b.width, height: b.height, createdAt: Date.now() }
     db.insert(boardItems).values(values).run()
     logEvent('board-item', id, 'create', { ...values })
     return c.json(toItem(values), 201)

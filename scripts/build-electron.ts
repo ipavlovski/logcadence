@@ -8,6 +8,7 @@
 
 import { context, type BuildOptions } from 'esbuild'
 import { copyFileSync, mkdirSync, rmSync } from 'node:fs'
+import { fetchFfmpeg } from './fetch-ffmpeg.ts'
 
 const args = process.argv.slice(2)
 const watch = args.includes('--watch')
@@ -29,6 +30,8 @@ copyFileSync('electron/setup.html', `${OUT}/setup.html`)
 const contexts = await Promise.all(builds.map((b) => context(b)))
 if (watch) await Promise.all(contexts.map((c) => c.watch()))
 else {
+  // Packaged with the app (electron-builder.yml); a watch build runs unpackaged, with the ffmpeg on PATH.
+  await fetchFfmpeg()
   await Promise.all(contexts.map((c) => c.rebuild()))
   await Promise.all(contexts.map((c) => c.dispose()))
 }

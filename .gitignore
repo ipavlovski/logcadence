@@ -12,4 +12,5 @@ ds-bundle/
 dist-electron
 release
 release-dev
+vendor/ffmpeg
 *.tsbuildinfo

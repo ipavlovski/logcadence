@@ -17,6 +17,9 @@ extraResources:
     to: dist
   - from: server/db/migrations
     to: migrations
+  # scripts/fetch-ffmpeg.ts: turns uploaded gifs into mp4s.
+  - from: vendor/ffmpeg
+    to: ffmpeg
 asarUnpack:
   - "**/node_modules/better-sqlite3/**"
 # better-sqlite3 ships Node-API prebuilds for every platform, which load in Electron as they are.

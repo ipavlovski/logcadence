@@ -1,5 +1,6 @@
 // Thumbnails for the image board, made in the app before upload: a smaller still, or a video's poster.
-// Gifs keep no thumbnail so they animate on the board.
+// Gifs keep no thumbnail so they animate on the board (the server stores an animated one as an mp4, which the
+// board then plays like the gif).
 
 /** Twice the default row height, so tiles stay sharp when zoomed in a little and on high-dpi screens. */
 const THUMB_H = 400

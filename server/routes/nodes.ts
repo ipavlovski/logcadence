@@ -1,14 +1,13 @@
 import { randomUUID } from 'node:crypto'
-import { writeFileSync } from 'node:fs'
-import path from 'node:path'
 import { asc, eq, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { validator } from 'hono/validator'
 import type { CreateNodeBody, UpdateNodeBody } from '../../shared/types.ts'
-import { ASSETS_DIR, db } from '../db/client.ts'
+import { db } from '../db/client.ts'
 import { entries, images, nodes } from '../db/content-schema.ts'
-import { extension, imageUrl, loadNode } from '../lib/content.ts'
+import { imageUrl, loadNode } from '../lib/content.ts'
 import { logEvent } from '../lib/events.ts'
+import { saveUpload } from '../lib/media.ts'
 import { touchDates } from '../lib/journalFiles.ts'
 import { bad, defined, notFound, num, obj, optBool, optNum, optStr, optStrArr, str } from '../lib/validate.ts'
 
@@ -83,11 +82,13 @@ export const nodeRoutes = new Hono()
     }),
     async (c) => {
       const nodeId = c.req.param('id')
-      const node = db.select().from(nodes).where(eq(nodes.id, nodeId)).get() ?? notFound('node')
+      const find = () => db.select().from(nodes).where(eq(nodes.id, nodeId)).get() ?? notFound('node')
+      find()
       const { file } = c.req.valid('form')
       const id = randomUUID()
-      const name = `${id}.${extension(file)}`
-      writeFileSync(path.join(ASSETS_DIR, name), Buffer.from(await file.arrayBuffer()))
+      // A gif can take a while to become an mp4, so the node is read again after.
+      const { file: name, mime } = await saveUpload(id, file)
+      const node = find()
       const max = db
         .select({ p: sql<number | null>`max(${images.position})` })
         .from(images)
@@ -95,14 +96,14 @@ export const nodeRoutes = new Hono()
         .get()?.p
       db.transaction(() => {
         db.insert(images)
-          .values({ id, nodeId, file: name, mime: file.type, position: (max ?? 0) + 1, createdAt: Date.now() })
+          .values({ id, nodeId, file: name, mime, position: (max ?? 0) + 1, createdAt: Date.now() })
           .run()
         // The first image becomes active; later pastes keep the current large preview.
         if (!node.activeImageId) db.update(nodes).set({ activeImageId: id }).where(eq(nodes.id, nodeId)).run()
       })
-      logEvent('image', id, 'create', { nodeId, file: name, mime: file.type })
+      logEvent('image', id, 'create', { nodeId, file: name, mime })
       touchDates(entryDate(node.entryId))
-      return c.json({ image: { id, url: imageUrl(name), mime: file.type }, activeImageId: node.activeImageId ?? id }, 201)
+      return c.json({ image: { id, url: imageUrl(name), mime }, activeImageId: node.activeImageId ?? id }, 201)
     },
   )
   // New gallery order (the first image is the node's thumbnail); `ids` must be all of the node's images.

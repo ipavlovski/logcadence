@@ -29,6 +29,8 @@ const APP_URL = DEV_URL ?? `http://127.0.0.1:${PORT}`
 const RESOURCES = app.isPackaged ? process.resourcesPath : app.getAppPath()
 // Read lazily by server/db/open.ts.
 process.env.LOGCADENCE_MIGRATIONS_DIR = app.isPackaged ? path.join(RESOURCES, 'migrations') : path.join(RESOURCES, 'server/db/migrations')
+// The bundled ffmpeg (scripts/fetch-ffmpeg.ts), which turns uploaded gifs into mp4s (server/lib/media.ts); unpackaged, the one on PATH.
+if (app.isPackaged) process.env.LOGCADENCE_FFMPEG = path.join(RESOURCES, 'ffmpeg', 'ffmpeg.exe')
 
 let server: RunningServer | undefined
 let win: BrowserWindow | undefined

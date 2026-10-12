@@ -22,6 +22,8 @@ const rowHeightStore = persistedStore('board.rowHeight', 160, (s) => (typeof s =
 
 const fail = (err: unknown) => notify(err instanceof Error ? err.message : String(err))
 const isVideo = (item: BoardItemDTO) => item.mime.startsWith('video/')
+/** A gif the server stored as an mp4 (server/lib/media.ts): a video the app made no poster for, played like the gif. */
+const isGifLike = (item: BoardItemDTO) => isVideo(item) && !item.thumbUrl
 
 interface Place {
   date: string
@@ -337,7 +339,7 @@ export function Board() {
       {next && <div ref={more} className={styles.more} />}
       {open && (
         <div className={styles.lightbox} data-keep-selection onClick={() => setOpenId(null)}>
-          {isVideo(open) ? <video key={open.id} src={open.url} controls autoPlay onClick={(e) => e.stopPropagation()} /> : <img key={open.id} src={open.url} alt="" />}
+          {isVideo(open) ? <video key={open.id} src={open.url} controls autoPlay loop={isGifLike(open)} onClick={(e) => e.stopPropagation()} /> : <img key={open.id} src={open.url} alt="" />}
           <span className={styles.count}>
             {openAt + 1} / {all.length}
           </span>
@@ -361,10 +363,11 @@ interface TileProps {
   onRemove: () => void
 }
 
-/** One tile: the thumbnail (or a gif as is); a video plays muted while hovered. */
+/** One tile: the thumbnail (or a gif as is); a video plays muted while hovered, a gif stored as an mp4 always. */
 function Tile({ item, selected, dragging, mark, onOpen, onRemove, ...handlers }: TileProps) {
   const [hover, setHover] = useState(false)
   const video = isVideo(item)
+  const gifLike = isGifLike(item)
   return (
     <div
       className={[styles.tile, selected && styles.selected, dragging && styles.dragging, mark && styles[mark]].filter(Boolean).join(' ')}
@@ -378,11 +381,11 @@ function Tile({ item, selected, dragging, mark, onOpen, onRemove, ...handlers }:
       {...handlers}
     >
       {video && (hover || !item.thumbUrl) ? (
-        <video src={item.url} muted loop playsInline autoPlay={hover} preload="metadata" />
+        <video src={item.url} muted loop playsInline autoPlay={hover || gifLike} preload="metadata" />
       ) : (
         <img src={item.thumbUrl ?? item.url} alt="" draggable={false} loading="lazy" />
       )}
-      {video && !hover && <span className={styles.play}>▶</span>}
+      {video && !gifLike && !hover && <span className={styles.play}>▶</span>}
       <button
         className={styles.delete}
         title="Remove (Delete)"
