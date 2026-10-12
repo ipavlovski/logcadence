@@ -1,7 +1,8 @@
-import { getPort, isRedditPost, PORTS, setPort } from './common.js'
+import { appFor, getPort, isRedditPost, isVideoSite, setPort } from './common.js'
 
-// The toolbar popup: what the page is, where it can go, and which app (port) captures are sent to. The capture
-// itself runs in the background worker, so it finishes even if the popup closes.
+// The toolbar popup: what the page is, where it can go, and which app (port) captures are sent to: SEO Dashboard for
+// YouTube, TikTok and Instagram pages, Logcadence for the rest. The capture itself runs in the background worker, so
+// it finishes even if the popup closes.
 
 const $ = (id) => document.getElementById(id)
 const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
@@ -13,9 +14,12 @@ else $('favicon').hidden = true
 
 const web = /^https?:/.test(tab?.url ?? '')
 const post = isRedditPost(tab?.url)
+const app = appFor(tab?.url)
+$('app').textContent = app.name
 $('reddit').hidden = !post
 $('comment').hidden = !post
 if (post) $('bookmark').textContent = 'Save as bookmark instead'
+if (isVideoSite(tab?.url)) $('bookmark').textContent = 'Bookmark video → SEO Dashboard'
 if (!web) {
   for (const b of document.querySelectorAll('.actions button')) b.disabled = true
   show(false, 'Only web pages can be captured.')
@@ -23,17 +27,17 @@ if (!web) {
 
 async function checkApp() {
   const status = $('status')
-  const { port, ok } = await chrome.runtime.sendMessage({ type: 'ping' })
+  const { port, name, ok } = await chrome.runtime.sendMessage({ type: 'ping', url: tab?.url })
   status.textContent = ok ? 'connected' : 'not running'
   status.className = `status ${ok ? 'ok' : 'off'}`
-  status.title = ok ? `${PORTS[port]} is listening on port ${port}` : `Nothing answers on port ${port}: start ${PORTS[port]}, or pick the other app below`
+  status.title = ok ? `${name} is listening on port ${port}` : `Nothing answers on port ${port}: start ${name}, or pick the other app below`
 }
 
 const select = $('port')
-for (const [port, name] of Object.entries(PORTS)) select.add(new Option(`${name} (${port})`, port))
-select.value = String(await getPort())
+for (const [port, name] of Object.entries(app.ports)) select.add(new Option(`${name} (${port})`, port))
+select.value = String(await getPort(app))
 select.onchange = async () => {
-  await setPort(Number(select.value))
+  await setPort(app, Number(select.value))
   checkApp()
 }
 checkApp()

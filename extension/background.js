@@ -1,9 +1,10 @@
 // Logcadence capture: screenshots the page and POSTs it, with its url, title and icon, to the Logcadence app's API
 // on 127.0.0.1 (server/routes/captures.ts). A Reddit post goes to the Reddit tab as one screenshot of the whole post
 // (scrolled through and stitched); any other page goes to Bookmarks as what is on screen; "comment" adds what is on
-// screen to the comments of a Reddit post already captured.
+// screen to the comments of a Reddit post already captured. Bookmarks of YouTube, TikTok and Instagram pages go to
+// SEO Dashboard (../seo-dashboard) instead, which takes the same request.
 
-import { getPort, isRedditPost, PORTS } from './common.js'
+import { appFor, getPort, isRedditPost, isVideoSite } from './common.js'
 
 // The server refuses captures without it (a web page can't send it).
 const HEADER = 'x-logcadence-capture'
@@ -17,23 +18,27 @@ const QUALITY = 0.9
 
 // ── talking to Logcadence ──────────────────────────────────────────────────
 
-async function ping() {
-  const port = await getPort()
+/** Whether the app that `url`'s captures go to is running. */
+async function ping(url) {
+  const app = appFor(url)
+  const port = await getPort(app)
+  const out = { port, name: app.ports[port], ok: false }
   try {
     const res = await fetch(`http://127.0.0.1:${port}/api/capture/ping`)
-    return { port, ok: res.ok && (await res.json()).app === 'logcadence' }
+    return { ...out, ok: res.ok && (await res.json()).app === app.id }
   } catch {
-    return { port, ok: false }
+    return out
   }
 }
 
 async function send(body) {
-  const port = await getPort()
+  const app = appFor(body.url)
+  const port = await getPort(app)
   let res
   try {
     res = await fetch(`http://127.0.0.1:${port}/api/capture`, { method: 'POST', headers: { 'content-type': 'application/json', [HEADER]: '1' }, body: JSON.stringify(body) })
   } catch {
-    throw new Error(`${PORTS[port]} isn't running (nothing on port ${port})`)
+    throw new Error(`${app.ports[port]} isn't running (nothing on port ${port})`)
   }
   const json = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`)
@@ -45,6 +50,7 @@ async function send(body) {
 /** Captures the tab for `target` (reddit | bookmark | comment) and sends it; returns Logcadence's answer. */
 async function capture(tab, target) {
   if (!/^https?:/.test(tab.url ?? '')) throw new Error('Only web pages can be captured')
+  if (target !== 'bookmark' && isVideoSite(tab.url)) throw new Error('Videos can only be bookmarked')
   if (target !== 'bookmark' && !isRedditPost(tab.url)) throw new Error('Not a Reddit post')
   const body = target === 'reddit' ? await redditPost(tab) : await visible(tab, target === 'bookmark')
   return send({ target, url: tab.url, title: tab.title ?? '', ...body })
@@ -231,7 +237,8 @@ function restorePage(y) {
 
 // ── wiring ─────────────────────────────────────────────────────────────────
 
-const describe = (r) => `${r.comment ? 'Comment added to' : r.created ? 'Saved to' : 'Updated in'} ${r.kind === 'reddit' ? 'Reddit' : 'Bookmarks'}`
+const PLACE = { reddit: 'Reddit', video: 'SEO Dashboard' }
+const describe = (r) => `${r.comment ? 'Comment added to' : r.created ? 'Saved to' : 'Updated in'} ${PLACE[r.kind] ?? 'Bookmarks'}`
 
 // The popup asks for a capture; it runs here, so it finishes even if the popup closes.
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
@@ -243,12 +250,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     return true
   }
   if (msg?.type === 'ping') {
-    ping().then(reply)
+    ping(msg.url).then(reply)
     return true
   }
 })
 
-// Alt+Shift+D: a Reddit post to Reddit, anything else to Bookmarks; the result shows on the toolbar icon.
+// Alt+Shift+D: a Reddit post to Reddit, a video to SEO Dashboard, anything else to Bookmarks; the result shows on the toolbar icon.
 chrome.commands.onCommand.addListener(async (command, tab) => {
   if (command !== 'capture-now' || !tab) return
   const badge = (text, color, title) => {

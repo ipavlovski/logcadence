@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Logcadence capture",
   "version": "0.1.0",
-  "description": "Sends a screenshot of the page (a whole Reddit post, stitched) with its url, title and favicon to Logcadence.",
+  "description": "Sends a screenshot of the page (a whole Reddit post, stitched) with its url, title and favicon to Logcadence; videos (YouTube, TikTok, Instagram) to SEO Dashboard.",
   "permissions": ["activeTab", "scripting", "storage", "favicon"],
   "host_permissions": ["http://127.0.0.1/*", "https://*.reddit.com/*", "https://*.redditmedia.com/*", "https://*.redditstatic.com/*"],
   "background": { "service_worker": "background.js", "type": "module" },
@@ -19,7 +19,7 @@
     },
     "capture-now": {
       "suggested_key": { "default": "Alt+Shift+D" },
-      "description": "Capture right away: a Reddit post to Reddit, any other page to Bookmarks"
+      "description": "Capture right away: a Reddit post to Reddit, a video to SEO Dashboard, any other page to Bookmarks"
     }
   }
 }

@@ -5,6 +5,7 @@ Sends a screenshot of the page, with its url, title and favicon, to the running 
 - **Reddit post** → the canvas **Reddit** tab: one screenshot of the whole post (title, text, images), scrolled through and stitched, with the subreddit, its icon, the author, points, comment count and post date.
 - **Add as comment** (on a Reddit post you have captured) → what's on screen goes to that post's **Comments**.
 - **Any other page** → the canvas **Bookmarks** tab: what's on screen, with the favicon.
+- **A YouTube, TikTok or Instagram page** → **SEO Dashboard** (`../seo-dashboard`) instead of Logcadence, as a bookmark. SEO Dashboard only keeps short videos (Shorts, TikToks, reels) and answers anything else on those sites with an error.
 
 Capturing a page again replaces its screenshot and keeps its notes, comments and tags.
 
@@ -17,10 +18,10 @@ Capturing a page again replaces its screenshot and keeps its notes, comments and
 ## Use
 
 - Toolbar button or **Alt+Shift+S** opens the popup: pick what to capture.
-- **Alt+Shift+D** captures right away (a Reddit post to Reddit, anything else to Bookmarks); the toolbar icon shows ✓ or ! (hover it for the message).
+- **Alt+Shift+D** captures right away (a Reddit post to Reddit, a video to SEO Dashboard, anything else to Bookmarks); the toolbar icon shows ✓ or ! (hover it for the message).
 - Shortcuts can be changed at `chrome://extensions/shortcuts`.
-- The popup's **Send to** picks the app: Logcadence (port 3002) or LogcadenceDev (3003).
+- The popup's **Send to** picks the build of the app the page goes to: Logcadence (port 3002) or LogcadenceDev (3003); on a video page, SEO Dashboard (3010) or SeoDashboardDev (3011). Each is remembered separately.
 
 ## How it talks to the app
 
-`POST http://127.0.0.1:<port>/api/capture` with a JSON body (`CaptureRequest` in `shared/types.ts`): the images are jpeg `data:` urls. The request must carry the `x-logcadence-capture` header; a web page can't add it to a request to another origin, so pages open in the browser can't send captures.
+`POST http://127.0.0.1:<port>/api/capture` (the same for SEO Dashboard) with a JSON body (`CaptureRequest` in `shared/types.ts`): the images are jpeg `data:` urls. The request must carry the `x-logcadence-capture` header; a web page can't add it to a request to another origin, so pages open in the browser can't send captures.
