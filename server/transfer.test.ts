@@ -54,7 +54,6 @@ describe('data export / import', () => {
 
     mkdirSync(path.join(dataDir, 'gps'), { recursive: true })
     writeFileSync(path.join(dataDir, 'gps', 'readme.txt'), 'not a gps day')
-    writeFileSync(path.join(dataDir, 'spotify.json'), JSON.stringify({ clientId: 'abc', refreshToken: 'secret' }))
 
     const manifest = await exportLibrary()
     expect(manifest.tables.entries!.rows).toBe(2)
@@ -77,8 +76,6 @@ describe('data export / import', () => {
     }
     for (const f of readdirSync(path.join(dataDir, 'assets'))) expect(readFileSync(path.join(target, 'assets', f))).toEqual(readFileSync(path.join(dataDir, 'assets', f)))
     expect(readFileSync(path.join(target, 'gps', 'readme.txt'), 'utf8')).toBe('not a gps day')
-    // Settings come along without the tokens.
-    expect(JSON.parse(readFileSync(path.join(target, 'spotify.json'), 'utf8'))).toEqual({ clientId: 'abc' })
     expect(readdirSync(target)).not.toContain('.importing')
   })
 

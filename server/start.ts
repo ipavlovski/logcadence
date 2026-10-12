@@ -11,8 +11,6 @@ import { setClaudeWeb, type ClaudeWebClient } from './lib/ai/claudeWeb.ts'
 import { autoReady, importNew } from './lib/gps/drive.ts'
 import { scanGps } from './lib/gps/scan.ts'
 import { flushJournalFiles, touchDates } from './lib/journalFiles.ts'
-import { isConnected } from './lib/spotify/auth.ts'
-import { sync as syncSpotify } from './lib/spotify/spotify.ts'
 import { importAll as importYoutube } from './lib/youtube/library.ts'
 import { loadSettings as youtubeSettings } from './lib/youtube/settings.ts'
 import { downloadThumbs } from './lib/youtube/thumbs.ts'
@@ -20,8 +18,6 @@ import { downloadThumbs } from './lib/youtube/thumbs.ts'
 // Starts the API (and, given staticDir, the built web app) plus the background jobs. Shared by the web
 // server (server/index.ts) and the desktop app, which runs it inside Electron's main process.
 
-// Spotify history: "recently played" holds only the last 50 plays, so sync well within that.
-const SPOTIFY_SYNC_MS = 3 * 60_000
 // GPS files from Google Drive: GPSLogger uploads on its own schedule, so every half hour is plenty.
 const GPS_DRIVE_SYNC_MS = 30 * 60_000
 // YouTube playlists: new videos count as discovered on the day an import sees them, so check a few times a day.
@@ -63,13 +59,6 @@ export function startServer({ port, staticDir, idleSeconds, claudeWeb }: StartOp
     if (dates.length) touchDates(...dates.map((d) => d.date))
   }
 
-  const spotifyTick = () => {
-    if (isConnected()) syncSpotify().catch((err: Error) => console.warn(`spotify sync: ${err.message}`))
-  }
-  const spotifyTimer = setInterval(spotifyTick, SPOTIFY_SYNC_MS)
-  spotifyTimer.unref()
-  spotifyTick()
-
   // GPS days dropped into the gps folder while the app was off, then new ones from Google Drive.
   const gpsDriveTick = () => {
     if (autoReady())
@@ -107,7 +96,7 @@ export function startServer({ port, staticDir, idleSeconds, claudeWeb }: StartOp
   const activity = idleSeconds && startRecorder(db, idleSeconds)
 
   return new Promise((resolve, reject) => {
-    // Bound to 127.0.0.1 explicitly: Spotify's login redirect must use that address, and WSL only
+    // Bound to 127.0.0.1 explicitly: Google Drive's login redirect uses that address, and WSL only
     // forwards a Linux 127.0.0.1 listener to Windows' 127.0.0.1 (an IPv6 "::" one becomes [::1] only).
     const server = serve({ fetch: app.fetch, port, hostname: '127.0.0.1' }, () => {
       console.log(`API listening on http://127.0.0.1:${port}`)
@@ -118,7 +107,6 @@ export function startServer({ port, staticDir, idleSeconds, claudeWeb }: StartOp
         activity,
         stop: () =>
           (stopped ??= new Promise<void>((done) => {
-            clearInterval(spotifyTimer)
             clearInterval(gpsDriveTimer)
             clearInterval(youtubeTimer)
             stopRecorder()

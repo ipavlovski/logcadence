@@ -1,11 +1,11 @@
 import Database from 'better-sqlite3'
 import { createHash } from 'node:crypto'
-import { chmodSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs'
 import path from 'node:path'
 import type { SQLiteTable } from 'drizzle-orm/sqlite-core'
 import { openContentDb, openEventsDb } from '../../db/open.ts'
 import { withZip, type ZipMember } from '../zip.ts'
-import { CONTENT_TABLES, EVENTS_TABLES, FORMAT, FORMAT_VERSION, LEGACY_FORMATS, type FileSet, type Manifest, type Progress, type Settings } from './format.ts'
+import { CONTENT_TABLES, EVENTS_TABLES, FORMAT, FORMAT_VERSION, LEGACY_FORMATS, type FileSet, type Manifest, type Progress } from './format.ts'
 
 export interface ImportOptions {
   /** The library folder to import into; it must be empty (no entries, events or assets). */
@@ -80,16 +80,6 @@ export function importFrom(zipFile: string, { dataDir, gpsDir = path.join(dataDi
     mkdirSync(gpsDir, { recursive: true })
     extractDir(members, 'gps', gpsDir, manifest.gps, onProgress, { keepExisting: true })
 
-    const settings = byName.get('settings.json') ? (JSON.parse(byName.get('settings.json')!.read().toString('utf8')) as Settings) : {}
-    const spotifyFile = path.join(dataDir, 'spotify.json')
-    if (settings.spotify?.clientId && !existsSync(spotifyFile)) {
-      writeFileSync(spotifyFile, JSON.stringify({ clientId: settings.spotify.clientId }, null, 2))
-      try {
-        chmodSync(spotifyFile, 0o600)
-      } catch {
-        // not supported on every filesystem
-      }
-    }
     return { manifest, warnings }
   })
 }

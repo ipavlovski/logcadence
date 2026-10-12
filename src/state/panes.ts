@@ -86,8 +86,9 @@ function validKey(pane: PaneId, key: string): boolean {
   }
 }
 
-// Tabs saved under a plugin's former name; the Shortcuts plugin became a window (ctrl+shift+?).
-const RENAMED: Record<string, string> = { 'plugin:threads': 'plugin:progress', 'plugin:shortcuts': 'dashboard' }
+// Tabs saved under a plugin's former name; the Shortcuts plugin became a window (ctrl+shift+?), and Spotify
+// moved out of the app.
+const RENAMED: Record<string, string> = { 'plugin:threads': 'plugin:progress', 'plugin:shortcuts': 'dashboard', 'plugin:spotify': 'dashboard' }
 const renamed = (k: unknown) => (typeof k === 'string' ? (RENAMED[k] ?? k) : k)
 
 function revive(stored: unknown): PanesState {

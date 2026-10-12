@@ -8,7 +8,6 @@ import type { ContentDb, EventsDb } from '../../db/open.ts'
 //   tables/<name>.ndjson   one row per line, as drizzle selects it (JSON columns nested, booleans, epoch ms)
 //   assets/<file>          pasted media, stored as is
 //   gps/<file>             raw GPS days (the map's source data)
-//   settings.json          Settings: no secrets, so Spotify has to be connected again after an import
 //
 // The journal markdown mirror is left out: it is derived from the database and rebuilt on start.
 
@@ -27,9 +26,6 @@ export const CONTENT_TABLES = {
   entry_tags: content.entryTags,
   images: content.images,
   chats: content.chats,
-  spotify_plays: content.spotifyPlays,
-  spotify_likes: content.spotifyLikes,
-  spotify_contexts: content.spotifyContexts,
   gps_places: content.gpsPlaces,
   gps_days: content.gpsDays,
   gps_segments: content.gpsSegments,
@@ -66,10 +62,6 @@ export interface Manifest {
   tables: Record<string, { rows: number; sha256: string }>
   assets: FileSet
   gps: FileSet
-}
-
-export interface Settings {
-  spotify?: { clientId?: string }
 }
 
 /** A library to export from: its open databases and folders. */

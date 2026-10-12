@@ -14,9 +14,9 @@ describe('canvas tabs', () => {
   it('keeps saved order and hidden tabs across plugin changes, adding new plugins at the end', () => {
     moveCanvasTab('ai', -2)
     setCanvasTabShown('map', false)
-    syncCanvasPlugins(['map', 'ai', 'spotify'])
-    expect(canvasTabsStore.get()).toEqual({ order: ['ai', 'map', 'spotify'], hidden: ['map'] })
-    expect(visibleCanvasTabs()).toEqual(['ai', 'spotify'])
+    syncCanvasPlugins(['map', 'ai', 'youtube'])
+    expect(canvasTabsStore.get()).toEqual({ order: ['ai', 'map', 'youtube'], hidden: ['map'] })
+    expect(visibleCanvasTabs()).toEqual(['ai', 'youtube'])
   })
 
   it('shows the dashboard and every plugin shown, plus a hidden one while it is open', () => {

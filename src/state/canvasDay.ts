@@ -4,7 +4,7 @@ import { journalDateOf, openDate, panesStore } from './panes.ts'
 import { createStore, useStore } from './store.ts'
 import { prefsStore, setPref } from './ui.ts'
 
-// The canvas tabs and the journal's day (Settings → Canvas, ctrl+l). Following, the day tabs (Map, Spotify,
+// The canvas tabs and the journal's day (Settings → Canvas, ctrl+l). Following, the day tabs (Map and
 // Activity) show the journal's day and step it along, and the scrolling tabs (YouTube, Reddit, Bookmarks,
 // Progress, AI chats) scroll to it whenever it changes. Not following, the day tabs share a day of their own and
 // the journal is browsed separately.

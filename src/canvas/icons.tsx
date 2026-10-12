@@ -15,13 +15,6 @@ export const ICONS: Record<string, ReactNode> = {
       <circle cx="12" cy="10" r="2.3" />
     </Icon>
   ),
-  spotify: (
-    <Icon>
-      <path d="M9 18V5.5l10-2V16" />
-      <circle cx="6.5" cy="18" r="2.5" />
-      <circle cx="16.5" cy="16" r="2.5" />
-    </Icon>
-  ),
   youtube: (
     <Icon>
       <rect x="2.5" y="5" width="19" height="14" rx="3.5" />

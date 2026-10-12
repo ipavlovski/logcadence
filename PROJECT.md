@@ -123,33 +123,10 @@
 - shows keyboard, also using modifiers activates keys visually
 - actively archive old shortcuts, show warning sign by clashes
 
-#### SPOTIFY
-- controls a spotify server/api
-- requires an API key
-- shows which playlist was listened to today
-- shows stats on total tracks listened and liked
-
-#### IMAGES
-- reuse functionality of 
-- would need a separate data structure to track 
-
-#### PROGRESS
-- vertical calendar with dates
-- can show true scale (w/ day gaps) vs. false scale (remove gaps)
-- each node should show a flat-list of finished tasks for a project
-  header, image, description
-- provide a visual helper in canvas to create a journal entry
-  if project line is already visible, will apply the appropriate tags
-- projects dont need to be 'projects'
-  hp-d1, chicken coup -> all qualify
-- view: fade the line out from top to bottom as scrolling through
-- view: show a heatmap for a project
-  squares can be cut into pieces to show multiple projects on a day
-
 #### DASHBOARD
 - heatmap
   columns: days of the week
-  rows: build/dev/design/map/spotify/youtube/ai-prompts
+  rows: build/dev/design/map/youtube/ai-prompts
 - 3 last direction writeups
 - calendar 
 - task list

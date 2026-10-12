@@ -21,7 +21,7 @@ if (IS_DEV_CHANNEL) {
   app.setName(APP_NAME)
   app.setPath('userData', path.join(app.getPath('appData'), APP_NAME))
 }
-// Read by the server when it loads (Spotify's redirect URI).
+// Read by the server when it loads (Google Drive's redirect URI).
 process.env.PORT = String(PORT)
 // Set by `pnpm dev:electron`: the renderer comes from Vite (hot reload), which proxies the API to PORT.
 const DEV_URL = process.env.ELECTRON_DEV_URL
@@ -117,11 +117,11 @@ function createWindow() {
   void win.loadURL(APP_URL)
 }
 
-/** The app's own pages only; Spotify's login runs in the window, every other link opens in the browser. */
+/** The app's own pages only; every other link opens in the browser. */
 function guardNavigation(wc: WebContents) {
   const allowed = (url: string) => {
     const u = new URL(url)
-    return u.origin === new URL(APP_URL).origin || u.origin === `http://127.0.0.1:${PORT}` || u.hostname === 'accounts.spotify.com'
+    return u.origin === new URL(APP_URL).origin || u.origin === `http://127.0.0.1:${PORT}`
   }
   const external = (url: string) => /^https?:/.test(url) && void shell.openExternal(url)
   wc.on('will-navigate', (e, url) => {
