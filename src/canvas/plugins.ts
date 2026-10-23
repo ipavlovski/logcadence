@@ -1,9 +1,7 @@
-import { lazy, type ComponentType, type LazyExoticComponent } from 'react'
-import { Activity } from '../components/Activity/Activity.tsx'
+import type { ComponentType, LazyExoticComponent } from 'react'
 import { AiChats } from '../components/AiChats/AiChats.tsx'
 import { Board } from '../components/Board/Board.tsx'
 import { Bookmarks, Reddit } from '../components/Captures/Captures.tsx'
-import { Progress } from '../components/Progress/Progress.tsx'
 import { Youtube } from '../components/Youtube/Youtube.tsx'
 import { syncCanvasPlugins } from '../state/canvasTabs.ts'
 
@@ -24,20 +22,11 @@ export interface CanvasPlugin {
 }
 
 export const PLUGINS: CanvasPlugin[] = [
-  {
-    type: 'map',
-    title: 'Map',
-    description: 'A day of GPS as a timetable of stays and trips (home, places, A→B, B→B, B→A, round trips) on a map.',
-    // MapLibre + deck.gl are large: load them only when the tab opens.
-    Component: lazy(() => import('../components/Map/MapTab.tsx').then((m) => ({ default: m.MapTab }))),
-  },
   { type: 'youtube', title: 'YouTube', description: 'Videos imported from your playlists, by the day they were discovered, with notes, images and tags of their own.', Component: Youtube },
   { type: 'reddit', title: 'Reddit', description: 'Reddit posts captured with the Chrome extension: a screenshot of each whole post, by subreddit and day, with comments, notes and tags.', Component: Reddit },
   { type: 'bookmarks', title: 'Bookmarks', description: 'Pages bookmarked with the Chrome extension, with a screenshot, title and favicon, by day, with notes and tags.', Component: Bookmarks },
   { type: 'images', title: 'Images', description: 'A scratchpad board, like PureRef: paste images, gifs and videos under today, and drag them into rows.', Component: Board },
-  { type: 'progress', title: 'Progress', description: 'Project progress over time: tasks:progress entries, one line per primary tag, one circle per day.', Component: Progress },
   { type: 'ai-prompts', title: 'AI', description: 'Chats imported from Claude, Claude Code, Gemini and Antigravity, with full transcripts.', Component: AiChats },
-  { type: 'activity', title: 'Activity', description: 'Keyboard and mouse activity in 5-minute slots, grouped into sessions of computer use (desktop app).', Component: Activity },
 ]
 
 export const pluginByType = (type: string) => PLUGINS.find((p) => p.type === type)

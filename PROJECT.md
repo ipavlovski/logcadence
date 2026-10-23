@@ -1,19 +1,18 @@
 # LOGCADENCE
 
 - purpose: knowledge base, similar to logseq
-- 3-pane workflow journaling app: canvas/journal/tags
-- structure: journal with entries are first class citizens (journal pane) 
-  allow tag view on the right (tag pane) and custom render view on the left (canvas pane)
+- 2-pane workflow journaling app: canvas/tags
+- structure: journal with entries are first class citizens (the canvas's journal tab)
+  allow tag view on the right (tag pane) and custom render views in the canvas's other tabs
+- activity tracking (maps, activity, progress, dashboard, checklists, ...) lives in a separate app: logtracker (../logtracker)
 
 
 ## UI DESCRIPTION
 - each pane can have multiple tabs
-  - canvas has custom-based types depending on a rendering plugin (e.g. dashboard, youtube, etc.)
-  - journal pane has tabs corresponding to journal date (e.g. "sep 20, 2026", "oct 19, 2025")
+  - canvas has the journal tab (one day at a time, with back/forward through the days shown) and custom-based types depending on a rendering plugin (e.g. youtube, reddit, etc.)
   - tag pane has tabs corresponding to a tag (e.g. "system:windows")
 - each pane has a primary tab, which opens on load and cannot be closed
-  - canvas -> 'dashboard' tab
-  - journal -> 'today' tab
+  - canvas -> 'journal' tab (today on load)
   - tags -> 'tag tree' virtual view, showing all the existing tags 
 
 
@@ -31,9 +30,14 @@
   - ctrl+[] -> next/prev tab
   - alt+left/right -> back forward
   - ctrl+click -> open in new tab
-- journal pane
+- journal tab
   - ctrl+n -> new entry at the cursor
   - ctrl+shift+n -> new entry with UI popup
+  - ctrl+[ / ctrl+] -> previous / next day
+  - alt+left/right -> back / forward through the days shown
+- panes
+  - ctrl+1 / ctrl+2 -> focus canvas / tags
+  - ctrl+t -> minimize / restore the tags pane (the canvas is always shown)
 - tags pane
   - delete -> archive (toggle)
   - shift+delete -> delete
@@ -44,7 +48,7 @@
   - events.db -> all the events
 - app data structure
   - journals: collection of .md files
-  - db: content.db, events.db, maps.db, etc.
+  - db: content.db, events.db
   - assets: images/gifs, videos, pdfs
 - events: {node_id: '', op: create|edit|delete, payload: {}}
 - stack: typescript, react, css-modules
@@ -73,7 +77,7 @@
 ## PANES
 
 ### JOURNAL
-- the main editing pane
+- the main editing view: the canvas's first tab
 - journal entries can have multiple tags, which can be viewed 
 - tags are hierarchical and separated by colon- e.g. system:windows:powertoys, design:davinci-resolve:til
 - all entries are 2-level: entry (contains title and categories) and children nodes
@@ -105,17 +109,8 @@
 
 
 ### CANVAS
-
-#### MAP
-- processes a full day of GPX data into 
-- classify movement into primary categories: A, B, A->B, B->A, B->B
-  A=homebase (home, or hotel/hostel/camp when travelling)
-  B=place
-  A->B=homebase to place (going somwehre)
-  B->B=place to place
-  B->A=coming back
-- movement gets automatically alloted a timestamp (start/end)
-- can tag with "timelog:" to automatically pull timestamps into timetable
+- tabs: journal (primary), youtube, reddit, bookmarks, images, ai
+- the rest of the old canvas (map, activity, progress, dashboard, checklists) moved to logtracker
 
 #### SHORTCUTS
 - entry type: must contain a single 'shortcuts:' category
@@ -123,17 +118,10 @@
 - shows keyboard, also using modifiers activates keys visually
 - actively archive old shortcuts, show warning sign by clashes
 
-#### DASHBOARD
-- heatmap
-  columns: days of the week
-  rows: build/dev/design/map/youtube/ai-prompts
-- 3 last direction writeups
-- calendar 
-- task list
-- sticky notes
-
 #### AI-PROMPTS
 - track all the AI prompts from today
 - eg. goole searches, gemini, claude
+- logtracker keeps its own AI history (timestamp, model, title) and links each chat back here as logcadence://ai/<id>
+  -> to do: register the logcadence:// link in the desktop app and open the chat in the AI tab
 
 

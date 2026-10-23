@@ -1,31 +1,28 @@
 import { useEffect, useRef } from 'react'
 import { formatJournalDate, today } from '../../../shared/dates.ts'
-import { HOME_ICON, LINK_ICON, pluginIcon, UNLINK_ICON } from '../../canvas/icons.tsx'
+import { LINK_ICON, pluginIcon, UNLINK_ICON } from '../../canvas/icons.tsx'
 import { pluginByType } from '../../canvas/plugins.ts'
 import { toggleFollowJournal } from '../../state/canvasDay.ts'
 import { canvasTabsStore } from '../../state/canvasTabs.ts'
-import { activateTab, closeTab, paneTabs, parseKey, PRIMARY, setFocus, setPaneOpen, panesStore, type PaneId } from '../../state/panes.ts'
+import { activateTab, closeTab, journalDateOf, paneTabs, parseKey, PRIMARY, setFocus, setPaneOpen, panesStore, type PaneId } from '../../state/panes.ts'
 import { useStore } from '../../state/store.ts'
 import { prefsStore, setFind, uiStore } from '../../state/ui.ts'
-import { CanvasDashboard, CanvasPluginTab } from '../Canvas/Canvas.tsx'
+import { CanvasPluginTab } from '../Canvas/Canvas.tsx'
 import { JournalDay } from '../Journal/JournalDay.tsx'
+import { useJournalHistory } from '../Journal/useJournalHistory.ts'
 import { TagTree } from '../Tags/TagTree.tsx'
 import { TagView } from '../Tags/TagView.tsx'
 import styles from './Pane.module.css'
 
-const PANE_LABEL: Record<PaneId, string> = { canvas: 'Canvas', journal: 'Journal', tags: 'Tags' }
+const PANE_LABEL: Record<PaneId, string> = { canvas: 'Canvas', tags: 'Tags' }
 
 function tabLabel(key: string): string {
   const loc = parseKey(key)
   switch (loc.kind) {
-    case 'dashboard':
-      return 'Dashboard'
+    case 'journal':
+      return 'Journal'
     case 'plugin':
       return pluginByType(loc.type)?.title ?? loc.type
-    case 'today':
-      return 'Today'
-    case 'date':
-      return formatJournalDate(loc.date)
     case 'tree':
       return 'Tagtree'
     case 'tag':
@@ -38,6 +35,7 @@ export function Pane({ id }: { id: PaneId }) {
   const focused = useStore(panesStore, (s) => s.focus === id)
   const find = useStore(uiStore, (s) => s.find[id])
   const open = useStore(panesStore, (s) => s.open[id])
+  const day = useStore(panesStore, journalDateOf)
   useStore(canvasTabsStore, (s) => s) // the canvas pane's tabs follow Settings → Canvas
   const primary = PRIMARY[id]
   const tabs = paneTabs(id, pane)
@@ -47,7 +45,7 @@ export function Pane({ id }: { id: PaneId }) {
       <section className={`${styles.pane} ${styles.minimized}`} data-pane={id} aria-label={`${PANE_LABEL[id]} (minimized)`}>
         <div className={styles.vTabs} role="tablist" aria-orientation="vertical">
           {tabs.map((key) => {
-            const icon = parseKey(key).kind === 'plugin' || key === 'dashboard'
+            const icon = parseKey(key).kind === 'plugin'
             return (
               <button
                 key={key}
@@ -62,7 +60,7 @@ export function Pane({ id }: { id: PaneId }) {
                   setFocus(id)
                 }}
               >
-                {key === 'dashboard' ? HOME_ICON : icon ? pluginIcon((parseKey(key) as { type: string }).type) : tabLabel(key)}
+                {icon ? pluginIcon((parseKey(key) as { type: string }).type) : tabLabel(key)}
               </button>
             )
           })}
@@ -82,12 +80,11 @@ export function Pane({ id }: { id: PaneId }) {
         <div
           role="tab"
           aria-selected={primary === pane.active}
-          className={`${styles.pinned} ${primary === pane.active ? styles.pinnedActive : ''} ${primary === 'dashboard' ? styles.pinnedHome : ''}`}
+          className={`${styles.pinned} ${primary === pane.active ? styles.pinnedActive : ''}`}
           onClick={() => activateTab(id, primary)}
-          title={primary === 'today' ? `Today · ${formatJournalDate(today())}` : `${tabLabel(primary)} (Ctrl+H)`}
-          aria-label={primary === 'dashboard' ? tabLabel(primary) : undefined}
+          title={primary === 'journal' ? `Journal · ${day === today() ? 'today, ' : ''}${formatJournalDate(day)} (Ctrl+H)` : `${tabLabel(primary)} (Ctrl+H)`}
         >
-          {primary === 'dashboard' ? HOME_ICON : tabLabel(primary)}
+          {tabLabel(primary)}
         </div>
         <div className={styles.tabs}>
           {tabs
@@ -163,22 +160,23 @@ function FollowButton() {
 function PaneContent({ pane, tabKey, find }: { pane: PaneId; tabKey: string; find: string }) {
   const loc = parseKey(tabKey)
   switch (loc.kind) {
-    case 'dashboard':
-      return <CanvasDashboard />
+    case 'journal':
+      return <JournalTab find={find} />
     case 'plugin':
       return <CanvasPluginTab key={tabKey} type={loc.type} tabKey={tabKey} />
-    case 'today': {
-      const d = today()
-      return <JournalDay key={d} date={d} find={find} />
-    }
-    case 'date':
-      return <JournalDay key={loc.date} date={loc.date} find={find} />
     case 'tree':
       return <TagTree find={find} />
     case 'tag':
       return <TagView key={loc.tag} tag={loc.tag} find={find} />
   }
   return <p>Unknown tab in {pane}</p>
+}
+
+/** The canvas's primary tab: the journal's day, with alt+left/right through the days it showed. */
+function JournalTab({ find }: { find: string }) {
+  const date = useStore(panesStore, journalDateOf)
+  useJournalHistory()
+  return <JournalDay key={date} date={date} find={find} />
 }
 
 function FindBar({ pane, query }: { pane: PaneId; query: string }) {
@@ -195,7 +193,7 @@ function FindBar({ pane, query }: { pane: PaneId; query: string }) {
       <input
         ref={ref}
         value={query}
-        placeholder={pane === 'journal' ? 'Filter this day…' : pane === 'tags' ? 'Filter…' : 'Find…'}
+        placeholder={pane === 'tags' ? 'Filter…' : panesStore.get().panes.canvas.active === PRIMARY.canvas ? 'Filter this day…' : 'Find…'}
         spellCheck={false}
         onChange={(e) => setFind(pane, e.target.value)}
         onKeyDown={(e) => {

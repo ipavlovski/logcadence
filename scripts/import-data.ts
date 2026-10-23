@@ -20,7 +20,6 @@ let last = ''
 try {
   const { manifest, warnings } = importFrom(zip, {
     dataDir,
-    gpsDir: process.env.LOGCADENCE_GPS_DIR,
     onProgress: ({ phase, done, total }) => {
       const line = `${phase} ${done}/${total}`
       if (line !== last) process.stdout.write(`\r${(last = line).padEnd(30)}`)
@@ -28,7 +27,7 @@ try {
   })
   for (const w of warnings) console.warn(`\nwarning: ${w}`)
   const rows = Object.values(manifest.tables).reduce((n, t) => n + t.rows, 0)
-  console.log(`\nimported into ${dataDir}: ${rows} rows, ${manifest.assets.files} assets, ${manifest.gps.files} gps files in ${((Date.now() - started) / 1000).toFixed(0)}s`)
+  console.log(`\nimported into ${dataDir}: ${rows} rows, ${manifest.assets.files} assets in ${((Date.now() - started) / 1000).toFixed(0)}s`)
 } catch (err) {
   console.error(`\nimport failed: ${(err as Error).message}`)
   process.exit(1)

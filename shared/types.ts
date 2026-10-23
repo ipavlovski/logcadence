@@ -197,94 +197,12 @@ export interface SelectionBody {
   nodeIds?: string[]
 }
 
-// ── Canvas dashboard ────────────────────────────────────────────────────────
+// ── Heatmaps ────────────────────────────────────────────────────────────────
 
 /** A count for one journal day (heatmaps). */
 export interface DayCount {
   date: string
   count: number
-}
-
-/** GPS movement on one day: the A->B, B->B, B->A and A->A rows. */
-export interface TravelDay {
-  date: string
-  distanceM: number
-  movingMs: number
-}
-
-// ── Map canvas tab (GPS) ────────────────────────────────────────────────────
-
-/** A = homebase, B = a place, X->Y = moving between them, A->A = a round trip from home, gap = no data. */
-export type GpsKind = 'A' | 'B' | 'A->B' | 'B->B' | 'B->A' | 'A->A' | 'gap'
-export const GPS_KINDS: GpsKind[] = ['A', 'B', 'A->B', 'B->B', 'B->A', 'A->A', 'gap']
-
-export interface GpsPlaceDTO {
-  id: string
-  lat: number
-  lon: number
-  name: string | null
-}
-
-export interface GpsSegmentDTO {
-  kind: GpsKind
-  start: number
-  end: number
-  placeId: string | null
-  fromPlaceId: string | null
-  toPlaceId: string | null
-  distanceM: number
-  /** Movements: simplified [lon, lat, seconds since day start]. */
-  path: [number, number, number][]
-}
-
-/** Rows of the timetable grouped by hand; a segment belongs to the trip its midpoint falls in. */
-export interface GpsTripDTO {
-  id: string
-  start: number
-  end: number
-}
-
-export interface GpsDayDTO {
-  date: string
-  dayStart: number
-  homebaseId: string | null
-  homebaseOverride: boolean
-  pointCount: number
-  segments: GpsSegmentDTO[]
-  /** Places referenced by the day's segments. */
-  places: GpsPlaceDTO[]
-  trips: GpsTripDTO[]
-  /** ms per kind; sums to the day's length. */
-  totals: Record<GpsKind, number>
-}
-
-/** GPS files imported from a Google Drive folder (server/lib/gps/drive.ts). */
-export interface GpsDriveStatus {
-  /** A Google OAuth client is set (GOOGLE_CLIENT_ID/SECRET or saved from the settings window). */
-  configured: boolean
-  connected: boolean
-  /** Must be an authorized redirect URI when the OAuth client is a "Web application" (Desktop clients take any). */
-  redirectUri: string
-  folder: { id: string; name: string } | null
-  /** New files are imported in the background. */
-  auto: boolean
-  /** Newest day imported; automatic imports take files from this day on (it may still have grown). */
-  lastDate: string | null
-  running: 'new' | 'range' | null
-  progress: { done: number; total: number } | null
-  lastSync: number | null
-  error: string | null
-  result: GpsDriveResult | null
-}
-
-export interface GpsDriveResult {
-  downloaded: number
-  unchanged: number
-  /** Days classified by the scan after the download. */
-  processed: number
-  errors: string[]
-  /** Files in the folder dated before lastDate that aren't here: import them with a date range. */
-  older: { count: number; from: string; to: string } | null
 }
 
 // ── YouTube canvas tab ──────────────────────────────────────────────────────

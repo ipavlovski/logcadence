@@ -7,8 +7,7 @@
   background: var(--bg);
 }
 
-.pane[data-pane='tags'],
-.pane[data-pane='canvas'] {
+.pane[data-pane='tags'] {
   background: color-mix(in srgb, var(--bg) 80%, var(--bg-2));
 }
 
@@ -40,16 +39,6 @@
 
 .pinned:hover {
   color: var(--text);
-}
-
-/* The canvas dashboard: a heavier icon with more room around it, set apart as the home tab. */
-.pinnedHome {
-  padding: 0 16px;
-}
-
-.pinnedHome svg {
-  width: 18px;
-  height: 18px;
 }
 
 .pinnedActive {
@@ -154,13 +143,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   border-left: 2px solid transparent;
-}
-
-/* The left (canvas) bar reads bottom-up, facing the journal. */
-[data-pane='canvas'] .vTab {
-  writing-mode: sideways-lr;
-  border-left: none;
-  border-right: 2px solid transparent;
 }
 
 .vTab:hover {

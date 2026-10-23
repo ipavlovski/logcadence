@@ -2,7 +2,7 @@ import { shiftDate } from '../shared/dates.ts'
 import { newEntryAtCursor, newEntryWithDialog } from './actions.ts'
 import { toggleFollowJournal } from './state/canvasDay.ts'
 import { runCommand } from './state/commands.ts'
-import { activeJournalDate, closeAllTabs, closeTab, cycleTab, focusPane, goHistory, openDate, openLoc, panesStore, PRIMARY, togglePane, type PaneId } from './state/panes.ts'
+import { activeJournalDate, closeAllTabs, closeTab, cycleTab, focusPane, goHistory, journalActiveOf, openDate, openLoc, panesStore, PRIMARY, togglePane, type PaneId } from './state/panes.ts'
 import { openFind, openSettings, openSpotlight, prefsStore, toggleAppKeys, toggleHelp, uiStore } from './state/ui.ts'
 import { openYtJump } from './state/youtube.ts'
 
@@ -19,8 +19,10 @@ export interface Binding {
   pane?: PaneId
   /** Also fires while typing in an input. */
   inInputs?: boolean
-  /** Listed under this pane in Settings (bindings scoped to a pane are listed there anyway). */
-  about?: PaneId
+  /** Only while this holds (e.g. the journal tab is active). */
+  when?: () => boolean
+  /** Listed under this section in Settings (bindings scoped to a pane are listed there anyway). */
+  about?: PaneId | 'journal'
 }
 
 /** Moves keyboard focus out of an editor in another pane, so typing doesn't carry on there. */
@@ -39,6 +41,8 @@ const toggle = (pane: PaneId) => () => {
   leaveOtherPanes(pane)
 }
 
+const onJournal = () => journalActiveOf(panesStore.get())
+
 export const BINDINGS: Binding[] = [
   { keys: ['mod+f'], label: 'Search within pane', group: 'Search', run: (p) => openFind(p), inInputs: true },
   { keys: ['mod+shift+f'], label: 'Search everything', group: 'Search', run: () => openSpotlight('search'), inInputs: true },
@@ -48,21 +52,20 @@ export const BINDINGS: Binding[] = [
   { keys: ['mod+shift+tab'], label: 'Previous tab', group: 'Navigation', run: (p) => cycleTab(p, -1), inInputs: true },
   { keys: ['mod+tab'], label: 'Next tab', group: 'Navigation', run: (p) => cycleTab(p, 1), inInputs: true },
   { keys: ['mod+1', 'alt+1'], label: 'Focus canvas pane', group: 'Navigation', run: focusOn('canvas'), inInputs: true, about: 'canvas' },
-  { keys: ['mod+2', 'alt+2'], label: 'Focus journal pane', group: 'Navigation', run: focusOn('journal'), inInputs: true, about: 'journal' },
-  { keys: ['mod+3', 'alt+3'], label: 'Focus tags pane', group: 'Navigation', run: focusOn('tags'), inInputs: true, about: 'tags' },
-  { keys: ['mod+b'], label: 'Show / hide canvas pane', group: 'Navigation', run: toggle('canvas'), inInputs: true, about: 'canvas' },
+  { keys: ['mod+2', 'alt+2'], label: 'Focus tags pane', group: 'Navigation', run: focusOn('tags'), inInputs: true, about: 'tags' },
   { keys: ['mod+t', 'alt+t'], label: 'Show / hide tags pane', group: 'Navigation', run: toggle('tags'), inInputs: true, about: 'tags' },
   { keys: ['mod+l'], label: 'Canvas follows the journal’s day (on / off)', group: 'Navigation', run: () => toggleFollowJournal(), inInputs: true, about: 'canvas' },
-  { keys: ['mod+h'], label: 'Home tab (dashboard / today / tag tree)', group: 'Navigation', run: (p) => openLoc(p, PRIMARY[p]), inInputs: true },
-  // A canvas tab keeps its own history (the active plugin registers canvas.back/forward); other panes step through their tabs.
+  { keys: ['mod+h'], label: 'Home tab (journal / tag tree)', group: 'Navigation', run: (p) => openLoc(p, PRIMARY[p]), inInputs: true },
+  // A canvas tab keeps its own history (the active tab registers canvas.back/forward: the journal's are the days it
+  // showed); the tags pane steps through its tabs.
   { keys: ['alt+arrowleft'], label: 'Back', group: 'Navigation', run: (p) => (p === 'canvas' ? runCommand('canvas.back') : goHistory(p, -1)) },
   { keys: ['alt+arrowright'], label: 'Forward', group: 'Navigation', run: (p) => (p === 'canvas' ? runCommand('canvas.forward') : goHistory(p, 1)) },
   { keys: ['mod+j'], label: 'YouTube: jump to date', group: 'Navigation', pane: 'canvas', run: () => openYtJump(), inInputs: true },
   { keys: ['mod+n', 'alt+n'], label: 'New entry at cursor', group: 'Journal', run: () => newEntryAtCursor(), inInputs: true, about: 'journal' },
   { keys: ['mod+shift+n', 'alt+shift+n'], label: 'New entry…', group: 'Journal', run: () => newEntryWithDialog(), inInputs: true, about: 'journal' },
-  { keys: ['mod+['], label: 'Previous day', group: 'Journal', pane: 'journal', run: () => openDate(shiftDate(activeJournalDate(), -1)), inInputs: true },
-  { keys: ['mod+]'], label: 'Next day', group: 'Journal', pane: 'journal', run: () => openDate(shiftDate(activeJournalDate(), 1)), inInputs: true },
-  { keys: ['mod+.'], label: 'Fold / unfold all entries', group: 'Journal', run: () => runCommand('journal.toggleFoldAll'), inInputs: true, about: 'journal' },
+  { keys: ['mod+['], label: 'Previous day', group: 'Journal', pane: 'canvas', when: onJournal, run: () => openDate(shiftDate(activeJournalDate(), -1)), inInputs: true, about: 'journal' },
+  { keys: ['mod+]'], label: 'Next day', group: 'Journal', pane: 'canvas', when: onJournal, run: () => openDate(shiftDate(activeJournalDate(), 1)), inInputs: true, about: 'journal' },
+  { keys: ['mod+.'], label: 'Fold / unfold all entries', group: 'Journal', when: onJournal, run: () => runCommand('journal.toggleFoldAll'), inInputs: true, about: 'journal' },
   { keys: ['delete'], label: 'Archive / unarchive selection', group: 'Tags', pane: 'tags', run: () => runCommand('tags.archive') },
   { keys: ['shift+delete'], label: 'Delete selection', group: 'Tags', pane: 'tags', run: () => runCommand('tags.delete') },
   { keys: ['mod+,'], label: 'Settings', group: 'General', run: () => openSettings(uiStore.get().settings ? null : 'general'), inInputs: true },
@@ -109,8 +112,9 @@ export function formatCombo(combo: string): string {
     .join('+')
 }
 
-/** Bindings shown in a pane's Settings section. */
-export const paneBindings = (pane: PaneId) => BINDINGS.filter((b) => b.pane === pane || b.about === pane)
+/** Bindings shown in a Settings section: a pane's (scoped to it or about it), or the journal's. */
+export const paneBindings = (section: PaneId | 'journal') =>
+  BINDINGS.filter((b) => (b.about ? b.about === section : b.pane === section))
 
 const isEditable = (t: EventTarget | null) =>
   t instanceof HTMLElement && (t.isContentEditable || t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')
@@ -122,6 +126,7 @@ export function handleGlobalKey(e: KeyboardEvent) {
   for (const b of BINDINGS) {
     if (!b.keys.includes(combo)) continue
     if (b.pane && b.pane !== pane) continue
+    if (b.when && !b.when()) continue
     if (!b.inInputs && isEditable(e.target)) continue
     e.preventDefault()
     b.run(pane)

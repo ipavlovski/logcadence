@@ -9,5 +9,5 @@ export const IS_DEV_CHANNEL = typeof __CHANNEL__ !== 'undefined' && __CHANNEL__ 
 export const APP_NAME = IS_DEV_CHANNEL ? 'LogcadenceDev' : 'Logcadence'
 /** The dev version as tagged (0.2.0.3), shown in the title bar; empty for release builds. */
 export const BUILD_LABEL = typeof __BUILD_LABEL__ !== 'undefined' ? __BUILD_LABEL__ : ''
-// Fixed ports: the Chrome extension posts captures to them, and Google Drive's login redirect is registered for them.
+// Fixed ports: the Chrome extension posts captures to them.
 export const PORT = IS_DEV_CHANNEL ? 3003 : 3002

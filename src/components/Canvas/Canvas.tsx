@@ -1,12 +1,6 @@
 import { Suspense } from 'react'
 import { pluginByType } from '../../canvas/plugins.ts'
-import { Dashboard } from '../Dashboard/Dashboard.tsx'
 import styles from './Canvas.module.css'
-
-/** Canvas primary tab: today's report. */
-export function CanvasDashboard() {
-  return <Dashboard />
-}
 
 export function CanvasPluginTab({ type, tabKey }: { type: string; tabKey: string }) {
   const plugin = pluginByType(type)

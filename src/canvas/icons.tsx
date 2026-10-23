@@ -2,19 +2,13 @@ import type { ReactNode } from 'react'
 
 // Line icons for the canvas tab bar, one per plugin: 24-unit grid, drawn in currentColor.
 
-const Icon = ({ children, bold }: { children: ReactNode; bold?: boolean }) => (
-  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth={bold ? 2.4 : 1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+const Icon = ({ children }: { children: ReactNode }) => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
     {children}
   </svg>
 )
 
 export const ICONS: Record<string, ReactNode> = {
-  map: (
-    <Icon>
-      <path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z" />
-      <circle cx="12" cy="10" r="2.3" />
-    </Icon>
-  ),
   youtube: (
     <Icon>
       <rect x="2.5" y="5" width="19" height="14" rx="3.5" />
@@ -39,36 +33,13 @@ export const ICONS: Record<string, ReactNode> = {
       <path d="m21 16-4.5-4.5L8 19.5" />
     </Icon>
   ),
-  progress: (
-    <Icon>
-      <path d="M3.5 20.5h17" />
-      <circle cx="6" cy="15" r="1.6" />
-      <circle cx="11" cy="11" r="1.6" />
-      <circle cx="15" cy="13" r="1.6" />
-      <circle cx="19.5" cy="6.5" r="1.6" />
-      <path d="m7.3 14 2.4-2M12.5 11.8l1 .5M16 11.7l2.6-3.9" />
-    </Icon>
-  ),
   'ai-prompts': (
     <Icon>
       <path d="M12 3.5c.6 4.3 2.5 6.2 6.8 6.8-4.3.6-6.2 2.5-6.8 6.8-.6-4.3-2.5-6.2-6.8-6.8 4.3-.6 6.2-2.5 6.8-6.8z" />
       <path d="M18.5 16.5c.2 1.6.9 2.3 2.5 2.5-1.6.2-2.3.9-2.5 2.5-.2-1.6-.9-2.3-2.5-2.5 1.6-.2 2.3-.9 2.5-2.5z" />
     </Icon>
   ),
-  activity: (
-    <Icon>
-      <path d="M2.5 12h4l2.5-6 4.5 12 2.5-6h5.5" />
-    </Icon>
-  ),
 }
-
-/** The dashboard, the canvas pane's home tab: drawn heavier than the plugin icons. */
-export const HOME_ICON = (
-  <Icon bold>
-    <path d="M3.5 11 12 4l8.5 7" />
-    <path d="M6 9.5V20h4.5v-5.5h3V20H18V9.5" />
-  </Icon>
-)
 
 /** The canvas following the journal's day (ctrl+l): a chain, linked or broken. */
 export const LINK_ICON = (

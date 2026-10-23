@@ -6,10 +6,7 @@ import path from 'node:path'
 import { app } from './app.ts'
 import { closeDbs, db, JOURNALS_DIR } from './db/client.ts'
 import { entries } from './db/content-schema.ts'
-import { startRecorder, stopRecorder, type ActivityRecorder } from './lib/activity.ts'
 import { setClaudeWeb, type ClaudeWebClient } from './lib/ai/claudeWeb.ts'
-import { autoReady, importNew } from './lib/gps/drive.ts'
-import { scanGps } from './lib/gps/scan.ts'
 import { flushJournalFiles, touchDates } from './lib/journalFiles.ts'
 import { importAll as importYoutube } from './lib/youtube/library.ts'
 import { loadSettings as youtubeSettings } from './lib/youtube/settings.ts'
@@ -18,8 +15,6 @@ import { downloadThumbs } from './lib/youtube/thumbs.ts'
 // Starts the API (and, given staticDir, the built web app) plus the background jobs. Shared by the web
 // server (server/index.ts) and the desktop app, which runs it inside Electron's main process.
 
-// GPS files from Google Drive: GPSLogger uploads on its own schedule, so every half hour is plenty.
-const GPS_DRIVE_SYNC_MS = 30 * 60_000
 // YouTube playlists: new videos count as discovered on the day an import sees them, so check a few times a day.
 const YOUTUBE_SYNC_MS = 3 * 60 * 60_000
 
@@ -27,21 +22,17 @@ export interface StartOptions {
   port: number
   /** Built web app (vite's dist/) to serve next to the API. */
   staticDir?: string
-  /** Seconds since the last keyboard/mouse input; given (by the desktop app), activity is recorded. */
-  idleSeconds?: () => number
   /** The claude.ai session the desktop app signs in to; given, the AI scan syncs claude.ai chats. */
   claudeWeb?: ClaudeWebClient
 }
 
 export interface RunningServer {
   port: number
-  /** Set when recording activity, for the desktop app to report screen locks and sleep. */
-  activity?: ActivityRecorder
   /** Writes pending journal files, stops the server and closes the databases. */
   stop(): Promise<void>
 }
 
-export function startServer({ port, staticDir, idleSeconds, claudeWeb }: StartOptions): Promise<RunningServer> {
+export function startServer({ port, staticDir, claudeWeb }: StartOptions): Promise<RunningServer> {
   setClaudeWeb(claudeWeb)
   if (staticDir) {
     const root = path.relative(process.cwd(), staticDir)
@@ -58,23 +49,6 @@ export function startServer({ port, staticDir, idleSeconds, claudeWeb }: StartOp
     const dates = db.selectDistinct({ date: entries.date }).from(entries).all()
     if (dates.length) touchDates(...dates.map((d) => d.date))
   }
-
-  // GPS days dropped into the gps folder while the app was off, then new ones from Google Drive.
-  const gpsDriveTick = () => {
-    if (autoReady())
-      importNew().then(
-        (r) => r.downloaded && console.log(`gps drive: ${r.downloaded} file(s) imported`),
-        (err: Error) => console.warn(`gps drive import: ${err.message}`),
-      )
-  }
-  scanGps()
-    .then(
-      (r) => r.processed && console.log(`gps: ${r.processed} day(s) classified`),
-      (err: Error) => console.warn(`gps scan: ${err.message}`),
-    )
-    .finally(gpsDriveTick)
-  const gpsDriveTimer = setInterval(gpsDriveTick, GPS_DRIVE_SYNC_MS)
-  gpsDriveTimer.unref()
 
   const youtubeTick = () => {
     if (!youtubeSettings().auto) return
@@ -93,8 +67,6 @@ export function startServer({ port, staticDir, idleSeconds, claudeWeb }: StartOp
   // Thumbnails left over from an interrupted run (app closed, offline), when no import is due to start them.
   if (!youtubeSettings().auto) downloadThumbs().catch((err: Error) => console.warn(`youtube thumbnails: ${err.message}`))
 
-  const activity = idleSeconds && startRecorder(db, idleSeconds)
-
   return new Promise((resolve, reject) => {
     // Bound to 127.0.0.1 explicitly: Google Drive's login redirect uses that address, and WSL only
     // forwards a Linux 127.0.0.1 listener to Windows' 127.0.0.1 (an IPv6 "::" one becomes [::1] only).
@@ -104,12 +76,9 @@ export function startServer({ port, staticDir, idleSeconds, claudeWeb }: StartOp
       let stopped: Promise<void> | undefined
       resolve({
         port,
-        activity,
         stop: () =>
           (stopped ??= new Promise<void>((done) => {
-            clearInterval(gpsDriveTimer)
             clearInterval(youtubeTimer)
-            stopRecorder()
             flushJournalFiles()
             server.close(() => {
               closeDbs()

@@ -2,7 +2,7 @@ import type { PaneId } from './panes.ts'
 import { createStore, persistedStore } from './store.ts'
 
 export type SpotlightMode = 'tags' | 'search'
-export type SettingsSection = 'general' | PaneId
+export type SettingsSection = 'general' | 'journal' | PaneId
 
 export interface NewEntryDefaults {
   date: string
@@ -71,7 +71,7 @@ interface Prefs {
   includeSubtags: boolean
   /** Expanded paths in the tag tree. */
   expanded: string[]
-  /** A pane's focus shortcut (ctrl+1/2/3) restores it when minimized; off, the shortcut skips a minimized pane. */
+  /** The tags pane's focus shortcut (ctrl+2) restores it when minimized; off, the shortcut skips it while minimized. */
   openHiddenPane: boolean
   /** Canvas tabs show (or scroll to) the journal's day, instead of browsing days of their own (state/canvasDay.ts). */
   canvasFollowsJournal: boolean

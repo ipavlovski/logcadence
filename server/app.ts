@@ -5,13 +5,10 @@ import { logger } from 'hono/logger'
 import path from 'node:path'
 import { ASSETS_DIR } from './db/client.ts'
 import { stripReplyPreviews } from './lib/ai/importer.ts'
-import { activityRoutes } from './routes/activity.ts'
 import { boardRoutes } from './routes/board.ts'
 import { aiRoutes } from './routes/ai.ts'
 import { captureRoutes } from './routes/captures.ts'
-import { checklistRoutes } from './routes/checklists.ts'
 import { entryRoutes } from './routes/entries.ts'
-import { gpsRoutes } from './routes/gps.ts'
 import { journalRoutes } from './routes/journal.ts'
 import { nodeRoutes } from './routes/nodes.ts'
 import { searchRoutes } from './routes/search.ts'
@@ -30,7 +27,7 @@ app.onError((err, c) => {
   return c.json({ error: 'internal error' }, 500)
 })
 
-const routes = app.route('/api', journalRoutes).route('/api', entryRoutes).route('/api', nodeRoutes).route('/api', tagRoutes).route('/api', searchRoutes).route('/api', aiRoutes).route('/api', gpsRoutes).route('/api', transferRoutes).route('/api', activityRoutes).route('/api', youtubeRoutes).route('/api', captureRoutes).route('/api', checklistRoutes).route('/api', boardRoutes)
+const routes = app.route('/api', journalRoutes).route('/api', entryRoutes).route('/api', nodeRoutes).route('/api', tagRoutes).route('/api', searchRoutes).route('/api', aiRoutes).route('/api', transferRoutes).route('/api', youtubeRoutes).route('/api', captureRoutes).route('/api', boardRoutes)
 export type AppType = typeof routes
 
 // Asset file names are server-generated uuids and never change, so cache them forever.

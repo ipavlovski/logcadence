@@ -5,7 +5,7 @@ import { app, Menu } from 'electron'
 // No Edit menu either: on Windows and Linux the clipboard keys work without one.
 
 export interface MenuActions {
-  exportData(opts: { assets: boolean; gps: boolean }): void
+  exportData(opts: { assets: boolean }): void
   openLibrary(): void
   importLibrary(): void
   showLibraryFolder(): void
@@ -18,8 +18,8 @@ export function setMenu(a: MenuActions) {
       {
         label: 'File',
         submenu: [
-          { label: 'Export data…', click: () => a.exportData({ assets: true, gps: true }) },
-          { label: 'Export without media and GPS files…', click: () => a.exportData({ assets: false, gps: false }) },
+          { label: 'Export data…', click: () => a.exportData({ assets: true }) },
+          { label: 'Export without media…', click: () => a.exportData({ assets: false }) },
           { type: 'separator' },
           { label: 'Open or create library…', click: a.openLibrary },
           { label: 'Import an export into a new library…', click: a.importLibrary },

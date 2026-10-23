@@ -57,7 +57,7 @@ export function App() {
         {PANES.map((id, i) => (
           <Fragment key={id}>
             {i > 0 && <Splitter left={PANES[i - 1]!} right={id} />}
-            {/* A minimized side pane is just its tab bar; drag its splitter out or click a tab to restore it. */}
+            {/* The minimized tags pane is just its tab bar; drag its splitter out or click a tab to restore it. */}
             <div className={open[id] ? styles.paneSlot : styles.paneBar} data-slot={id} style={open[id] ? { flexGrow: weights[id] } : undefined}>
               <Pane id={id} />
             </div>
@@ -93,17 +93,17 @@ function FoldButton() {
   )
 }
 
-/** Journal day picker: steps the journal pane's active day (ctrl+click opens a new tab). */
+/** Journal day picker: steps the journal tab's day (and shows the journal tab). */
 function DayNav() {
   const date = useStore(panesStore, journalDateOf)
-  const nav = (e: MouseEvent, d: string) => openDate(d, { newTab: e.ctrlKey || e.metaKey })
+  const nav = (_: MouseEvent, d: string) => openDate(d)
   return (
     <nav className={styles.dayNav}>
-      <button title="Previous day (Ctrl+[; Ctrl+click: new tab)" onClick={(e) => nav(e, shiftDate(date, -1))}>
+      <button title="Previous day (Ctrl+[)" onClick={(e) => nav(e, shiftDate(date, -1))}>
         ‹
       </button>
       <input type="date" value={date} onChange={(e) => e.target.value && openDate(e.target.value)} aria-label="Journal date" />
-      <button title="Next day (Ctrl+]; Ctrl+click: new tab)" onClick={(e) => nav(e, shiftDate(date, 1))}>
+      <button title="Next day (Ctrl+])" onClick={(e) => nav(e, shiftDate(date, 1))}>
         ›
       </button>
     </nav>

@@ -98,66 +98,6 @@ export const images = sqliteTable(
   (t) => [index('images_node_idx').on(t.nodeId, t.position)],
 )
 
-// GPS days for the canvas Map tab, classified into stays and movements (see server/lib/gps/classify.ts).
-
-// Places stayed at (≥ 5 min within 120 m), shared across days so they can be named once.
-export const gpsPlaces = sqliteTable('gps_places', {
-  id: text('id').primaryKey(),
-  lat: real('lat').notNull(),
-  lon: real('lon').notNull(),
-  name: text('name'),
-  createdAt: integer('created_at').notNull(),
-})
-
-export const gpsDays = sqliteTable('gps_days', {
-  date: text('date').primaryKey(), // YYYY-MM-DD
-  // Source file fingerprint (mtime:size); an unchanged file is not processed again.
-  sourceStamp: text('source_stamp').notNull(),
-  dayStart: integer('day_start').notNull(), // local midnight, epoch ms
-  homebaseId: text('homebase_id'),
-  // Set when the homebase was picked by hand (e.g. a hotel while travelling).
-  homebaseOverride: integer('homebase_override', { mode: 'boolean' }).notNull().default(false),
-  pointCount: integer('point_count').notNull(),
-  processedAt: integer('processed_at').notNull(),
-})
-
-// The day's timeline: rows tile the day (A, B, A->B, B->B, B->A, A->A, gap).
-export const gpsSegments = sqliteTable(
-  'gps_segments',
-  {
-    date: text('date')
-      .notNull()
-      .references(() => gpsDays.date, { onDelete: 'cascade' }),
-    idx: integer('idx').notNull(),
-    kind: text('kind').notNull(),
-    startAt: integer('start_at').notNull(),
-    endAt: integer('end_at').notNull(),
-    placeId: text('place_id'),
-    fromPlaceId: text('from_place_id'),
-    toPlaceId: text('to_place_id'),
-    distanceM: integer('distance_m').notNull(),
-    // Movements: simplified [lon, lat, seconds since day start].
-    path: text('path', { mode: 'json' }).$type<[number, number, number][]>().notNull(),
-  },
-  (t) => [primaryKey({ columns: [t.date, t.idx] })],
-)
-
-// Trips: stretches of a day's timeline grouped by hand. Kept as times, not segment indexes, so they
-// survive the day being classified again (a changed file or homebase).
-export const gpsTrips = sqliteTable(
-  'gps_trips',
-  {
-    id: text('id').primaryKey(),
-    date: text('date')
-      .notNull()
-      .references(() => gpsDays.date, { onDelete: 'cascade' }),
-    startAt: integer('start_at').notNull(),
-    endAt: integer('end_at').notNull(),
-    createdAt: integer('created_at').notNull(),
-  },
-  (t) => [index('gps_trips_date_idx').on(t.date)],
-)
-
 // YouTube videos for the canvas YouTube tab, imported from playlists (see server/lib/youtube/). Their tags are a
 // set of their own, apart from the journal's. Which playlist a video came from is not kept.
 
@@ -318,69 +258,6 @@ export const captureImages = sqliteTable(
     createdAt: integer('created_at').notNull(),
   },
   (t) => [index('capture_images_capture_idx').on(t.captureId, t.position)],
-)
-
-// Computer activity for the canvas Activity tab (see server/lib/activity.ts). `input` spans are stretches of
-// keyboard/mouse input (pauses under a minute included); `tracked` spans are when the recorder was running
-// with the machine awake, so idle time can be told apart from time that was not recorded.
-export const activitySpans = sqliteTable(
-  'activity_spans',
-  {
-    id: integer('id').primaryKey({ autoIncrement: true }),
-    device: text('device').notNull(), // host name
-    kind: text('kind', { enum: ['input', 'tracked'] }).notNull(),
-    startAt: integer('start_at').notNull(), // epoch ms
-    endAt: integer('end_at').notNull(),
-  },
-  (t) => [index('activity_spans_end_idx').on(t.endAt)],
-)
-
-// Daily checklists for the dashboard (see shared/checklists.ts and server/lib/checklists.ts).
-
-export const checklists = sqliteTable('checklists', {
-  id: text('id').primaryKey(),
-  title: text('title').notNull(),
-  position: real('position').notNull(),
-  startDate: text('start_date').notNull(), // YYYY-MM-DD, first day it is due
-  endDate: text('end_date'), // last day it is due; null runs on
-  weekdays: integer('weekdays').notNull().default(127), // bit i = weekday i, Sunday first
-  archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
-  createdAt: integer('created_at').notNull(),
-  updatedAt: integer('updated_at').notNull(),
-})
-
-// An item is part of its checklist on the days from addedDate up to (not including) removedDate, and on any earlier
-// day it was ticked. Items with ticks are kept when removed, so past days still show what they had.
-export const checklistItems = sqliteTable(
-  'checklist_items',
-  {
-    id: text('id').primaryKey(),
-    checklistId: text('checklist_id')
-      .notNull()
-      .references(() => checklists.id, { onDelete: 'cascade' }),
-    label: text('label').notNull(),
-    target: integer('target').notNull().default(1), // 1 = a checkbox, more = a counter
-    source: text('source'), // ChecklistSource: counts on its own from the app's data
-    position: real('position').notNull(),
-    addedDate: text('added_date').notNull(),
-    removedDate: text('removed_date'),
-    createdAt: integer('created_at').notNull(),
-  },
-  (t) => [index('checklist_items_list_idx').on(t.checklistId, t.position)],
-)
-
-// What was done of an item on a day (by hand; a sourced item's automatic count is added when read).
-export const checklistMarks = sqliteTable(
-  'checklist_marks',
-  {
-    itemId: text('item_id')
-      .notNull()
-      .references(() => checklistItems.id, { onDelete: 'cascade' }),
-    date: text('date').notNull(),
-    count: integer('count').notNull(),
-    updatedAt: integer('updated_at').notNull(),
-  },
-  (t) => [primaryKey({ columns: [t.itemId, t.date] }), index('checklist_marks_date_idx').on(t.date)],
 )
 
 // The image board (Images tab): pasted images, gifs and videos kept as a scratchpad, in rows under a day.

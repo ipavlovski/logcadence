@@ -2,18 +2,18 @@ import type { PointerEvent } from 'react'
 import { panesStore, setPaneOpen, type PaneId } from '../../state/panes.ts'
 import styles from './Splitter.module.css'
 
-/** Dragging a side pane narrower than this minimizes it to its tab bar; dragging past it restores it. */
+/** Dragging the tags pane narrower than this minimizes it to its tab bar; dragging past it restores it. */
 const COLLAPSE_BELOW = 120
-/** Narrowest an open side pane gets: between this and COLLAPSE_BELOW the pane holds, then snaps shut. */
+/** Narrowest the open tags pane gets: between this and COLLAPSE_BELOW the pane holds, then snaps shut. */
 const SIDE_MIN = 200
-const JOURNAL_MIN = 240
+const CANVAS_MIN = 240
 
 /**
- * Drag handle between the journal and a side pane (canvas or tags); converts the pixel width
- * into flex weights. Weights are px / (journal px per weight) so the third pane keeps its size.
+ * Drag handle between the canvas and the tags pane; converts the pixel width into flex weights
+ * (px / canvas px per weight).
  */
 export function Splitter({ left, right }: { left: PaneId; right: PaneId }) {
-  const side = left === 'journal' ? right : left
+  const side = left === 'canvas' ? right : left
   const sideIsLeft = side === left
 
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
@@ -28,7 +28,7 @@ export function Splitter({ left, right }: { left: PaneId; right: PaneId }) {
     const rw = r.getBoundingClientRect().width
     const pair = lw + rw
     const { weights } = panesStore.get()
-    const perWeight = (sideIsLeft ? rw : lw) / weights.journal
+    const perWeight = (sideIsLeft ? rw : lw) / weights.canvas
     const bar = parseFloat(getComputedStyle(handle).getPropertyValue('--tabbar-h')) || 36
     // Width to come back to when the minimized pane is reopened by clicking its tab bar.
     const restoreWeight = weights[side]
@@ -37,11 +37,11 @@ export function Splitter({ left, right }: { left: PaneId; right: PaneId }) {
       const dx = ev.clientX - startX
       const want = sideIsLeft ? lw + dx : rw - dx
       if (want < COLLAPSE_BELOW) {
-        setPaneOpen(side, false, { [side]: restoreWeight, journal: (pair - bar) / perWeight })
+        setPaneOpen(side, false, { [side]: restoreWeight, canvas: (pair - bar) / perWeight })
         return
       }
-      const w = Math.min(Math.max(want, SIDE_MIN), pair - JOURNAL_MIN)
-      setPaneOpen(side, true, { [side]: w / perWeight, journal: (pair - w) / perWeight })
+      const w = Math.min(Math.max(want, SIDE_MIN), pair - CANVAS_MIN)
+      setPaneOpen(side, true, { [side]: w / perWeight, canvas: (pair - w) / perWeight })
     }
     const up = () => {
       handle.removeEventListener('pointermove', move)

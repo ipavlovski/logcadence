@@ -94,7 +94,7 @@
     <script>
       const status = document.getElementById('status')
       const buttons = [...document.querySelectorAll('button')]
-      const PHASES = { tables: 'Importing entries', assets: 'Copying media', gps: 'Copying GPS files' }
+      const PHASES = { tables: 'Importing entries', assets: 'Copying media' }
 
       window.desktop.onProgress(({ phase, done, total }) => {
         status.className = ''

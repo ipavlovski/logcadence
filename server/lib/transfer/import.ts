@@ -10,14 +10,12 @@ import { CONTENT_TABLES, EVENTS_TABLES, FORMAT, FORMAT_VERSION, LEGACY_FORMATS, 
 export interface ImportOptions {
   /** The library folder to import into; it must be empty (no entries, events or assets). */
   dataDir: string
-  /** Defaults to <dataDir>/gps. */
-  gpsDir?: string
   onProgress?: Progress
 }
 
 export interface ImportResult {
   manifest: Manifest
-  /** Things skipped that a newer build exported (unknown tables). */
+  /** Things skipped: tables a newer build exported, or an older one's that moved to logtracker (GPS, activity, checklists). */
   warnings: string[]
 }
 
@@ -26,7 +24,7 @@ export interface ImportResult {
  * only moved into place once complete, so a failed import leaves the library as it was. The app must not
  * have the library open meanwhile.
  */
-export function importFrom(zipFile: string, { dataDir, gpsDir = path.join(dataDir, 'gps'), onProgress }: ImportOptions): ImportResult {
+export function importFrom(zipFile: string, { dataDir, onProgress }: ImportOptions): ImportResult {
   const problem = libraryNotEmpty(dataDir)
   if (problem) throw new Error(`can only import into an empty library: ${problem}`)
 
@@ -76,9 +74,7 @@ export function importFrom(zipFile: string, { dataDir, gpsDir = path.join(dataDi
       rmSync(staging, { recursive: true, force: true })
     }
 
-    // GPS files are source data the app re-reads, so existing ones are kept and they go straight in.
-    mkdirSync(gpsDir, { recursive: true })
-    extractDir(members, 'gps', gpsDir, manifest.gps, onProgress, { keepExisting: true })
+    if (manifest.gps?.files) warnings.push(`skipped ${manifest.gps.files} GPS file(s): GPS moved to logtracker`)
 
     return { manifest, warnings }
   })
@@ -145,18 +141,18 @@ function insertRows(tx: { insert(t: SQLiteTable): { values(rows: never[]): { run
       .run()
 }
 
-function extractDir(members: ZipMember[], prefix: string, dir: string, expected: FileSet, onProgress?: Progress, { keepExisting = false } = {}) {
+function extractDir(members: ZipMember[], prefix: 'assets', dir: string, expected: FileSet, onProgress?: Progress) {
   const list = members.filter((m) => m.name.startsWith(`${prefix}/`))
   const got = { files: 0, bytes: 0 }
   for (const [i, m] of list.entries()) {
     const name = m.name.slice(prefix.length + 1)
     if (!name || name !== path.basename(name) || name === '..') throw new Error(`export is corrupt: bad file name ${m.name}`)
     const file = path.join(dir, name)
-    if (!(keepExisting && existsSync(file))) m.extractTo(file)
-    if (statSync(file).size !== m.size && !keepExisting) throw new Error(`export is corrupt: ${m.name} is truncated`)
+    m.extractTo(file)
+    if (statSync(file).size !== m.size) throw new Error(`export is corrupt: ${m.name} is truncated`)
     got.files++
     got.bytes += m.size
-    if (i % 25 === 0 || i === list.length - 1) onProgress?.({ phase: prefix as 'assets' | 'gps', done: i + 1, total: list.length })
+    if (i % 25 === 0 || i === list.length - 1) onProgress?.({ phase: prefix, done: i + 1, total: list.length })
   }
   if (got.files !== expected.files || got.bytes !== expected.bytes)
     throw new Error(`export is incomplete: ${prefix} has ${got.files} files / ${got.bytes} bytes, expected ${expected.files} / ${expected.bytes}`)

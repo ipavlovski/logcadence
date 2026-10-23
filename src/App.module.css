@@ -122,7 +122,7 @@
   min-height: 0;
 }
 
-.paneSlot[data-slot='journal'] {
+.paneSlot[data-slot='canvas'] {
   min-width: 240px;
 }
 

@@ -8,7 +8,7 @@ export type UpdateStatus =
   | { state: 'error'; message: string }
 
 export interface TransferProgress {
-  phase: 'tables' | 'assets' | 'gps'
+  phase: 'tables' | 'assets'
   done: number
   total: number
 }
@@ -37,7 +37,7 @@ export interface DesktopApi {
   platform: string
   appInfo(): Promise<AppInfo>
   /** Writes an export zip to a file picked in a save dialog. */
-  exportData(opts?: { assets?: boolean; gps?: boolean }): Promise<ActionResult>
+  exportData(opts?: { assets?: boolean }): Promise<ActionResult>
   checkForUpdates(): Promise<void>
   /** Downloads one release (by tag, e.g. a dev build) as the next update; progress comes through onUpdate. */
   installRelease(tag: string): Promise<void>

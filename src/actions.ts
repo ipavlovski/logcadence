@@ -30,7 +30,7 @@ export async function createEntry(opts: NewEntryDefaults & { title?: string; con
 
 /**
  * Defaults for a new entry, inherited from where the user is: the journal cursor's entry
- * (same day, same tags, placed right after it) or the tag open in the tags pane. AI chat source
+ * (same day, same tags, placed right after it) or the tag open in the tags pane, when that has focus. AI chat source
  * tags are not inherited: they belong to imported chats only.
  */
 export function newEntryDefaults(): NewEntryDefaults {

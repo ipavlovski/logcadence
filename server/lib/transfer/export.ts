@@ -10,13 +10,11 @@ import { CONTENT_TABLES, EVENTS_TABLES, FORMAT, FORMAT_VERSION, type FileSet, ty
 export interface ExportOptions {
   /** Include pasted media (default true): by far the bulk of an export. */
   assets?: boolean
-  /** Include the raw GPS files (default true). */
-  gps?: boolean
   onProgress?: Progress
 }
 
 /** Streams the library as an export zip into `out` (and ends it). */
-export async function exportTo(out: Writable, lib: Library, { assets = true, gps = true, onProgress }: ExportOptions = {}): Promise<Manifest> {
+export async function exportTo(out: Writable, lib: Library, { assets = true, onProgress }: ExportOptions = {}): Promise<Manifest> {
   const zip = new ZipWriter(out)
   try {
     // One read transaction per database: a consistent snapshot even while the app keeps writing.
@@ -36,7 +34,6 @@ export async function exportTo(out: Writable, lib: Library, { assets = true, gps
     }
 
     const assetSet = assets ? await addDir(zip, path.join(lib.dataDir, 'assets'), 'assets', 'assets', onProgress) : { files: 0, bytes: 0 }
-    const gpsSet = gps ? await addDir(zip, lib.gpsDir, 'gps', 'gps', onProgress) : { files: 0, bytes: 0 }
 
     const manifest: Manifest = {
       format: FORMAT,
@@ -46,7 +43,6 @@ export async function exportTo(out: Writable, lib: Library, { assets = true, gps
       schema: { content: schemaTag('content'), events: schemaTag('events') },
       tables: manifestTables,
       assets: assetSet,
-      gps: gpsSet,
     }
     await zip.add('manifest.json', Buffer.from(JSON.stringify(manifest, null, 2)))
     await zip.finish()
@@ -58,7 +54,7 @@ export async function exportTo(out: Writable, lib: Library, { assets = true, gps
 }
 
 /** Adds every file directly in `dir` under `prefix/`. Files that vanish before they are reached are skipped. */
-async function addDir(zip: ZipWriter, dir: string, prefix: string, phase: 'assets' | 'gps', onProgress?: Progress): Promise<FileSet> {
+async function addDir(zip: ZipWriter, dir: string, prefix: string, phase: 'assets', onProgress?: Progress): Promise<FileSet> {
   const names = existsSync(dir) ? readdirSync(dir, { withFileTypes: true }).filter((d) => d.isFile()).map((d) => d.name) : []
   const set = { files: 0, bytes: 0 }
   for (const [i, name] of names.entries()) {

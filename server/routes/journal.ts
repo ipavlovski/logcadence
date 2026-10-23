@@ -24,7 +24,7 @@ export const journalRoutes = new Hono()
       .all()
     return c.json({ dates })
   })
-  // Entries written per day from `from` on (dashboard heatmap); imported AI chats aren't journal entries here.
+  // Entries written per day from `from` on (for heatmaps); imported AI chats aren't journal entries here.
   .get('/journal-activity', (c) => {
     const from = c.req.query('from') ?? ''
     if (!isIsoDate(from)) bad('from must be YYYY-MM-DD')

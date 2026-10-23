@@ -75,7 +75,7 @@ function General() {
           checked={openHidden}
           onChange={(v) => setPref('openHiddenPane', v)}
           label="Open a hidden pane with its focus shortcut"
-          hint={`${formatCombo('mod+1')} and ${formatCombo('mod+3')} restore the canvas or tags pane when it is minimized. Off, they leave a minimized pane alone.`}
+          hint={`${formatCombo('mod+2')} restores the tags pane when it is minimized. Off, it leaves the minimized pane alone.`}
         />
       </Group>
       <Group title="Keyboard">
@@ -91,7 +91,7 @@ function General() {
         </Row>
       </Group>
       <Group title="Data">
-        <Row label="Export the library" hint="Entries, chats, GPS history, media. An export can be imported into an empty library, e.g. the desktop app.">
+        <Row label="Export the library" hint="Entries, chats, YouTube, captures, media. An export can be imported into an empty library, e.g. the desktop app.">
           <DataExport />
         </Row>
       </Group>
@@ -99,7 +99,7 @@ function General() {
   )
 }
 
-const PHASES = { tables: 'Exporting entries', assets: 'Exporting media', gps: 'Exporting GPS files' }
+const PHASES = { tables: 'Exporting entries', assets: 'Exporting media' }
 
 /** Browser: plain downloads. Desktop app: a save dialog, with progress (a full library is many GB). */
 function DataExport() {
@@ -113,21 +113,21 @@ function DataExport() {
         <a href="/api/export" download>
           Everything
         </a>
-        <a href="/api/export?assets=0&gps=0" download>
-          Without media and GPS files
+        <a href="/api/export?assets=0" download>
+          Without media
         </a>
       </div>
     )
 
-  const run = async (opts: { assets: boolean; gps: boolean }) => {
+  const run = async (opts: { assets: boolean }) => {
     setStatus('')
     const r = await desktop.exportData(opts)
     setStatus(r.ok ? 'Export written.' : (r.error ?? ''))
   }
   return (
     <div className={styles.buttons}>
-      <button onClick={() => run({ assets: true, gps: true })}>Everything…</button>
-      <button onClick={() => run({ assets: false, gps: false })}>Without media and GPS files…</button>
+      <button onClick={() => run({ assets: true })}>Everything…</button>
+      <button onClick={() => run({ assets: false })}>Without media…</button>
       {status && <span className={styles.hint}>{status}</span>}
     </div>
   )
@@ -157,9 +157,6 @@ function UpdatesGroup() {
 function Canvas() {
   return (
     <>
-      <Group title="Pane">
-        <PaneToggle pane="canvas" label="Show the canvas pane" />
-      </Group>
       <FollowJournal />
       <CanvasTabs />
       <Shortcuts pane="canvas" />
@@ -170,7 +167,7 @@ function Canvas() {
 function Journal() {
   return (
     <>
-      <p className={styles.note}>The journal pane is always shown.</p>
+      <p className={styles.note}>The journal is the canvas’s first tab, which is always there.</p>
       <Shortcuts pane="journal" />
     </>
   )
@@ -201,7 +198,7 @@ function FollowJournal() {
         checked={follows}
         onChange={setFollowJournal}
         label={`Follow the journal’s day (${formatCombo('mod+l')})`}
-        hint="On, Map and Activity show the day open in the journal and step it along, and YouTube, Reddit, Bookmarks, Progress and AI chats scroll to it. Off, the canvas browses days on its own."
+        hint="On, YouTube, Reddit, Bookmarks and AI chats scroll to the day open in the journal tab. Off, they keep their own place."
       />
     </Group>
   )
@@ -212,7 +209,7 @@ function CanvasTabs() {
   const { order, hidden } = useStore(canvasTabsStore, (s) => s)
   return (
     <Group title="Tabs">
-      <p className={styles.note}>Each shown tab is an icon in the canvas tab bar, in this order, after the dashboard.</p>
+      <p className={styles.note}>Each shown tab is an icon in the canvas tab bar, in this order, after the journal.</p>
       <ul className={styles.tabList}>
         {order.map((type, i) => {
           const p = PLUGINS.find((x) => x.type === type)
@@ -252,7 +249,7 @@ function PaneToggle({ pane, label }: { pane: PaneId; label: string }) {
   return <Check checked={open} onChange={(v) => setPaneOpen(pane, v)} label={label} hint="Hidden, it shrinks to its tab bar." />
 }
 
-function Shortcuts({ pane }: { pane: PaneId }) {
+function Shortcuts({ pane }: { pane: PaneId | 'journal' }) {
   return (
     <Group title="Keyboard shortcuts">
       {paneBindings(pane).map((b) => (

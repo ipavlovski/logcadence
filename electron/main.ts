@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, powerMonitor, session, shell, type WebContents } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, session, shell, type WebContents } from 'electron'
 import { createWriteStream, rmSync } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
@@ -21,7 +21,6 @@ if (IS_DEV_CHANNEL) {
   app.setName(APP_NAME)
   app.setPath('userData', path.join(app.getPath('appData'), APP_NAME))
 }
-// Read by the server when it loads (Google Drive's redirect URI).
 process.env.PORT = String(PORT)
 // Set by `pnpm dev:electron`: the renderer comes from Vite (hot reload), which proxies the API to PORT.
 const DEV_URL = process.env.ELECTRON_DEV_URL
@@ -58,7 +57,6 @@ async function main() {
     server = await startServer({
       port: PORT,
       staticDir: DEV_URL ? undefined : path.join(RESOURCES, 'dist'),
-      idleSeconds: () => powerMonitor.getSystemIdleTime(),
       claudeWeb: claudeWebClient,
     })
   } catch (err) {
@@ -66,8 +64,6 @@ async function main() {
       return fatal(new Error(`Port ${PORT} is in use. Is the app (or the web server from \`pnpm dev\`) already running?`))
     throw err
   }
-
-  watchPower()
 
   setMenu({
     exportData: (opts) => void exportData(opts),
@@ -197,7 +193,7 @@ function relaunchInto(library: string) {
   app.quit() // before-quit stops the server first
 }
 
-async function exportData(opts: { assets?: boolean; gps?: boolean } = {}): Promise<ActionResult> {
+async function exportData(opts: { assets?: boolean } = {}): Promise<ActionResult> {
   const r = await dialog.showSaveDialog(win!, {
     title: 'Export data',
     defaultPath: path.join(app.getPath('documents'), `logcadence-${today()}.zip`),
@@ -207,10 +203,9 @@ async function exportData(opts: { assets?: boolean; gps?: boolean } = {}): Promi
   const file = r.filePath
   // Already loaded by the server, so these resolve to its open databases.
   const { db, eventsDb, DATA_DIR } = await import('../server/db/client.ts')
-  const { GPS_DIR } = await import('../server/lib/gps/scan.ts')
   const { exportTo } = await import('../server/lib/transfer/export.ts')
   try {
-    await exportTo(createWriteStream(file), { db, eventsDb, dataDir: DATA_DIR, gpsDir: GPS_DIR }, { ...opts, onProgress: (p) => progress(win, p) })
+    await exportTo(createWriteStream(file), { db, eventsDb, dataDir: DATA_DIR }, { ...opts, onProgress: (p) => progress(win, p) })
     return { ok: true }
   } catch (err) {
     rmSync(file, { force: true })
@@ -228,17 +223,10 @@ function progress(w: BrowserWindow | undefined, p: TransferProgress | null) {
   if (p) w.webContents.send('transfer-progress', p)
 }
 
-/** Screen locks and sleep end the open activity spans; while locked, input doesn't count. */
-function watchPower() {
-  powerMonitor.on('lock-screen', () => server?.activity?.setLocked(true))
-  powerMonitor.on('unlock-screen', () => server?.activity?.setLocked(false))
-  powerMonitor.on('suspend', () => server?.activity?.close())
-}
-
 // ── plumbing ────────────────────────────────────────────────────────────────
 
 function registerIpc() {
-  ipcMain.handle('export-data', (_e, opts?: { assets?: boolean; gps?: boolean }) => exportData(opts))
+  ipcMain.handle('export-data', (_e, opts?: { assets?: boolean }) => exportData(opts))
   ipcMain.handle('app-info', (): AppInfo => ({ version: app.getVersion(), channel: IS_DEV_CHANNEL ? 'dev' : 'release' }))
   ipcMain.handle('check-for-updates', () => checkForUpdates())
   ipcMain.handle('install-release', (_e, tag: string) => installRelease(tag))

@@ -7,9 +7,9 @@ import type { ContentDb, EventsDb } from '../../db/open.ts'
 //   manifest.json          Manifest (below)
 //   tables/<name>.ndjson   one row per line, as drizzle selects it (JSON columns nested, booleans, epoch ms)
 //   assets/<file>          pasted media, stored as is
-//   gps/<file>             raw GPS days (the map's source data)
 //
-// The journal markdown mirror is left out: it is derived from the database and rebuilt on start.
+// The journal markdown mirror is left out: it is derived from the database and rebuilt on start. Exports made before
+// GPS, activity and checklists moved to logtracker also have their tables and a gps/ folder; an import skips them.
 
 export const FORMAT = 'logcadence-export'
 // Exports written before the rename to logcadence.
@@ -26,11 +26,6 @@ export const CONTENT_TABLES = {
   entry_tags: content.entryTags,
   images: content.images,
   chats: content.chats,
-  gps_places: content.gpsPlaces,
-  gps_days: content.gpsDays,
-  gps_segments: content.gpsSegments,
-  gps_trips: content.gpsTrips,
-  activity_spans: content.activitySpans,
   yt_playlists: content.ytPlaylists,
   yt_videos: content.ytVideos,
   yt_tags: content.ytTags,
@@ -40,9 +35,6 @@ export const CONTENT_TABLES = {
   capture_tags: content.captureTags,
   capture_item_tags: content.captureItemTags,
   capture_images: content.captureImages,
-  checklists: content.checklists,
-  checklist_items: content.checklistItems,
-  checklist_marks: content.checklistMarks,
   board_items: content.boardItems,
 }
 export const EVENTS_TABLES = { events: events.events }
@@ -61,7 +53,8 @@ export interface Manifest {
   schema: { content: string; events: string }
   tables: Record<string, { rows: number; sha256: string }>
   assets: FileSet
-  gps: FileSet
+  /** Raw GPS days, in exports made before GPS moved to logtracker. */
+  gps?: FileSet
 }
 
 /** A library to export from: its open databases and folders. */
@@ -69,7 +62,6 @@ export interface Library {
   db: ContentDb
   eventsDb: EventsDb
   dataDir: string
-  gpsDir: string
 }
 
-export type Progress = (p: { phase: 'tables' | 'assets' | 'gps'; done: number; total: number }) => void
+export type Progress = (p: { phase: 'tables' | 'assets'; done: number; total: number }) => void

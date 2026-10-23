@@ -14,7 +14,7 @@ export const aiRoutes = new Hono()
     return c.json({ sources: describeSources().map((s) => (s.source === 'claude' && connected !== undefined ? { ...s, connected } : s)) })
   })
   .get('/ai/chats', (c) => c.json({ chats: listChats() }))
-  // Prompts per day from `from` on (dashboard heatmap).
+  // Prompts per day from `from` on (for heatmaps).
   .get('/ai/prompt-days', (c) => {
     const from = c.req.query('from') ?? ''
     if (!isIsoDate(from)) bad('from must be YYYY-MM-DD')

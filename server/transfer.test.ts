@@ -1,8 +1,10 @@
-import { createWriteStream, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { createWriteStream, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { EntryDTO } from '../shared/types.ts'
+import type { Manifest } from './lib/transfer/format.ts'
 
 // The db client reads LOGCADENCE_DATA_DIR at import time, so the app is imported after setting it.
 const tmp = mkdtempSync(path.join(os.tmpdir(), 'logcadence-transfer-'))
@@ -37,12 +39,12 @@ async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
 }
 
 async function exportLibrary(file = zipFile) {
-  const lib = { db: client.db, eventsDb: client.eventsDb, dataDir, gpsDir: path.join(dataDir, 'gps') }
+  const lib = { db: client.db, eventsDb: client.eventsDb, dataDir }
   return transfer.exportTo(createWriteStream(file), lib)
 }
 
 describe('data export / import', () => {
-  it('round-trips every table, the assets and the gps files into an empty library', async () => {
+  it('round-trips every table and the assets into an empty library', async () => {
     const e = await req<EntryDTO>('POST', '/api/entries', { date: '2026-09-20', title: 'SSD check', tags: ['dev', 'hardware:disk'] })
     await req('PATCH', `/api/nodes/${e.nodes[0]!.id}`, { content: 'smart data **ok**' })
     await req('POST', '/api/entries', { date: '2026-09-21', title: 'archived one', tags: ['misc'] }).then((x) => req('PATCH', `/api/entries/${(x as EntryDTO).id}`, { archived: true }))
@@ -52,13 +54,10 @@ describe('data export / import', () => {
     const up = await app.request(`/api/nodes/${e.nodes[0]!.id}/images`, { method: 'POST', body: form })
     expect(up.status).toBe(201)
 
-    mkdirSync(path.join(dataDir, 'gps'), { recursive: true })
-    writeFileSync(path.join(dataDir, 'gps', 'readme.txt'), 'not a gps day')
-
     const manifest = await exportLibrary()
     expect(manifest.tables.entries!.rows).toBe(2)
     expect(manifest.assets.files).toBe(1)
-    expect(manifest.gps.files).toBe(1)
+    expect(manifest.gps).toBeUndefined()
 
     const target = path.join(tmp, 'target')
     const { warnings } = transfer.importFrom(zipFile, { dataDir: target })
@@ -75,7 +74,6 @@ describe('data export / import', () => {
       events.$client.close()
     }
     for (const f of readdirSync(path.join(dataDir, 'assets'))) expect(readFileSync(path.join(target, 'assets', f))).toEqual(readFileSync(path.join(dataDir, 'assets', f)))
-    expect(readFileSync(path.join(target, 'gps', 'readme.txt'), 'utf8')).toBe('not a gps day')
     expect(readdirSync(target)).not.toContain('.importing')
   })
 
@@ -101,6 +99,33 @@ describe('data export / import', () => {
     const empty = path.join(tmp, 'empty2')
     expect(() => transfer.importFrom(corrupt, { dataDir: empty })).toThrow(/checksum/)
     // A failed import leaves nothing behind.
-    expect(readdirSync(empty).filter((f) => f !== 'db' && f !== 'gps')).toEqual([])
+    expect(readdirSync(empty).filter((f) => f !== 'db')).toEqual([])
+  })
+
+  it('imports an export made before GPS, activity and checklists moved to logtracker, skipping them', async () => {
+    const { ZipWriter, withZip } = await import('./lib/zip.ts')
+    const members = withZip(zipFile, (ms) => ms.map((m) => [m.name, m.read()] as const))
+    const old = path.join(tmp, 'old.zip')
+    const zip = new ZipWriter(createWriteStream(old))
+    const gpsDays = Buffer.from(JSON.stringify({ date: '2026-09-17', sourceStamp: '1:2', dayStart: 0, homebaseId: null, homebaseOverride: false, pointCount: 1, processedAt: 0 }) + '\n')
+    const gpx = Buffer.from('<gpx/>')
+    for (const [name, data] of members) {
+      if (name !== 'manifest.json') {
+        await zip.add(name, data)
+        continue
+      }
+      const m = JSON.parse(data.toString()) as Manifest
+      m.tables.gps_days = { rows: 1, sha256: createHash('sha256').update(gpsDays).digest('hex') }
+      m.gps = { files: 1, bytes: gpx.length }
+      await zip.add(name, Buffer.from(JSON.stringify(m)))
+    }
+    await zip.add('tables/gps_days.ndjson', gpsDays)
+    await zip.add('gps/20260917.gpx', gpx)
+    await zip.finish()
+
+    const target = path.join(tmp, 'old-target')
+    const { warnings } = transfer.importFrom(old, { dataDir: target })
+    expect(warnings).toEqual(['skipped unknown table "gps_days"', 'skipped 1 GPS file(s): GPS moved to logtracker'])
+    expect(readdirSync(target)).not.toContain('gps')
   })
 })

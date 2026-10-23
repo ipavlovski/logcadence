@@ -1,6 +1,8 @@
 # logcadence
 
-Logcadence (a cadence of daily logs) is a journaling knowledge base with three panes: **canvas | journal | tags**. See [PROJECT.md](PROJECT.md) for the product spec.
+Logcadence (a cadence of daily logs) is a journaling knowledge base with two panes: **canvas | tags**. The journal is the canvas's first tab; YouTube, Reddit, Bookmarks, Images and AI chats are its other tabs. See [PROJECT.md](PROJECT.md) for the product spec.
+
+Activity tracking (Map, Activity, Progress, the dashboard and checklists) moved to [logtracker](../logtracker), a separate desktop app.
 
 Stack: TypeScript, React + CSS modules (Vite), Hono, SQLite via drizzle (better-sqlite3).
 
@@ -27,6 +29,23 @@ Data lives in `data/` (override with `LOGCADENCE_DATA_DIR`):
 
 After changing a schema: `pnpm db:generate` (writes migrations for both databases; they run on server start).
 
+## The logtracker split
+
+Logcadence used to be a journal plus an activity tracker. The tracker half moved to its own desktop app,
+[logtracker](../logtracker): the Map (GPS), Activity, Progress and dashboard tabs and the daily checklists, with the
+GPS / Google Drive sync and the activity recorder. Logcadence keeps the knowledge base: the journal (now the canvas's
+first tab), tags, YouTube, Reddit, Bookmarks, Images and AI chats. The two apps don't talk to each other; logtracker has
+its own copy of the AI import, for its AI history.
+
+- **The moved data**: migration `0013_drop_tracker_tables` drops `gps_*`, `activity_spans` and `checklist*` from
+  content.db. Before a build with it opens a library, copy that data into logtracker with
+  `pnpm import:logcadence <library>` (in ../logtracker), which reads the library without changing it. The library's
+  `gps/` folder, `google.json` and `gps-drive.json` are left in place (logtracker copies them).
+- **Old exports** still import: their GPS, activity and checklist tables and `gps/` folder are skipped with a warning.
+- **Saved layouts** of the three-pane version come up as two panes, the journal pane's day becoming the Journal tab's.
+- `tasks:progress` tags are kept as they are, but nothing reads them any more.
+- Logtracker's AI history links each chat as `logcadence://ai/<chat id>`; logcadence doesn't register that link yet.
+
 ## Model
 
 - **Entry**: belongs to a journal day, has a title and ordered tags. The first tag is primary and groups the entry in the journal.
@@ -36,7 +55,7 @@ After changing a schema: `pnpm db:generate` (writes migrations for both database
 
 ## Desktop app
 
-The desktop app (Windows) is Electron around the same code: its main process runs the API server in-process on `127.0.0.1:3002` and the window shows the web app from it, so the renderer is the web build unchanged. 3002 is fixed because the Chrome extension and Google Drive's login redirect use it, so the desktop app and `pnpm dev` can't run at the same time.
+The desktop app (Windows) is Electron around the same code: its main process runs the API server in-process on `127.0.0.1:3002` and the window shows the web app from it, so the renderer is the web build unchanged. 3002 is fixed because the Chrome extension posts to it, so the desktop app and `pnpm dev` can't run at the same time.
 
 - **Library**: on first run the app asks for a library folder (an existing one, an empty one for a new library, or an empty one to import an export into), remembered in `%APPDATA%/Logcadence/config.json`. File → Open or create library / Import an export into a new library switch to another (the app restarts). `LOGCADENCE_DATA_DIR` overrides it.
 - **Desktop-only features** go through `window.desktop` (`electron/preload.ts`, typed in `shared/desktop.ts`); the renderer feature-detects it, so `src/` never imports Electron. Ctrl+W / Ctrl+N and the other browser-reserved shortcuts work here, since the menu leaves them alone.
@@ -50,9 +69,9 @@ The desktop app (Windows) is Electron around the same code: its main process run
 
 ## Data export / import
 
-An export is one zip holding the whole library: `manifest.json` (format version, schema version, row counts and checksums), one NDJSON file per table under `tables/`, the media under `assets/` and the raw GPS files under `gps/`. The journal markdown mirror is left out; the server rebuilds it on start when `journals/` is empty. The zip uses zip64 throughout, so a multi-GB library is fine.
+An export is one zip holding the whole library: `manifest.json` (format version, schema version, row counts and checksums), one NDJSON file per table under `tables/`, and the media under `assets/`. Exports made before the logtracker split also carry GPS, activity and checklist tables and a `gps/` folder; an import skips those with a warning. The journal markdown mirror is left out; the server rebuilds it on start when `journals/` is empty. The zip uses zip64 throughout, so a multi-GB library is fine.
 
-- **Export**: "Export everything" on the canvas dashboard (streams `GET /api/export`; `?assets=0&gps=0` leaves media and GPS out), or `pnpm export:data [out.zip] [--no-assets] [--no-gps]`. Both are safe while the app runs.
+- **Export**: Settings → General → Export the library (streams `GET /api/export`; `?assets=0` leaves media out), or `pnpm export:data [out.zip] [--no-assets]`. Both are safe while the app runs.
 - **Import**: `pnpm import:data <export.zip> [--data-dir <dir>]`, into an **empty** library only (no entries, events or assets) and with the app not running on it. The databases and assets are built in `<dir>/.importing` and moved into place when complete, so a failed import changes nothing.
 
 This is how data moves from the web app into the desktop app. The format (see `server/lib/transfer/format.ts`) is plain JSON and media files, so later builds (mobile included) can read it; `formatVersion` only changes when existing rows change meaning.
@@ -61,11 +80,7 @@ This is how data moves from the web app into the desktop app. The format (see `s
 
 The canvas **AI** tab imports chats as journal entries: titled like the chat, tagged `ai:<source>`, dated the day the chat started, one node per prompt. These entries are read-only apart from their tags, and their `ai:<source>` tag stays locked as the primary tag; clicking a prompt shows it with its reply in the AI tab, and “transcript ↗” on the entry opens the whole chat. Opening the tab scans automatically; **Scan** forces it; export files can also be dropped on the tab.
 
-The canvas **Map** tab turns a day of GPS into a timetable of stays and trips for the journal's active day. Drop GPSLogger files (`YYYYMMDD.zip` or `.gpx`) into `data/gps/` (git-ignored; `LOGCADENCE_GPS_DIR` overrides): the server classifies new and changed files at startup and on **Scan**. Staying within 120 m for 5+ minutes is a place; the place slept at (around 03:00) is the homebase **A**, others are **B**; trips between them are **A→B**, **B→B**, **B→A**, or **A→A** for a round trip without a stop, and missing data shows as gaps. Rows tile the day, so the durations sum to 24 h. Places are shared across days and can be named by clicking them; a place can be made the day's homebase (a hotel while travelling). Rows can be grouped into trips: click a row, Shift+click another to select the rows between, and press the **+** that appears in the unlabelled first column; the trip shows as a bracket there (overlapping trips merge). Click a bracket to select its trip and **×** to remove it. Trips are stored as time ranges, so they survive the day being classified again. The map uses free OpenFreeMap tiles with deck.gl layers on MapLibre (kept on 5.x until deck.gl supports MapLibre 6).
-
-The canvas **Activity** tab shows computer use for the journal's active day. While the desktop app runs it polls the OS's time since the last keyboard/mouse input every 5 s (Electron's `powerMonitor.getSystemIdleTime`, so no native hooks; it can't tell the mouse from the keyboard) and stores spans of input in `activity_spans`: input less than a minute apart is one span, a locked screen doesn't count, and sleep ends the spans. It also stores when it was recording, so idle time reads differently from time the app was closed. The tab bins the day into 5-minute slots (input minutes per slot), groups input into sessions (pauses under 20 min stay inside a session, sessions with under 10 min of input are dropped; named morning/afternoon/evening/night by their midpoint; click a session's band or table row to zoom the chart into it at 48 slots, or 4 hours, across, scrolling sideways when it's longer), and shows the last 14 days as strips. The web server doesn't record.
-
-The canvas **Shortcuts** tab draws an app's hotkeys on a keyboard. They come from entries whose primary tag is `shortcuts:<app>` (e.g. `#shortcuts:illustrator`), one per line: `- ctrl+shift+s -> save as`. A line ending in `:` starts a section; `b -> brush + blob brush` puts the second action on Shift; `- [ ] …` marks a planned binding and `-> ?` a key whose action is still undecided; `[]` binds both brackets. Toggle Shift/Ctrl/Alt/Win, or hold the real keys, to see that layer; combos bound to two different actions are flagged as clashes.
+The **App shortcuts** window (`Ctrl+Shift+?`) draws an app's hotkeys on a keyboard. They come from entries whose primary tag is `shortcuts:<app>` (e.g. `#shortcuts:illustrator`), one per line: `- ctrl+shift+s -> save as`. A line ending in `:` starts a section; `b -> brush + blob brush` puts the second action on Shift; `- [ ] …` marks a planned binding and `-> ?` a key whose action is still undecided; `[]` binds both brackets. Toggle Shift/Ctrl/Alt/Win, or hold the real keys, to see that layer; combos bound to two different actions are flagged as clashes.
 
 | source | where it comes from |
 | --- | --- |
@@ -116,10 +131,10 @@ server/
 src/
   state/         panes/tabs store, change bus, journal cursor, UI state
   components/    Journal, Tags, Canvas (frame only), Pane, Spotlight, dialogs
-  canvas/        canvas plugin registry (AI chats, Progress, Shortcuts, Map, YouTube, Reddit and Bookmarks are built; Images is a placeholder)
+  canvas/        canvas plugin registry (YouTube, Reddit, Bookmarks, Images and AI chats); the journal tab itself is in components/Pane
   shortcuts.ts   every keyboard shortcut, used by the handler and the help overlay (press ?)
 ```
 
 ## Keyboard
 
-Press `?` in the app for the full list. Journal entries fold to their title and tags: the top bar's **fold** button (its chevron points right when the day's entries are all folded) or `Ctrl+.` folds or unfolds all of the open day's entries, and `Shift+click` on a title folds one (with Shift held, titles show a fold or unfold cursor). Folds are remembered per entry; a find (`Ctrl+F`) shows its matches inside folded entries. Browsers reserve `Ctrl+W`, `Ctrl+N`, `Ctrl+Shift+N` and `Ctrl+Shift+W`, so each also has an `Alt+` binding.
+Press `?` in the app for the full list. `Ctrl+1` / `Ctrl+2` focus the canvas / tags pane and `Ctrl+T` minimizes or restores the tags pane. On the journal tab, `Ctrl+[` / `Ctrl+]` step the day and `Alt+←` / `Alt+→` go back and forward through the days shown. Journal entries fold to their title and tags: the top bar's **fold** button (its chevron points right when the day's entries are all folded) or `Ctrl+.` folds or unfolds all of the open day's entries, and `Shift+click` on a title folds one (with Shift held, titles show a fold or unfold cursor). Folds are remembered per entry; a find (`Ctrl+F`) shows its matches inside folded entries. Browsers reserve `Ctrl+W`, `Ctrl+N`, `Ctrl+Shift+N` and `Ctrl+Shift+W`, so each also has an `Alt+` binding.
