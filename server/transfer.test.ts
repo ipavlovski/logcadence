@@ -129,7 +129,7 @@ describe('data export / import', () => {
     expect(readdirSync(target)).not.toContain('gps')
   })
 
-  it('imports Reddit and Bookmarks captures from a format 1 export as handlers, with one tag set', async () => {
+  it('imports Reddit and Bookmarks captures from a format 1 export as handlers, with one tag set of / paths', async () => {
     const { ZipWriter, withZip } = await import('./lib/zip.ts')
     const ndjson = (rows: object[]) => Buffer.from(rows.map((r) => JSON.stringify(r) + '\n').join(''))
     const row = { url: '', title: 'T', site: '', icon: null, screenshot: 's.jpg', screenshotWidth: null, screenshotHeight: null, thumb: null, capturedAt: 1, capturedDate: '2026-09-20', notes: '', activeImageId: null, comments: '', commentsActiveImageId: null, updatedAt: 1 }
@@ -141,12 +141,15 @@ describe('data export / import', () => {
       capture_tags: ndjson([
         { id: 1, kind: 'reddit', path: 'homelab', createdAt: 1 },
         { id: 2, kind: 'bookmark', path: 'homelab', createdAt: 1 },
-        { id: 3, kind: 'reddit', path: 'nas', createdAt: 1 },
+        { id: 3, kind: 'reddit', path: 'nas:disk', createdAt: 1 },
+        // Its '/' form, there too: the ':' one merges into it.
+        { id: 4, kind: 'bookmark', path: 'nas/disk', createdAt: 1 },
       ]),
       capture_item_tags: ndjson([
         { captureId: 'post', tagId: 1, position: 0 },
         { captureId: 'post', tagId: 3, position: 1 },
         { captureId: 'mark', tagId: 2, position: 0 },
+        { captureId: 'mark', tagId: 4, position: 1 },
       ]),
     } as Record<string, Buffer>
     const members = withZip(zipFile, (ms) => ms.map((m) => [m.name, m.read()] as const))
@@ -178,8 +181,9 @@ describe('data export / import', () => {
       ])
       expect(sqlite.prepare('SELECT capture_id AS id, path FROM capture_item_tags JOIN capture_tags ON capture_tags.id = tag_id ORDER BY capture_id, position').all()).toEqual([
         { id: 'mark', path: 'homelab' },
+        { id: 'mark', path: 'nas/disk' },
         { id: 'post', path: 'homelab' },
-        { id: 'post', path: 'nas' },
+        { id: 'post', path: 'nas/disk' },
       ])
       expect(sqlite.prepare('SELECT count(*) AS n FROM capture_tags').get()).toEqual({ n: 2 })
     } finally {

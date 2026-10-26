@@ -14,7 +14,7 @@ interface UiState {
   spotlight: SpotlightMode | null
   newEntry: NewEntryDefaults | null
   help: boolean
-  /** The app-shortcuts window (shortcuts:<app> entries on a keyboard). */
+  /** The app-shortcuts window (shortcuts/<app> entries on a keyboard). */
   appKeys: boolean
   /** Open section of the Settings window; null = closed. */
   settings: SettingsSection | null

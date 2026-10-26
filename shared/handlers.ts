@@ -134,7 +134,7 @@ const marketplace: CaptureHandler = {
   many: 'listings',
   domains: ['facebook.com/marketplace/item/…'],
   about:
-    'A listing is kept once by its id, wherever it was opened from: capturing it again replaces its screenshot and what it says (a new price, say) and keeps your notes and tags. Listings are grouped by location. Tag them to keep track (e.g. marketplace:desk, contacted). Facebook’s page changes often, so a field it couldn’t read can be filled in on the listing’s page here.',
+    'A listing is kept once by its id, wherever it was opened from: capturing it again replaces its screenshot and what it says (a new price, say) and keeps your notes and tags. Listings are grouped by location. Tag them to keep track (e.g. marketplace/desk, contacted). Facebook’s page changes often, so a field it couldn’t read can be filled in on the listing’s page here.',
   capture: 'What’s on screen, with the price, condition, location, seller and when it was listed, read from the listing’s text.',
   match: (u) => (/(^|\.)facebook\.com$/.test(u.hostname) ? (u.pathname.match(/^\/marketplace\/(?:[^/]+\/)?item\/(\d+)/)?.[1] ?? null) : null),
   canonical: (_u, key) => `https://www.facebook.com/marketplace/item/${key}/`,

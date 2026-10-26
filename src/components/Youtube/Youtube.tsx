@@ -648,7 +648,7 @@ function VideoPage({ id, lib }: { id: string; lib: YtLibraryDTO | undefined }) {
                 paths={tagPaths}
                 onChange={(tags) => save({ tags })}
                 onOpen={(path) => setYtFilter({ kind: 'tag', path })}
-                placeholder="add tag… (e.g. build:well)"
+                placeholder="add tag… (e.g. build/well)"
               />
             </div>
           </section>

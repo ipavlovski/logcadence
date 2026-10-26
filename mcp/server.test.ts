@@ -59,22 +59,22 @@ describe('mcp server', () => {
   it('adds tags to the current ones, or replaces them', async () => {
     const tagsOf = async (id: string) => (await call<{ tags: string[] }>('yt_get_video', { id })).tags
     expect(await call('yt_set_tags', { items: [{ id: 'v1', tags: ['Build:Well'] }, { id: 'nope', tags: ['x'] }] })).toEqual({ updated: 1, errors: [{ id: 'nope', error: 'video not found' }] })
-    expect(await tagsOf('v1')).toEqual(['build:well'])
-    expect(await call('yt_set_tags', { items: [{ id: 'v1', tags: ['build:well:drilling', 'build:well'] }] })).toEqual({ updated: 1 })
-    expect(await tagsOf('v1')).toEqual(['build:well', 'build:well:drilling'])
-    expect(await call('yt_set_tags', { items: [{ id: 'v1', tags: ['build:well:drilling'] }, { id: 'v3', tags: ['build:well:casing'] }], mode: 'replace' })).toEqual({ updated: 2 })
-    expect(await tagsOf('v1')).toEqual(['build:well:drilling'])
+    expect(await tagsOf('v1')).toEqual(['build/well'])
+    expect(await call('yt_set_tags', { items: [{ id: 'v1', tags: ['build/well/drilling', 'build/well'] }] })).toEqual({ updated: 1 })
+    expect(await tagsOf('v1')).toEqual(['build/well', 'build/well/drilling'])
+    expect(await call('yt_set_tags', { items: [{ id: 'v1', tags: ['build/well/drilling'] }, { id: 'v3', tags: ['build/well/casing'] }], mode: 'replace' })).toEqual({ updated: 2 })
+    expect(await tagsOf('v1')).toEqual(['build/well/drilling'])
     expect(await call('yt_list_tags')).toEqual([
-      { path: 'build:well:casing', videos: 1 },
-      { path: 'build:well:drilling', videos: 1 },
+      { path: 'build/well/casing', videos: 1 },
+      { path: 'build/well/drilling', videos: 1 },
     ])
     expect(ids(await call<Page>('yt_list_videos', { tag: 'build' }))).toEqual(['v3', 'v1'])
     expect(ids(await call<Page>('yt_list_videos', { untagged: true }))).toEqual(['v2'])
   })
 
   it('renames a tag and reads one video', async () => {
-    await call('yt_move_tag', { from: 'build:well', to: 'water:well' })
-    expect(await call('yt_get_video', { id: 'v1' })).toMatchObject({ id: 'v1', tags: ['water:well:drilling'], url: 'https://www.youtube.com/watch?v=v1', notes: '' })
+    await call('yt_move_tag', { from: 'build/well', to: 'water/well' })
+    expect(await call('yt_get_video', { id: 'v1' })).toMatchObject({ id: 'v1', tags: ['water/well/drilling'], url: 'https://www.youtube.com/watch?v=v1', notes: '' })
   })
 
   it('reports app errors as tool errors', async () => {

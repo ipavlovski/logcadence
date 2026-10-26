@@ -30,7 +30,7 @@ describe('shortcuts', () => {
   })
 
   it('reads sections, shift variants, open checkboxes and unknown actions', () => {
-    const e = entry('e', ['shortcuts:illustrator'], [
+    const e = entry('e', ['shortcuts/illustrator'], [
       'TOOLS:\n- b -> brush + blob brush\n- c -> ?\n- f -> artboard + ?',
       'TEMP REMOVED:\n- [ ] deselect\n\nMissing CHARs:\n- [ ] ctrl+shif+j -> justify text left (text)',
       '## Top row\n- ctrl+[] -> toggle order\n- ctrl+shift+s -> save as + nothing',
@@ -52,20 +52,20 @@ describe('shortcuts', () => {
 
   it('groups entries by the app in their primary tag', () => {
     const apps = shortcutApps([
-      entry('a', ['shortcuts:illustrator'], []),
-      entry('b', ['shortcuts:davinci-resolve:edit'], []),
-      entry('c', ['dev', 'shortcuts:revit'], []),
+      entry('a', ['shortcuts/illustrator'], []),
+      entry('b', ['shortcuts/davinci-resolve/edit'], []),
+      entry('c', ['dev', 'shortcuts/revit'], []),
       entry('d', ['shortcuts'], []),
-      entry('e', ['shortcuts:illustrator', 'design'], []),
+      entry('e', ['shortcuts/illustrator', 'design'], []),
     ])
     expect([...apps].map(([app, es]) => [app, es.map((e) => e.id)])).toEqual([
       ['illustrator', ['a', 'e']],
-      ['davinci-resolve:edit', ['b']],
+      ['davinci-resolve/edit', ['b']],
     ])
   })
 
   it('flags combos bound to different actions, ignoring unknown ones', () => {
-    const list = parseShortcuts(entry('e', ['shortcuts:x'], ['- ctrl+shift+f -> paste in back\n- [ ] ctrl+shift+f -> justify all lines\n- ctrl+e -> ?\n- ctrl+e -> effect\n- ctrl+s -> save\n- ctrl+s -> Save']))
+    const list = parseShortcuts(entry('e', ['shortcuts/x'], ['- ctrl+shift+f -> paste in back\n- [ ] ctrl+shift+f -> justify all lines\n- ctrl+e -> ?\n- ctrl+e -> effect\n- ctrl+s -> save\n- ctrl+s -> Save']))
     expect([...clashes(list)]).toEqual(['ctrl+shift+f'])
   })
 })

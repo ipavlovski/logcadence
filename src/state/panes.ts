@@ -87,6 +87,7 @@ function validKey(pane: PaneId, key: string): boolean {
 
 // Tabs saved under a former name or of a tab that's gone: the Shortcuts plugin became a window (ctrl+shift+?),
 // Spotify moved out of the app, Reddit merged into Bookmarks, and the dashboard, Map, Progress and Activity moved to logtracker.
+// Tag tabs saved while ':' separated tags (before 0015_tag_slash) take the '/' path.
 const RENAMED: Record<string, string> = {
   'plugin:threads': 'journal',
   'plugin:shortcuts': 'journal',
@@ -97,7 +98,7 @@ const RENAMED: Record<string, string> = {
   'plugin:activity': 'journal',
   dashboard: 'journal',
 }
-const renamed = (k: unknown) => (typeof k === 'string' ? (RENAMED[k] ?? k) : k)
+const renamed = (k: unknown) => (typeof k !== 'string' ? k : k.startsWith('tag:') ? tagKey(normalizeTag(k.slice(4))) : (RENAMED[k] ?? k))
 
 const toDay = (v: unknown): Day | undefined => (v === null ? null : typeof v === 'string' && isIsoDate(v) ? (v === today() ? null : v) : undefined)
 

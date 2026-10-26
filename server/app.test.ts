@@ -38,7 +38,7 @@ const tagList = () => req<{ tags: TagInfo[] }>('GET', '/api/tags').then((r) => r
 describe('entries and nodes', () => {
   it('creates an entry with normalized tags and a default node', async () => {
     const e = await req<EntryDTO>('POST', '/api/entries', { date: '2026-09-20', title: 'SSD check', tags: ['#DEV', 'Dev', 'hardware: disk'] })
-    expect(e.tags).toEqual(['dev', 'hardware:disk'])
+    expect(e.tags).toEqual(['dev', 'hardware/disk'])
     expect(e.nodes).toHaveLength(1)
     expect((await day('2026-09-20')).map((x) => x.id)).toEqual([e.id])
   })
@@ -58,7 +58,7 @@ describe('entries and nodes', () => {
     const md = readFileSync(path.join(dataDir, 'journals', '2026_09_20.md'), 'utf8')
     expect(md).toContain('# Sep 20th, 2026')
     expect(md).toContain('- Get-PhysicalDisk | Format-Table')
-    expect(md).toContain('tags:: dev, hardware:disk')
+    expect(md).toContain('tags:: dev, hardware/disk')
   })
 
   it('logs events', async () => {
@@ -67,13 +67,13 @@ describe('entries and nodes', () => {
   })
 
   it('archives a selection and hides it from tag listings', async () => {
-    const e = await req<EntryDTO>('POST', '/api/entries', { date: '2026-09-21', title: 'old note', tags: ['dev:old'] })
+    const e = await req<EntryDTO>('POST', '/api/entries', { date: '2026-09-21', title: 'old note', tags: ['dev/old'] })
     await req('POST', '/api/archive', { entryIds: [e.id], archived: true })
     const visible = await req<{ entries: EntryDTO[] }>('GET', '/api/tags/entries?tag=dev')
     expect(visible.entries.map((x) => x.id)).not.toContain(e.id)
     const all = await req<{ entries: EntryDTO[] }>('GET', '/api/tags/entries?tag=dev&archived=1')
     expect(all.entries[0]!.id).toBe(e.id) // newest day first
-    expect((await tagList()).find((t) => t.path === 'dev:old')).toEqual({ path: 'dev:old', active: 0, archived: 1 })
+    expect((await tagList()).find((t) => t.path === 'dev/old')).toEqual({ path: 'dev/old', active: 0, archived: 1 })
   })
 
   it('counts entries per day for the dashboard, leaving out archived ones', async () => {
@@ -85,24 +85,24 @@ describe('entries and nodes', () => {
 
 describe('tag operations', () => {
   it('renames a subtree and merges on collision', async () => {
-    await req('POST', '/api/entries', { date: '2026-09-22', title: 'a', tags: ['system:windows:powertoys'] })
-    await req('POST', '/api/entries', { date: '2026-09-22', title: 'b', tags: ['os:win:powertoys', 'os:win'] })
-    await req('POST', '/api/tags/rename', { from: 'system:windows', to: 'os:win' })
+    await req('POST', '/api/entries', { date: '2026-09-22', title: 'a', tags: ['system/windows/powertoys'] })
+    await req('POST', '/api/entries', { date: '2026-09-22', title: 'b', tags: ['os/win/powertoys', 'os/win'] })
+    await req('POST', '/api/tags/rename', { from: 'system/windows', to: 'os/win' })
     const paths = (await tagList()).map((t) => t.path)
-    expect(paths).toContain('os:win:powertoys')
+    expect(paths).toContain('os/win/powertoys')
     expect(paths.some((p) => p.startsWith('system'))).toBe(false)
     const listed = await req<{ entries: EntryDTO[] }>('GET', '/api/tags/entries?tag=os:win:powertoys')
     expect(listed.entries.map((e) => e.title).sort()).toEqual(['a', 'b'])
   })
 
   it('refuses to move a tag into its own subtree', async () => {
-    await expect(req('POST', '/api/tags/rename', { from: 'os', to: 'os:x' })).rejects.toThrow(/400/)
+    await expect(req('POST', '/api/tags/rename', { from: 'os', to: 'os/x' })).rejects.toThrow(/400/)
   })
 
   it('branches selected entries into a sub-tag', async () => {
     const listed = await req<{ entries: EntryDTO[] }>('GET', '/api/tags/entries?tag=os:win:powertoys')
     const a = listed.entries.find((e) => e.title === 'a')!
-    await req('POST', '/api/tags/branch', { from: 'os:win:powertoys', to: 'os:win:powertoys:fancyzones', entryIds: [a.id] })
+    await req('POST', '/api/tags/branch', { from: 'os/win/powertoys', to: 'os/win/powertoys/fancyzones', entryIds: [a.id] })
     const exact = await req<{ entries: EntryDTO[] }>('GET', '/api/tags/entries?tag=os:win:powertoys&sub=0')
     expect(exact.entries.map((e) => e.title)).toEqual(['b'])
   })

@@ -1,16 +1,17 @@
 import { CHAT_SOURCES, type ChatSource, type TagInfo } from './types.ts'
 
-/** Tags are hierarchical paths: "system:windows:powertoys". */
-export const TAG_SEP = ':'
+/** Tags are hierarchical paths: "system/windows/powertoys". */
+export const TAG_SEP = '/'
 
-/** Lowercase, no leading '#', spaces become dashes, empty segments dropped. Returns '' for junk. */
+/** Lowercase, no leading '#', spaces become dashes, empty segments dropped. Returns '' for junk.
+ *  ':' (the separator before 0015_tag_slash) still splits, for old notes, exports and clients. */
 export function normalizeTag(raw: string): string {
   return raw
     .trim()
     .replace(/^#+/, '')
     .toLowerCase()
     .replace(/[\s,#[\]()]+/g, '-')
-    .split(TAG_SEP)
+    .split(/[/:]/)
     .map((s) => s.replace(/^-+|-+$/g, ''))
     .filter(Boolean)
     .join(TAG_SEP)
@@ -91,8 +92,8 @@ export function allTagPaths(infos: TagInfo[]): string[] {
   return [...set].sort()
 }
 
-/** Source tag of an imported AI chat (ai:claude-code…): the locked primary tag of its journal entry. */
-export const chatTag = (source: ChatSource) => `ai:${source}`
+/** Source tag of an imported AI chat (ai/claude-code…): the locked primary tag of its journal entry. */
+export const chatTag = (source: ChatSource) => `ai${TAG_SEP}${source}`
 
 export const isChatTag = (path: string) => CHAT_SOURCES.some((s) => chatTag(s) === path)
 

@@ -396,23 +396,23 @@ describe('large imports: retries, failures, thumbnails', () => {
 
 describe('tags, notes and comments', () => {
   it('tags videos with their own hierarchical tags, apart from the journal', async () => {
-    const v = await req<YtVideoDTO>('PATCH', `/api/youtube/videos/${V(1).id}`, { tags: ['Build:Well', '#build:well:drilling', 'build:well'] })
-    expect(v.tags).toEqual(['build:well', 'build:well:drilling'])
-    await req('PATCH', `/api/youtube/videos/${V(2).id}`, { tags: ['build:pump'] })
+    const v = await req<YtVideoDTO>('PATCH', `/api/youtube/videos/${V(1).id}`, { tags: ['Build:Well', '#build/well/drilling', 'build/well'] })
+    expect(v.tags).toEqual(['build/well', 'build/well/drilling'])
+    await req('PATCH', `/api/youtube/videos/${V(2).id}`, { tags: ['build/pump'] })
     const lib1 = await req<YtLibraryDTO>('GET', '/api/youtube/library')
     expect(lib1.tags.map((t) => [t.path, t.active])).toEqual([
-      ['build:pump', 1],
-      ['build:well', 1],
-      ['build:well:drilling', 1],
+      ['build/pump', 1],
+      ['build/well', 1],
+      ['build/well/drilling', 1],
     ])
     const journal = await req<{ tags: unknown[] }>('GET', '/api/tags')
     expect(journal.tags).toEqual([])
   })
 
   it('renames (merging), then deletes a tag subtree', async () => {
-    await req('POST', '/api/youtube/tags/move', { from: 'build:pump', to: 'build:well' })
-    expect((await req<YtVideoDTO>('GET', `/api/youtube/videos/${V(2).id}`)).tags).toEqual(['build:well'])
-    await req('POST', '/api/youtube/tags/delete', { path: 'build:well' })
+    await req('POST', '/api/youtube/tags/move', { from: 'build/pump', to: 'build/well' })
+    expect((await req<YtVideoDTO>('GET', `/api/youtube/videos/${V(2).id}`)).tags).toEqual(['build/well'])
+    await req('POST', '/api/youtube/tags/delete', { path: 'build/well' })
     const { tags, videos } = await req<YtLibraryDTO>('GET', '/api/youtube/library')
     expect(tags).toEqual([])
     expect(videos.every((v) => !v.tags.length)).toBe(true)

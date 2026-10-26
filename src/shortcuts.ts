@@ -71,7 +71,7 @@ export const BINDINGS: Binding[] = [
   { keys: ['mod+,'], label: 'Settings', group: 'General', run: () => openSettings(uiStore.get().settings ? null : 'general'), inInputs: true },
   { keys: ['mod+/'], label: 'Keyboard shortcuts', group: 'General', run: () => toggleHelp(), inInputs: true },
   { keys: ['shift+?'], label: 'Keyboard shortcuts', group: 'General', run: () => toggleHelp() },
-  { keys: ['mod+shift+?'], label: 'App shortcuts (shortcuts:<app> entries)', group: 'General', run: () => toggleAppKeys(), inInputs: true },
+  { keys: ['mod+shift+?'], label: 'App shortcuts (shortcuts/<app> entries)', group: 'General', run: () => toggleAppKeys(), inInputs: true },
 ]
 
 /** Shortcuts handled by the editor itself, listed in the help overlay. */

@@ -585,7 +585,7 @@ function ItemPage({ id, lib }: { id: string; lib: CaptureLibraryDTO | undefined 
             ))}
             <div className={yt.infoRow}>
               <span className={yt.label}>Tags</span>
-              <TagInput className={yt.tags} value={c.tags} paths={tagPaths} onChange={(tags) => save({ tags })} onOpen={(path) => nav.setFilter({ kind: 'tag', path })} placeholder="add tag… (e.g. homelab:nas)" />
+              <TagInput className={yt.tags} value={c.tags} paths={tagPaths} onChange={(tags) => save({ tags })} onOpen={(path) => nav.setFilter({ kind: 'tag', path })} placeholder="add tag… (e.g. homelab/nas)" />
             </div>
           </section>
 

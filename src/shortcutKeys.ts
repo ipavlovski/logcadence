@@ -1,7 +1,7 @@
 import { TAG_SEP } from '../shared/tags.ts'
 import type { EntryDTO } from '../shared/types.ts'
 
-// Shortcuts canvas tab. An entry whose primary tag is "shortcuts:<app>" lists that app's hotkeys,
+// Shortcuts canvas tab. An entry whose primary tag is "shortcuts/<app>" lists that app's hotkeys,
 // one per line, in any of its nodes:
 //
 //   TOOLS:                         a line ending in ':' (or a # heading) starts a section
@@ -139,7 +139,7 @@ export function parseShortcuts(entry: EntryDTO): Shortcut[] {
   return out
 }
 
-/** App name → entries whose primary tag is shortcuts:<app>. */
+/** App name → entries whose primary tag is shortcuts/<app>. */
 export function shortcutApps(entries: EntryDTO[]): Map<string, EntryDTO[]> {
   const prefix = SHORTCUTS_TAG + TAG_SEP
   const apps = new Map<string, EntryDTO[]>()

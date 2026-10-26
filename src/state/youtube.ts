@@ -1,4 +1,5 @@
 import { isIsoDate } from '../../shared/dates.ts'
+import { normalizeTag } from '../../shared/tags.ts'
 import { openLoc, panesStore, pluginKey } from './panes.ts'
 import { createStore, persistedStore } from './store.ts'
 
@@ -33,7 +34,7 @@ const MAX_HISTORY = 50
 
 const reviveFilter = (f: unknown): YtFilter => {
   const o = f as { kind?: string; path?: unknown; name?: unknown } | null
-  if (o?.kind === 'tag' && typeof o.path === 'string') return { kind: 'tag', path: o.path }
+  if (o?.kind === 'tag' && typeof o.path === 'string') return { kind: 'tag', path: normalizeTag(o.path) } // ':' before 0015_tag_slash
   if (o?.kind === 'channel' && typeof o.name === 'string') return { kind: 'channel', name: o.name }
   if (o?.kind === 'untagged') return { kind: o.kind }
   return null

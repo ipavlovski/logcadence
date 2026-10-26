@@ -9,8 +9,8 @@ import type { LogcadenceApi } from './api.ts'
 // scripts/build-mcp.ts.
 
 const INSTRUCTIONS = `Logcadence is the user's journaling app; its YouTube tab holds videos imported from their playlists.
-Tags are hierarchical, lowercase paths joined by ":" (e.g. "build:well:drilling"); ancestors are implicit, so a video tagged
-"build:well:drilling" also shows under "build". The first tag of a video is its primary tag. The YouTube tab has its own tag
+Tags are hierarchical, lowercase paths joined by "/" (e.g. "build/well/drilling"); ancestors are implicit, so a video tagged
+"build/well/drilling" also shows under "build". The first tag of a video is its primary tag. The YouTube tab has its own tag
 set, apart from the journal's. Before tagging, read the existing tags with yt_list_tags and reuse them where they fit;
 create new paths only when nothing fits. Show the user what you plan to tag before applying large batches.`
 

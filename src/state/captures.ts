@@ -1,6 +1,7 @@
 import { isIsoDate } from '../../shared/dates.ts'
 import { HANDLER_IDS } from '../../shared/handlers.ts'
 import type { HandlerId } from '../../shared/types.ts'
+import { normalizeTag } from '../../shared/tags.ts'
 import { openLoc, panesStore, pluginKey } from './panes.ts'
 import { createStore, persistedStore, type Store } from './store.ts'
 
@@ -38,7 +39,7 @@ const MAX_HISTORY = 50
 
 const reviveFilter = (f: unknown): CaptureFilter => {
   const o = f as { kind?: string; path?: unknown; site?: unknown } | null
-  if (o?.kind === 'tag' && typeof o.path === 'string') return { kind: 'tag', path: o.path }
+  if (o?.kind === 'tag' && typeof o.path === 'string') return { kind: 'tag', path: normalizeTag(o.path) } // ':' before 0015_tag_slash
   if (o?.kind === 'site' && typeof o.site === 'string') return { kind: 'site', site: o.site }
   if (o?.kind === 'untagged') return { kind: o.kind }
   return null

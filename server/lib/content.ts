@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { and, asc, eq, inArray, sql, type SQL } from 'drizzle-orm'
 import type { ChatSource, EntryDTO, ImageDTO, NodeDTO } from '../../shared/types.ts'
-import { chatTag, cleanTags, holdsChatTag, isChatTag, isUnder } from '../../shared/tags.ts'
+import { chatTag, cleanTags, holdsChatTag, isChatTag, isUnder, TAG_SEP } from '../../shared/tags.ts'
 import { db } from '../db/client.ts'
 import { chats, entries, entryTags, images, nodes, tags } from '../db/content-schema.ts'
 import { bad } from './validate.ts'
@@ -152,7 +152,7 @@ export function pruneTags() {
 
 /** SQL condition: tag path is `root` or below it. */
 export function tagSubtree(root: string): SQL {
-  return sql`(${tags.path} = ${root} or substr(${tags.path}, 1, ${root.length + 1}) = ${root + ':'})`
+  return sql`(${tags.path} = ${root} or substr(${tags.path}, 1, ${root.length + 1}) = ${root + TAG_SEP})`
 }
 
 /** Dates of entries that carry any tag in `tagIds`. */

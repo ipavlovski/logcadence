@@ -133,10 +133,14 @@ type Row = Record<string, unknown>
  * earlier table's). Add a step per version bump.
  */
 function upgrader(fromVersion: number): (table: string, rows: Row[]) => Row[] {
-  // v1 → 2: Reddit merged into Bookmarks (migration 0014_capture_handlers). Merged capture tags' old ids → the kept one's.
+  const steps = [toV2(), toV3()].slice(fromVersion - 1)
+  return (table, rows) => steps.reduce((r, step) => step(table, r), rows)
+}
+
+// v1 → 2: Reddit merged into Bookmarks (migration 0014_capture_handlers). Merged capture tags' old ids → the kept one's.
+function toV2(): (table: string, rows: Row[]) => Row[] {
   const tagIds = new Map<unknown, unknown>()
   return (table, rows) => {
-    if (fromVersion >= 2) return rows
     if (table === 'captures')
       return rows.map(({ kind, author, score, commentCount, postedAt, ...r }) => ({
         ...r,
@@ -156,6 +160,37 @@ function upgrader(fromVersion: number): (table: string, rows: Row[]) => Row[] {
     }
     if (table === 'capture_item_tags') return rows.map((r) => (tagIds.has(r.tagId) ? { ...r, tagId: tagIds.get(r.tagId) } : r))
     return rows
+  }
+}
+
+const TAG_TABLES: Record<string, string> = { tags: 'entry_tags', yt_tags: 'yt_video_tags', capture_tags: 'capture_item_tags' }
+
+// v2 → 3: tag paths separated by '/' (migration 0015_tag_slash). A path whose '/' form is there too merges into it.
+function toV3(): (table: string, rows: Row[]) => Row[] {
+  const tagIds = new Map<string, Map<unknown, unknown>>()
+  return (table, rows) => {
+    if (table in TAG_TABLES) {
+      const ids = new Map<unknown, unknown>()
+      tagIds.set(TAG_TABLES[table]!, ids)
+      const byPath = new Map<unknown, Row>()
+      // Paths already in '/' form first: theirs is the id a ':' one merges into.
+      for (const r of [...rows].sort((a, b) => Number(String(a.path).includes(':')) - Number(String(b.path).includes(':')))) {
+        const path = String(r.path).replaceAll(':', '/')
+        const kept = byPath.get(path)
+        if (kept) ids.set(r.id, kept.id)
+        else byPath.set(path, { ...r, path })
+      }
+      return [...byPath.values()]
+    }
+    const ids = tagIds.get(table)
+    if (!ids?.size) return rows
+    const seen = new Set<string>()
+    return rows
+      .map((r) => (ids.has(r.tagId) ? { ...r, tagId: ids.get(r.tagId) } : r))
+      .filter((r) => {
+        const key = JSON.stringify([r.entryId ?? r.videoId ?? r.captureId, r.tagId])
+        return !seen.has(key) && !!seen.add(key)
+      })
   }
 }
 

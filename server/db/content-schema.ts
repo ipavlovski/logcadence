@@ -38,7 +38,7 @@ export const nodes = sqliteTable(
 
 export const tags = sqliteTable('tags', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  // Full colon-separated path ("system:windows:powertoys"); ancestors are implicit.
+  // Full slash-separated path ("system/windows/powertoys"); ancestors are implicit.
   path: text('path').notNull().unique(),
   createdAt: integer('created_at').notNull(),
 })
@@ -147,7 +147,7 @@ export const ytVideos = sqliteTable(
 
 export const ytTags = sqliteTable('yt_tags', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  path: text('path').notNull().unique(), // "build:well:drilling"; ancestors are implicit
+  path: text('path').notNull().unique(), // "build/well/drilling"; ancestors are implicit
   createdAt: integer('created_at').notNull(),
 })
 

@@ -59,7 +59,7 @@ function reveal(e: MouseEvent, entry: EntryDTO, nodeId?: string) {
   requestReveal({ date: entry.date, entryId: entry.id, nodeId, mode: 'flash' })
 }
 
-/** The app-shortcuts window (ctrl+shift+?): an app's hotkeys from its shortcuts:<app> entries, on a keyboard. */
+/** The app-shortcuts window (ctrl+shift+?): an app's hotkeys from its shortcuts/<app> entries, on a keyboard. */
 export function AppShortcuts() {
   const open = useStore(uiStore, (s) => s.appKeys)
   if (!open) return null
@@ -275,7 +275,7 @@ function Empty() {
   return (
     <div className={styles.empty}>
       <p>
-        No shortcut lists yet. Give an entry the primary tag <code>#shortcuts:&lt;app&gt;</code> (e.g. <code>#shortcuts:illustrator</code>) and list one
+        No shortcut lists yet. Give an entry the primary tag <code>#shortcuts/&lt;app&gt;</code> (e.g. <code>#shortcuts/illustrator</code>) and list one
         hotkey per line:
       </p>
       <pre>{`TOOLS:

@@ -17,7 +17,8 @@ export const LEGACY_FORMATS = ['logseq-rewrite-export']
 // Bumped only when existing rows change meaning; new optional columns don't need it. An importer upgrades
 // rows from older versions (see upgradeRow in import.ts) and refuses newer ones.
 // 2: Reddit merged into Bookmarks (captures' kind became handler, Reddit's columns became fields; one capture tag set).
-export const FORMAT_VERSION = 2
+// 3: tag paths are separated by '/' instead of ':'.
+export const FORMAT_VERSION = 3
 
 // Insert order: parents before the rows that reference them.
 export const CONTENT_TABLES = {

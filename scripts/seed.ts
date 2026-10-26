@@ -18,7 +18,7 @@ const samples: { date: string; title: string; tags: string[]; nodes: string[]; a
   {
     date: d(-8),
     title: 'DISK: checking which SSD nvme i have installed',
-    tags: ['dev', 'system:windows:disk'],
+    tags: ['dev', 'system/windows/disk'],
     nodes: [
       '```powershell\nGet-PhysicalDisk | Format-Table DeviceId, FriendlyName, MediaType, BusType, Size, HealthStatus\n```',
       'Both drives are Samsung SSD 980 PRO 500GB, NVMe, healthy.',
@@ -28,37 +28,37 @@ const samples: { date: string; title: string; tags: string[]; nodes: string[]; a
     date: d(-8),
     title: 'Samsung Notes - installing on a non-samsung PC',
     tags: ['dev', 'samsung-note'],
-    nodes: ['Needs the store package + a registry tweak.', 'See also #system:windows:powertoys for window pinning.'],
+    nodes: ['Needs the store package + a registry tweak.', 'See also #system/windows/powertoys for window pinning.'],
   },
   {
     date: d(-5),
     title: 'PowerToys: FancyZones layout',
-    tags: ['system:windows:powertoys', 'shortcuts'],
+    tags: ['system/windows/powertoys', 'shortcuts'],
     nodes: ['`Win+Shift+~` opens the layout editor', 'Three columns, middle one 50% for the journal.'],
   },
   {
     date: d(-5),
     title: 'PowerToys: old FancyZones layout',
-    tags: ['system:windows:powertoys'],
+    tags: ['system/windows/powertoys'],
     nodes: ['Two columns — replaced, see [[' + d(-5) + ']].'],
     archived: true,
   },
   {
     date: d(-2),
     title: 'DaVinci Resolve: proxy workflow',
-    tags: ['design:davinci-resolve:til'],
+    tags: ['design/davinci-resolve/til'],
     nodes: ['Generate proxies at **half res** before cutting.', 'Render cache: *smart*.'],
   },
   {
     date: d(-2),
     title: 'Blog: draft on journaling setup',
-    tags: ['tidewater:blog:a'],
+    tags: ['tidewater/blog/a'],
     nodes: ['Outline: why logseq, what is missing, the 3-pane idea.'],
   },
   {
     date: d(0),
     title: 'Logcadence: first run',
-    tags: ['dev', 'project:logcadence'],
+    tags: ['dev', 'project/logcadence'],
     nodes: [
       'Journal in the middle, tags on the right, canvas on the left.',
       'Try: Alt+N for a new entry at the cursor, Ctrl+K for tags, Ctrl+Shift+F to search.',

@@ -5,7 +5,7 @@ import { and, asc, eq, inArray, sql } from 'drizzle-orm'
 import { HTTPException } from 'hono/http-exception'
 import { toIsoDate } from '../../shared/dates.ts'
 import { cleanFields, handlerById, handlerFor } from '../../shared/handlers.ts'
-import { cleanTags, isUnder } from '../../shared/tags.ts'
+import { cleanTags, isUnder, TAG_SEP } from '../../shared/tags.ts'
 import type { CaptureDTO, CaptureLibraryDTO, CaptureRequest, CaptureResult, CaptureSection, CaptureSummary, ImageDTO, TagInfo, UpdateCaptureBody } from '../../shared/types.ts'
 import { ASSETS_DIR, db } from '../db/client.ts'
 import { captureImages, captureItemTags, captures, captureTags } from '../db/content-schema.ts'
@@ -348,7 +348,7 @@ export function deleteImage(id: string): { activeImageId: string | null } {
 
 // ── tags ───────────────────────────────────────────────────────────────────
 
-const subtree = (root: string) => sql`(${captureTags.path} = ${root} or substr(${captureTags.path}, 1, ${root.length + 1}) = ${root + ':'})`
+const subtree = (root: string) => sql`(${captureTags.path} = ${root} or substr(${captureTags.path}, 1, ${root.length + 1}) = ${root + TAG_SEP})`
 
 /** Moves `from` and its subtree under `to`; where a target path exists, the tags merge. */
 export function moveTag(from: string, to: string) {
