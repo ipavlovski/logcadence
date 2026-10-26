@@ -501,6 +501,8 @@
 .title {
   margin: 0 0 4px;
   font: 500 15px/22px var(--yt-font);
+  /* Always two lines tall, so channel and meta line up across a row. */
+  min-height: 44px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
