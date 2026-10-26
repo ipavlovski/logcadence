@@ -48,6 +48,11 @@ const watchUrl = (id: string) => `https://www.youtube.com/watch?v=${id}`
 
 function useLibrary() {
   const rev = useStore(ytRevision, (n) => n)
+  // Coming back to the window refetches: tags set from outside (the MCP server, through the API) don't bump the revision.
+  useEffect(() => {
+    window.addEventListener('focus', bumpYt)
+    return () => window.removeEventListener('focus', bumpYt)
+  }, [])
   return useFetch<YtLibraryDTO>(`ytlib|${rev}`, (signal) => unwrap(api.youtube.library.$get({}, { init: { signal } })))
 }
 
