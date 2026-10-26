@@ -1,0 +1,35 @@
+{
+  "manifest_version": "0.2",
+  "name": "logcadence",
+  "display_name": "Logcadence",
+  "version": "0.0.0",
+  "description": "Read and tag the videos in Logcadence's YouTube tab, in the running app.",
+  "long_description": "Talks to Logcadence running on this computer (its local API on 127.0.0.1). Lets Claude list the YouTube tab's videos and tags, read a video's notes, tag videos in batches and rename tags. Logcadence must be running.",
+  "author": { "name": "IP" },
+  "server": {
+    "type": "node",
+    "entry_point": "server/index.mjs",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/index.mjs"],
+      "env": { "LOGCADENCE_PORT": "${user_config.port}" }
+    }
+  },
+  "tools": [
+    { "name": "yt_list_tags", "description": "Every tag path used in the YouTube tab, with video counts." },
+    { "name": "yt_list_videos", "description": "Videos, paged, filtered by untagged, tag or text." },
+    { "name": "yt_get_video", "description": "One video with the user's notes and kept comments." },
+    { "name": "yt_set_tags", "description": "Add or replace the tags of videos, in batches." },
+    { "name": "yt_move_tag", "description": "Rename a tag path on every video." }
+  ],
+  "user_config": {
+    "port": {
+      "type": "number",
+      "title": "Port",
+      "description": "3002 for Logcadence, 3003 for LogcadenceDev.",
+      "default": 3002,
+      "required": false
+    }
+  },
+  "compatibility": { "platforms": ["win32", "darwin", "linux"] }
+}
