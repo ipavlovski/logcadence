@@ -32,5 +32,15 @@ export async function getPort(app) {
 
 export const setPort = (app, port) => chrome.storage.local.set({ [app.key]: port })
 
-/** A Reddit post, or a comment's link under one (new, old, www…). */
-export const isRedditPost = (url) => /^https:\/\/([a-z0-9-]+\.)?reddit\.com\/(r\/[^/]+\/)?comments\/[a-z0-9]+/i.test(url ?? '')
+/**
+ * Sites with a handler in Logcadence (shared/handlers.ts there decides what a capture is; this list is how the
+ * extension captures and reads each, in background.js). A page none of them match is captured as what's on screen.
+ */
+export const HANDLERS = [
+  // A post, or a comment's link under one (new, old, www…).
+  { id: 'reddit', name: 'Reddit', one: 'post', comments: true, match: /^https:\/\/([a-z0-9-]+\.)?reddit\.com\/(r\/[^/]+\/)?comments\/[a-z0-9]+/i },
+  { id: 'marketplace', name: 'Marketplace', one: 'listing', comments: false, match: /^https:\/\/([a-z0-9-]+\.)?facebook\.com\/marketplace\/([^/]+\/)?item\/\d+/i },
+]
+
+/** The handler of a page, or null for any other page (and for videos, which go to SEO Dashboard). */
+export const handlerOf = (url) => (isVideoSite(url) ? null : (HANDLERS.find((h) => h.match.test(url ?? '')) ?? null))

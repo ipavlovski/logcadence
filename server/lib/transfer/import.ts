@@ -44,10 +44,11 @@ export function importFrom(zipFile: string, { dataDir, onProgress }: ImportOptio
       let done = 0
       const progress = () => onProgress?.({ phase: 'tables', done: ++done, total })
 
+      const upgrade = upgrader(manifest.formatVersion)
       const content = openContentDb(path.join(staging, 'db'))
       try {
         content.transaction((tx) => {
-          for (const [name, table] of Object.entries(CONTENT_TABLES)) insertRows(tx, table, readTable(byName, manifest, name)), progress()
+          for (const [name, table] of Object.entries(CONTENT_TABLES)) insertRows(tx, table, upgrade(name, readTable(byName, manifest, name))), progress()
         })
       } finally {
         content.$client.close()
@@ -120,14 +121,42 @@ function readTable(byName: Map<string, ZipMember>, manifest: Manifest, name: str
     .toString('utf8')
     .split('\n')
     .filter(Boolean)
-    .map((line) => upgradeRow(manifest.formatVersion, name, JSON.parse(line) as Record<string, unknown>))
+    .map((line) => JSON.parse(line) as Record<string, unknown>)
   if (rows.length !== expected.rows) throw new Error(`export is corrupt: ${name} has ${rows.length} rows, expected ${expected.rows}`)
   return rows
 }
 
-/** Brings a row from an older export format up to FORMAT_VERSION. Add a step per version bump. */
-function upgradeRow(_fromVersion: number, _table: string, row: Record<string, unknown>): Record<string, unknown> {
-  return row
+type Row = Record<string, unknown>
+
+/**
+ * Brings a table's rows from an older export format up to FORMAT_VERSION, in insert order (a step can depend on an
+ * earlier table's). Add a step per version bump.
+ */
+function upgrader(fromVersion: number): (table: string, rows: Row[]) => Row[] {
+  // v1 → 2: Reddit merged into Bookmarks (migration 0014_capture_handlers). Merged capture tags' old ids → the kept one's.
+  const tagIds = new Map<unknown, unknown>()
+  return (table, rows) => {
+    if (fromVersion >= 2) return rows
+    if (table === 'captures')
+      return rows.map(({ kind, author, score, commentCount, postedAt, ...r }) => ({
+        ...r,
+        handler: kind === 'bookmark' ? 'page' : kind,
+        fields: kind === 'reddit' ? Object.fromEntries(Object.entries({ author, score, commentCount }).filter(([, v]) => v != null)) : {},
+        publishedAt: postedAt ?? null,
+      }))
+    if (table === 'capture_tags') {
+      const byPath = new Map<unknown, Row>()
+      // Bookmark tags first: theirs is the id a same-path Reddit tag merges into.
+      for (const { kind, ...r } of [...rows].sort((a, b) => Number(a.kind !== 'bookmark') - Number(b.kind !== 'bookmark'))) {
+        const kept = byPath.get(r.path)
+        if (kept) tagIds.set(r.id, kept.id)
+        else byPath.set(r.path, r)
+      }
+      return [...byPath.values()]
+    }
+    if (table === 'capture_item_tags') return rows.map((r) => (tagIds.has(r.tagId) ? { ...r, tagId: tagIds.get(r.tagId) } : r))
+    return rows
+  }
 }
 
 // Keeps each statement well under SQLite's bound-parameter limit.

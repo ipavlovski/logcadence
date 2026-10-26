@@ -1,5 +1,5 @@
 import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
-import type { ChatMessage } from '../../shared/types.ts'
+import type { CaptureFields, ChatMessage } from '../../shared/types.ts'
 
 // content.db: the notes. Entries belong to a journal day; nodes are an entry's children.
 
@@ -182,31 +182,30 @@ export const ytImages = sqliteTable(
   (t) => [index('yt_images_video_idx').on(t.videoId, t.position)],
 )
 
-// Web pages captured by the Chrome extension (extension/) for the canvas Reddit and Bookmarks tabs (see
-// server/lib/captures.ts): a screenshot with the page's url, title and icon, plus notes, comments, images and tags
-// of their own. Each kind has its own tag set, apart from the journal's and from each other's.
+// Web pages captured by the Chrome extension (extension/) for the canvas Bookmarks tab (see server/lib/captures.ts):
+// a screenshot with the page's url, title and icon, plus notes, comments, images and tags of their own (one tag
+// set, apart from the journal's). A capture's handler (shared/handlers.ts) is what its url made it: a Reddit post,
+// a Marketplace listing, any other page.
 
 export const captures = sqliteTable(
   'captures',
   {
     id: text('id').primaryKey(),
-    kind: text('kind', { enum: ['reddit', 'bookmark'] }).notNull(),
-    // What makes two captures the same page: a Reddit post's id ("1kq2x3v"), or a bookmark's url without its #fragment.
+    handler: text('handler', { enum: ['page', 'reddit', 'marketplace'] }).notNull(),
+    // What makes two captures the same page, from the handler: a Reddit post's id ("1kq2x3v"), a listing's id, a page's url without its #fragment.
     key: text('key').notNull(),
     url: text('url').notNull(),
     title: text('title').notNull(),
-    site: text('site').notNull().default(''), // a bookmark's host ("example.com"); a Reddit post's subreddit ("r/selfhosted")
+    site: text('site').notNull().default(''), // a page's host ("example.com"); a Reddit post's subreddit ("r/selfhosted"); a listing's location
     icon: text('icon'), // favicon, or the subreddit's icon: a file under data/assets
-    // The screenshot (a whole Reddit post, stitched; a bookmark's visible page) and the top of it for the grid, jpegs under data/assets.
+    // The screenshot (a whole Reddit post, stitched; otherwise the visible page) and the top of it for the grid, jpegs under data/assets.
     screenshot: text('screenshot').notNull(),
     screenshotWidth: integer('screenshot_width'),
     screenshotHeight: integer('screenshot_height'),
     thumb: text('thumb'),
-    // Reddit posts: as the page showed them when captured.
-    author: text('author'),
-    score: integer('score'),
-    commentCount: integer('comment_count'),
-    postedAt: integer('posted_at'), // epoch ms
+    // What the handler read from the page (a post's author and score, a listing's price…), and when the page says it was posted.
+    fields: text('fields', { mode: 'json' }).$type<CaptureFields>().notNull().default({}),
+    publishedAt: integer('published_at'), // epoch ms
     capturedAt: integer('captured_at').notNull(), // first captured (epoch ms); capturing again replaces the screenshot only
     capturedDate: text('captured_date').notNull(), // local YYYY-MM-DD of capturedAt
     notes: text('notes').notNull().default(''), // markdown
@@ -215,18 +214,17 @@ export const captures = sqliteTable(
     commentsActiveImageId: text('comments_active_image_id'),
     updatedAt: integer('updated_at').notNull(),
   },
-  (t) => [uniqueIndex('captures_kind_key_idx').on(t.kind, t.key), index('captures_date_idx').on(t.kind, t.capturedDate, t.capturedAt)],
+  (t) => [uniqueIndex('captures_handler_key_idx').on(t.handler, t.key), index('captures_date_idx').on(t.capturedDate, t.capturedAt)],
 )
 
 export const captureTags = sqliteTable(
   'capture_tags',
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
-    kind: text('kind', { enum: ['reddit', 'bookmark'] }).notNull(),
     path: text('path').notNull(), // ancestors are implicit
     createdAt: integer('created_at').notNull(),
   },
-  (t) => [uniqueIndex('capture_tags_kind_path_idx').on(t.kind, t.path)],
+  (t) => [uniqueIndex('capture_tags_path_idx').on(t.path)],
 )
 
 export const captureItemTags = sqliteTable(

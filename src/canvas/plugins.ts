@@ -1,7 +1,7 @@
 import type { ComponentType, LazyExoticComponent } from 'react'
 import { AiChats } from '../components/AiChats/AiChats.tsx'
 import { Board } from '../components/Board/Board.tsx'
-import { Bookmarks, Reddit } from '../components/Captures/Captures.tsx'
+import { Bookmarks } from '../components/Captures/Captures.tsx'
 import { Youtube } from '../components/Youtube/Youtube.tsx'
 import { syncCanvasPlugins } from '../state/canvasTabs.ts'
 
@@ -23,8 +23,7 @@ export interface CanvasPlugin {
 
 export const PLUGINS: CanvasPlugin[] = [
   { type: 'youtube', title: 'YouTube', description: 'Videos imported from your playlists, by the day they were discovered, with notes, images and tags of their own.', Component: Youtube },
-  { type: 'reddit', title: 'Reddit', description: 'Reddit posts captured with the Chrome extension: a screenshot of each whole post, by subreddit and day, with comments, notes and tags.', Component: Reddit },
-  { type: 'bookmarks', title: 'Bookmarks', description: 'Pages bookmarked with the Chrome extension, with a screenshot, title and favicon, by day, with notes and tags.', Component: Bookmarks },
+  { type: 'bookmarks', title: 'Bookmarks', description: 'Pages captured with the Chrome extension, with a screenshot, by day, with notes and tags. Handlers add what’s special about some sites: whole Reddit posts with their comments, Marketplace listings with their price and seller.', Component: Bookmarks },
   { type: 'images', title: 'Images', description: 'A scratchpad board, like PureRef: paste images, gifs and videos under today, and drag them into rows.', Component: Board },
   { type: 'ai-prompts', title: 'AI', description: 'Chats imported from Claude, Claude Code, Gemini and Antigravity, with full transcripts.', Component: AiChats },
 ]

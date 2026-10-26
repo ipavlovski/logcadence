@@ -1,4 +1,4 @@
-import { appFor, getPort, isRedditPost, isVideoSite, setPort } from './common.js'
+import { appFor, getPort, handlerOf, isVideoSite, setPort } from './common.js'
 
 // The toolbar popup: what the page is, where it can go, and which app (port) captures are sent to: SEO Dashboard for
 // YouTube, TikTok and Instagram pages, Logcadence for the rest. The capture itself runs in the background worker, so
@@ -13,12 +13,11 @@ if (tab?.favIconUrl) $('favicon').src = tab.favIconUrl
 else $('favicon').hidden = true
 
 const web = /^https?:/.test(tab?.url ?? '')
-const post = isRedditPost(tab?.url)
+const handler = handlerOf(tab?.url)
 const app = appFor(tab?.url)
 $('app').textContent = app.name
-$('reddit').hidden = !post
-$('comment').hidden = !post
-if (post) $('bookmark').textContent = 'Save as bookmark instead'
+$('comment').hidden = !handler?.comments
+if (handler) $('bookmark').textContent = `Capture ${handler.one} → Bookmarks (${handler.name})`
 if (isVideoSite(tab?.url)) $('bookmark').textContent = 'Bookmark video → SEO Dashboard'
 if (!web) {
   for (const b of document.querySelectorAll('.actions button')) b.disabled = true
@@ -53,7 +52,7 @@ async function run(target, button) {
   const buttons = [...document.querySelectorAll('.actions button')]
   for (const b of buttons) b.disabled = true
   const label = button.textContent
-  button.textContent = target === 'reddit' ? 'Capturing the post…' : 'Capturing…'
+  button.textContent = handler?.id === 'reddit' && target === 'bookmark' ? 'Capturing the post…' : 'Capturing…'
   const r = await chrome.runtime.sendMessage({ type: 'capture', tabId: tab.id, target })
   button.textContent = label
   for (const b of buttons) b.disabled = false
@@ -61,4 +60,4 @@ async function run(target, button) {
   if (r.ok) setTimeout(() => window.close(), 1200)
 }
 
-for (const target of ['reddit', 'comment', 'bookmark']) $(target).onclick = (e) => run(target, e.currentTarget)
+for (const target of ['comment', 'bookmark']) $(target).onclick = (e) => run(target, e.currentTarget)

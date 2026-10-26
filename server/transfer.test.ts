@@ -128,4 +128,62 @@ describe('data export / import', () => {
     expect(warnings).toEqual(['skipped unknown table "gps_days"', 'skipped 1 GPS file(s): GPS moved to logtracker'])
     expect(readdirSync(target)).not.toContain('gps')
   })
+
+  it('imports Reddit and Bookmarks captures from a format 1 export as handlers, with one tag set', async () => {
+    const { ZipWriter, withZip } = await import('./lib/zip.ts')
+    const ndjson = (rows: object[]) => Buffer.from(rows.map((r) => JSON.stringify(r) + '\n').join(''))
+    const row = { url: '', title: 'T', site: '', icon: null, screenshot: 's.jpg', screenshotWidth: null, screenshotHeight: null, thumb: null, capturedAt: 1, capturedDate: '2026-09-20', notes: '', activeImageId: null, comments: '', commentsActiveImageId: null, updatedAt: 1 }
+    const v1 = {
+      captures: ndjson([
+        { ...row, id: 'post', kind: 'reddit', key: 'abc', author: 'alice', score: 5, commentCount: null, postedAt: 7 },
+        { ...row, id: 'mark', kind: 'bookmark', key: 'https://example.com/', author: null, score: null, commentCount: null, postedAt: null },
+      ]),
+      capture_tags: ndjson([
+        { id: 1, kind: 'reddit', path: 'homelab', createdAt: 1 },
+        { id: 2, kind: 'bookmark', path: 'homelab', createdAt: 1 },
+        { id: 3, kind: 'reddit', path: 'nas', createdAt: 1 },
+      ]),
+      capture_item_tags: ndjson([
+        { captureId: 'post', tagId: 1, position: 0 },
+        { captureId: 'post', tagId: 3, position: 1 },
+        { captureId: 'mark', tagId: 2, position: 0 },
+      ]),
+    } as Record<string, Buffer>
+    const members = withZip(zipFile, (ms) => ms.map((m) => [m.name, m.read()] as const))
+    const old = path.join(tmp, 'v1.zip')
+    const zip = new ZipWriter(createWriteStream(old))
+    for (const [name, data] of members) {
+      const table = name.match(/^tables\/(.+)\.ndjson$/)?.[1]
+      if (table && v1[table]) continue
+      if (name !== 'manifest.json') {
+        await zip.add(name, data)
+        continue
+      }
+      const m = JSON.parse(data.toString()) as Manifest
+      m.formatVersion = 1
+      for (const [t, buf] of Object.entries(v1)) m.tables[t] = { rows: buf.toString().split('\n').filter(Boolean).length, sha256: createHash('sha256').update(buf).digest('hex') }
+      await zip.add(name, Buffer.from(JSON.stringify(m)))
+    }
+    for (const [t, buf] of Object.entries(v1)) await zip.add(`tables/${t}.ndjson`, buf)
+    await zip.finish()
+
+    const target = path.join(tmp, 'v1-target')
+    transfer.importFrom(old, { dataDir: target })
+    const Database = (await import('better-sqlite3')).default
+    const sqlite = new Database(path.join(target, 'db', 'content.db'), { readonly: true })
+    try {
+      expect(sqlite.prepare('SELECT id, handler, fields, published_at AS publishedAt FROM captures ORDER BY id').all()).toEqual([
+        { id: 'mark', handler: 'page', fields: '{}', publishedAt: null },
+        { id: 'post', handler: 'reddit', fields: JSON.stringify({ author: 'alice', score: 5 }), publishedAt: 7 },
+      ])
+      expect(sqlite.prepare('SELECT capture_id AS id, path FROM capture_item_tags JOIN capture_tags ON capture_tags.id = tag_id ORDER BY capture_id, position').all()).toEqual([
+        { id: 'mark', path: 'homelab' },
+        { id: 'post', path: 'homelab' },
+        { id: 'post', path: 'nas' },
+      ])
+      expect(sqlite.prepare('SELECT count(*) AS n FROM capture_tags').get()).toEqual({ n: 2 })
+    } finally {
+      sqlite.close()
+    }
+  })
 })

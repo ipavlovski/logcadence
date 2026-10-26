@@ -1,11 +1,12 @@
 import { isIsoDate } from '../../shared/dates.ts'
-import type { CaptureKind } from '../../shared/types.ts'
+import { HANDLER_IDS } from '../../shared/handlers.ts'
+import type { HandlerId } from '../../shared/types.ts'
 import { openLoc, panesStore, pluginKey } from './panes.ts'
 import { createStore, persistedStore, type Store } from './store.ts'
 
-// The Reddit and Bookmarks canvas tabs (pages captured by the Chrome extension), each with its own state: the open
-// capture (null = the listing), the listing's filter and search, and a history that alt+left/right walk, like the
-// YouTube tab's (state/youtube.ts): capture clicks are steps, each listing step with its scroll position.
+// The Bookmarks canvas tab (pages captured by the Chrome extension): the open capture (null = the listing), the
+// listing's filter, handler and search, and a history that alt+left/right walk, like the YouTube tab's
+// (state/youtube.ts): capture clicks are steps, each listing step with its scroll position.
 
 /** A tag path (captures with it or a tag under it), captures without tags, or one site's (a subreddit's) captures. */
 export type CaptureFilter = { kind: 'tag'; path: string } | { kind: 'untagged' } | { kind: 'site'; site: string } | null
@@ -22,6 +23,10 @@ export interface CaptureEntry {
 export interface CaptureState {
   itemId: string | null
   filter: CaptureFilter
+  /** Only captures of one handler (Reddit posts, Marketplace listings…); with the filter and the search. */
+  handler: HandlerId | null
+  /** The Handlers view, over the listing. */
+  handlers: boolean
   query: string
   history: CaptureEntry[]
   hIndex: number
@@ -62,6 +67,8 @@ export function reviveCaptures(s: unknown): CaptureState {
   return {
     itemId,
     filter: reviveFilter(o.filter),
+    handler: HANDLER_IDS.includes(o.handler as HandlerId) ? (o.handler as HandlerId) : null,
+    handlers: o.handlers === true,
     query: typeof o.query === 'string' ? o.query : '',
     history: ok ? history : [{ itemId }],
     hIndex: ok ? hIndex : 0,
@@ -73,6 +80,7 @@ export function reviveCaptures(s: unknown): CaptureState {
 
 const show = (s: CaptureState, entry: CaptureEntry, hIndex: number): CaptureState => ({
   ...s,
+  handlers: false,
   hIndex,
   itemId: entry.itemId,
   filter: entry.itemId === null && entry.filter !== undefined ? entry.filter : s.filter,
@@ -97,7 +105,15 @@ export function stepHistory(s: CaptureState, dir: -1 | 1): CaptureState | null {
 export function withFilter(s: CaptureState, filter: CaptureFilter): CaptureState {
   const history = [...s.history]
   if (s.history[s.hIndex]?.itemId === null) history[s.hIndex] = { itemId: null, anchor: null, filter }
-  return { ...s, history, filter, seq: s.seq + 1 }
+  return { ...s, history, filter, handlers: false, seq: s.seq + 1 }
+}
+
+/** Only one handler's captures (null: all), on the listing step being shown (it starts from the top). */
+export function withHandler(s: CaptureState, handler: HandlerId | null): CaptureState {
+  const history = [...s.history]
+  const cur = s.history[s.hIndex]
+  if (cur?.itemId === null) history[s.hIndex] = { ...cur, anchor: null }
+  return { ...s, history, handler, handlers: false, seq: s.seq + 1 }
 }
 
 /** Records where the listing step being shown is scrolled. */
@@ -119,7 +135,6 @@ export function toListing(s: CaptureState): CaptureState {
 // ── a tab's store and actions ──────────────────────────────────────────────
 
 export interface CaptureNav {
-  kind: CaptureKind
   plugin: string
   store: Store<CaptureState>
   /** The mounted listing reports where it is scrolled, so a step away can keep its position. */
@@ -133,14 +148,17 @@ export interface CaptureNav {
   go(dir: -1 | 1): void
   setFilter(filter: CaptureFilter): void
   setQuery(query: string): void
+  setHandler(handler: HandlerId | null): void
+  /** Opens or closes the Handlers view. */
+  showHandlers(open: boolean): void
   isActive(): boolean
   /** The tab's own change counter (its edits don't touch the journal). */
   revision: Store<number>
   bump(): void
 }
 
-function createNav(kind: CaptureKind, plugin: string): CaptureNav {
-  const store = persistedStore<CaptureState>(`captures.${kind}.v1`, reviveCaptures(null), reviveCaptures)
+function createNav(plugin: string): CaptureNav {
+  const store = persistedStore<CaptureState>('captures.bookmark.v1', reviveCaptures(null), reviveCaptures)
   let capture: (() => CaptureAnchor | undefined) | null = null
   const saveAnchor = () => {
     const anchor = capture?.()
@@ -152,7 +170,6 @@ function createNav(kind: CaptureKind, plugin: string): CaptureNav {
   }
   const revision = createStore(0)
   return {
-    kind,
     plugin,
     store,
     registerAnchorCapture: (fn) => (capture = fn),
@@ -177,11 +194,18 @@ function createNav(kind: CaptureKind, plugin: string): CaptureNav {
       if (query && store.get().itemId !== null) navigate((s) => pushStep(s, { itemId: null, anchor: null }))
       store.set((s) => ({ ...s, query }))
     },
+    setHandler(handler) {
+      if (store.get().itemId !== null) navigate((s) => pushStep(s, { itemId: null, anchor: null }))
+      store.set((s) => withHandler(s, handler))
+    },
+    showHandlers(open) {
+      if (open && store.get().itemId !== null) navigate((s) => pushStep(s, { itemId: null, anchor: null }))
+      store.set((s) => ({ ...s, handlers: open }))
+    },
     isActive: () => panesStore.get().panes.canvas.active === pluginKey(plugin),
     revision,
     bump: () => revision.set((n) => n + 1),
   }
 }
 
-export const redditNav = createNav('reddit', 'reddit')
-export const bookmarksNav = createNav('bookmark', 'bookmarks')
+export const bookmarksNav = createNav('bookmarks')

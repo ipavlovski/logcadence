@@ -1,13 +1,8 @@
-/* The Reddit and Bookmarks tabs take the YouTube tab's look (Youtube.module.css); these are their own bits. */
+/* The Bookmarks tab takes the YouTube tab's look (Youtube.module.css); these are its own bits. */
 
 /* Screenshots are shown from their top: a post's title, a page's header. */
 .shotThumb img {
   object-position: top;
-}
-
-/* Posts are taller than videos: a deeper card shows more of them. */
-.postGrid .shotThumb {
-  aspect-ratio: 4 / 3;
 }
 
 .siteIcon {
@@ -52,4 +47,143 @@
   gap: 4px;
   align-items: center;
   justify-content: center;
+}
+
+/* A handler's logo before the site, on a card and on the page. */
+.byline {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.byline > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.handlerChip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chipGap {
+  flex-shrink: 0;
+  width: 1px;
+  margin: 4px 0;
+  background: var(--border);
+}
+
+.handlersButton {
+  height: 36px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 18px;
+  background: var(--yt-chip);
+  color: var(--text);
+  font: 500 13px var(--yt-font);
+}
+
+.handlersButton:hover {
+  background: var(--yt-chip-hover);
+}
+
+.handlersOn,
+.handlersOn:hover {
+  background: var(--text);
+  color: var(--bg);
+}
+
+/* A field read from the page: reads as text until clicked. */
+.fieldInput {
+  flex: 1;
+  min-width: 120px;
+  max-width: 360px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  padding: 2px 6px;
+  margin-left: -7px;
+  color: var(--text);
+  font: inherit;
+}
+
+.fieldInput:hover {
+  border-color: var(--border);
+}
+
+.fieldInput:focus {
+  border-color: var(--accent);
+  background: var(--surface-2);
+  outline: none;
+}
+
+/* ── the Handlers view ── */
+
+.intro {
+  max-width: 760px;
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.intro p {
+  margin: 0 0 10px;
+}
+
+.handler {
+  max-width: 760px;
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.handler header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.handler header > div {
+  min-width: 0;
+}
+
+.handler h2 {
+  margin: 0;
+  font: 600 16px var(--yt-font);
+}
+
+.handler header button {
+  border: none;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.handler header button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.handler p {
+  margin: 10px 0;
+}
+
+.handler dl {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 4px 12px;
+  margin: 0;
+}
+
+.handler dt {
+  font-weight: 500;
+}
+
+.handler dd {
+  margin: 0;
+  color: var(--text-muted);
 }

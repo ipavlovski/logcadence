@@ -198,7 +198,7 @@ function FollowJournal() {
         checked={follows}
         onChange={setFollowJournal}
         label={`Follow the journal’s day (${formatCombo('mod+l')})`}
-        hint="On, YouTube, Reddit, Bookmarks and AI chats scroll to the day open in the journal tab. Off, they keep their own place."
+        hint="On, YouTube, Bookmarks and AI chats scroll to the day open in the journal tab. Off, they keep their own place."
       />
     </Group>
   )

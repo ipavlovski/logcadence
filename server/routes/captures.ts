@@ -2,12 +2,12 @@ import { randomUUID } from 'node:crypto'
 import { Hono } from 'hono'
 import { validator } from 'hono/validator'
 import { normalizeTag } from '../../shared/tags.ts'
-import type { CaptureKind, CaptureRequest, CaptureSection, UpdateCaptureBody } from '../../shared/types.ts'
+import type { CaptureFields, CaptureRequest, CaptureSection, UpdateCaptureBody } from '../../shared/types.ts'
 import { addImage, capture, captureRevision, deleteCapture, deleteImage, deleteTag, getCapture, library, moveTag, reorderImages, updateCapture } from '../lib/captures.ts'
 import { saveUpload } from '../lib/media.ts'
 import { bad, defined, notFound, obj, optNum, optStr, optStrArr, str, type Obj } from '../lib/validate.ts'
 
-// The Reddit and Bookmarks tabs, and POST /capture, where the Chrome extension (extension/) sends a page.
+// The Bookmarks tab, and POST /capture, where the Chrome extension (extension/) sends a page.
 
 // The extension sends this header. A web page can't add it to a request to another origin without a CORS
 // preflight, which this server never answers, so pages open in the browser can't send captures.
@@ -15,17 +15,22 @@ export const CAPTURE_HEADER = 'x-logcadence-capture'
 
 const MAX_UPLOAD = 500 * 1024 * 1024
 
-const KINDS: CaptureKind[] = ['reddit', 'bookmark']
-const kind = (v: string | undefined): CaptureKind => (KINDS.includes(v as CaptureKind) ? (v as CaptureKind) : bad('kind must be reddit or bookmark'))
 const SECTIONS: CaptureSection[] = ['notes', 'comments']
 const section = (v: string | undefined): CaptureSection => (SECTIONS.includes(v as CaptureSection) ? (v as CaptureSection) : bad('section must be notes or comments'))
 const tagPath = (o: Obj, k: string) => normalizeTag(str(o, k)) || bad(`${k} must be a tag`)
 
+/** An object of strings and numbers; which keys a capture keeps is up to its handler (cleanFields). */
+function optFields(o: Obj, k: string): CaptureFields | undefined {
+  if (o[k] === undefined) return undefined
+  const f = obj(o[k])
+  if (!Object.values(f).every((v) => typeof v === 'string' || typeof v === 'number')) bad(`${k} must map names to strings or numbers`)
+  return f as CaptureFields
+}
+
 function parseCapture(v: unknown): CaptureRequest {
   const o = obj(v)
   const target = str(o, 'target')
-  if (target !== 'reddit' && target !== 'bookmark' && target !== 'comment') bad('target must be reddit, bookmark or comment')
-  const p = o.post === undefined ? undefined : obj(o.post)
+  if (target !== 'bookmark' && target !== 'comment') bad('target must be bookmark or comment')
   return defined({
     target,
     url: str(o, 'url'),
@@ -35,7 +40,9 @@ function parseCapture(v: unknown): CaptureRequest {
     width: optNum(o, 'width'),
     height: optNum(o, 'height'),
     icon: optStr(o, 'icon'),
-    post: p && defined({ subreddit: optStr(p, 'subreddit'), author: optStr(p, 'author'), score: optNum(p, 'score'), comments: optNum(p, 'comments'), postedAt: optNum(p, 'postedAt') }),
+    site: optStr(o, 'site'),
+    fields: optFields(o, 'fields'),
+    publishedAt: optNum(o, 'publishedAt'),
   })
 }
 
@@ -52,6 +59,8 @@ function parseUpdate(v: unknown): UpdateCaptureBody {
     tags: optStrArr(o, 'tags'),
     activeImageId: image('activeImageId'),
     commentsActiveImageId: image('commentsActiveImageId'),
+    fields: optFields(o, 'fields'),
+    publishedAt: o.publishedAt === null ? null : optNum(o, 'publishedAt'),
   })
 }
 
@@ -74,8 +83,8 @@ export const captureRoutes = new Hono()
   // Polled by an open tab, to reload when a capture arrives.
   .get('/captures/revision', (c) => c.json({ revision: captureRevision() }))
 
-  // ── the tabs ──
-  .get('/captures/:kind/library', (c) => c.json(library(kind(c.req.param('kind')))))
+  // ── the tab ──
+  .get('/captures/library', (c) => c.json(library()))
   .get('/captures/items/:id', (c) => c.json(getCapture(c.req.param('id')) ?? notFound('capture')))
   .patch('/captures/items/:id', validator('json', parseUpdate), (c) => c.json(updateCapture(c.req.param('id'), c.req.valid('json'))))
   .delete('/captures/items/:id', (c) => {
@@ -111,24 +120,24 @@ export const captureRoutes = new Hono()
   )
   .delete('/captures/images/:id', (c) => c.json(deleteImage(c.req.param('id'))))
 
-  // ── tags (each tab's own) ──
+  // ── tags ──
   .post(
-    '/captures/:kind/tags/move',
+    '/captures/tags/move',
     validator('json', (v) => {
       const o = obj(v)
       return { from: tagPath(o, 'from'), to: tagPath(o, 'to') }
     }),
     (c) => {
       const { from, to } = c.req.valid('json')
-      moveTag(kind(c.req.param('kind')), from, to)
+      moveTag(from, to)
       return c.json({ ok: true })
     },
   )
   .post(
-    '/captures/:kind/tags/delete',
+    '/captures/tags/delete',
     validator('json', (v) => ({ path: tagPath(obj(v), 'path') })),
     (c) => {
-      deleteTag(kind(c.req.param('kind')), c.req.valid('json').path)
+      deleteTag(c.req.valid('json').path)
       return c.json({ ok: true })
     },
   )

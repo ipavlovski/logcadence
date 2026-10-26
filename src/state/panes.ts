@@ -86,11 +86,12 @@ function validKey(pane: PaneId, key: string): boolean {
 }
 
 // Tabs saved under a former name or of a tab that's gone: the Shortcuts plugin became a window (ctrl+shift+?),
-// Spotify moved out of the app, and the dashboard, Map, Progress and Activity moved to logtracker.
+// Spotify moved out of the app, Reddit merged into Bookmarks, and the dashboard, Map, Progress and Activity moved to logtracker.
 const RENAMED: Record<string, string> = {
   'plugin:threads': 'journal',
   'plugin:shortcuts': 'journal',
   'plugin:spotify': 'journal',
+  'plugin:reddit': 'plugin:bookmarks',
   'plugin:map': 'journal',
   'plugin:progress': 'journal',
   'plugin:activity': 'journal',

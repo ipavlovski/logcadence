@@ -4,17 +4,18 @@ import path from 'node:path'
 import { and, asc, eq, inArray, sql } from 'drizzle-orm'
 import { HTTPException } from 'hono/http-exception'
 import { toIsoDate } from '../../shared/dates.ts'
+import { cleanFields, handlerById, handlerFor } from '../../shared/handlers.ts'
 import { cleanTags, isUnder } from '../../shared/tags.ts'
-import type { CaptureDTO, CaptureKind, CaptureLibraryDTO, CaptureRequest, CaptureResult, CaptureSection, CaptureSummary, ImageDTO, TagInfo, UpdateCaptureBody } from '../../shared/types.ts'
+import type { CaptureDTO, CaptureLibraryDTO, CaptureRequest, CaptureResult, CaptureSection, CaptureSummary, ImageDTO, TagInfo, UpdateCaptureBody } from '../../shared/types.ts'
 import { ASSETS_DIR, db } from '../db/client.ts'
 import { captureImages, captureItemTags, captures, captureTags } from '../db/content-schema.ts'
 import { imageUrl } from './content.ts'
 import { logEvent } from './events.ts'
 import { bad, notFound } from './validate.ts'
 
-// Pages captured by the Chrome extension (extension/): Reddit posts for the Reddit tab, anything else for the
-// Bookmarks tab. A capture is a screenshot with the page's url, title and icon; notes, comments, images and tags
-// are added in the app. Capturing a page again replaces its screenshot (and what Reddit showed), keeping the rest.
+// Pages captured by the Chrome extension (extension/), for the Bookmarks tab. A capture is a screenshot with the
+// page's url, title and icon, and what its handler (shared/handlers.ts) read from the page; notes, comments, images
+// and tags are added in the app. Capturing a page again replaces its screenshot and fields, keeping the rest.
 
 type Row = typeof captures.$inferSelect
 
@@ -28,33 +29,7 @@ export const captureRevision = () => `${started}.${captured}`
 
 // ── pages ──────────────────────────────────────────────────────────────────
 
-/** A Reddit post's id from its url (…/comments/<id>/…, also on a comment's link, or redd.it/<id>). */
-export function redditPostId(url: string): string | null {
-  let u: URL
-  try {
-    u = new URL(url)
-  } catch {
-    return null
-  }
-  if (u.hostname === 'redd.it') return u.pathname.match(/^\/([a-z0-9]+)\/?$/i)?.[1]?.toLowerCase() ?? null
-  if (!/(^|\.)reddit\.com$/.test(u.hostname)) return null
-  return u.pathname.match(/\/comments\/([a-z0-9]+)(\/|$)/i)?.[1]?.toLowerCase() ?? null
-}
-
-/** The post's link as Reddit gives it, without the query, the comment and the old/np/m host. */
-function redditPermalink(url: string, id: string): string {
-  const u = new URL(url)
-  const m = u.pathname.match(/^(\/r\/[^/]+)?\/comments\/[a-z0-9]+(\/[^/]+)?/i)
-  return `https://www.reddit.com${m ? m[0] : `/comments/${id}`}/`
-}
-
-/** "r/selfhosted" from the page, or from the post's link. */
-function subredditOf(url: string, given?: string): string {
-  const name = (given ?? '').trim().replace(/^\/?r\//i, '') || new URL(url).pathname.match(/^\/r\/([^/]+)/)?.[1] || ''
-  return name ? `r/${name}` : ''
-}
-
-function pageKey(kind: CaptureKind, url: string): { key: string; url: string } {
+function parseUrl(url: string): URL {
   let u: URL
   try {
     u = new URL(url)
@@ -62,12 +37,7 @@ function pageKey(kind: CaptureKind, url: string): { key: string; url: string } {
     bad('url must be a link')
   }
   if (!/^https?:$/.test(u.protocol)) bad('only http(s) pages can be captured')
-  if (kind === 'reddit') {
-    const id = redditPostId(url) ?? bad('not a Reddit post (…/comments/<id>/…)')
-    return { key: id, url: redditPermalink(url, id) }
-  }
-  u.hash = ''
-  return { key: u.href, url: u.href }
+  return u
 }
 
 // ── files ──────────────────────────────────────────────────────────────────
@@ -114,56 +84,78 @@ function saveIcon(img: { data: Buffer; ext: string }): string {
 
 const optInt = (n: number | undefined) => (n !== undefined && Number.isFinite(n) ? Math.round(n) : null)
 
-/** Stores what the extension sent: a new page, a page captured again, or a screenshot for a post's comments. */
+/** Stores what the extension sent: a new page, a page captured again, or a screenshot for a capture's comments. */
 export function capture(req: CaptureRequest): CaptureResult {
   if (req.target === 'comment') return captureComment(req)
-  const kind = req.target
-  const { key, url } = pageKey(kind, req.url)
+  const u = parseUrl(req.url)
+  const { handler, key } = handlerFor(u)
+  const url = handler.canonical(u, key)
+  const fields = cleanFields(handler, req.fields)
   const shot = decodeImage(req.image, 'image')
   const thumb = req.thumb ? decodeImage(req.thumb, 'thumb') : null
   const icon = req.icon ? iconOf(req.icon) : null
   const now = Date.now()
-  const fields = {
+  const cols = {
+    handler: handler.id,
+    key,
     url,
-    title: req.title.trim() || url,
-    site: kind === 'reddit' ? subredditOf(url, req.post?.subreddit) : new URL(url).hostname.replace(/^www\./, ''),
+    title: (handler.title?.(req.title.trim()) ?? req.title.trim()) || url,
+    site: handler.site(u, req.site, fields),
     screenshot: saveFile(shot),
     screenshotWidth: optInt(req.width),
     screenshotHeight: optInt(req.height),
     thumb: thumb ? saveFile(thumb) : null,
     ...(icon && { icon: saveIcon(icon) }),
-    ...(kind === 'reddit' && {
-      author: req.post?.author?.replace(/^u\//, '') || null,
-      score: optInt(req.post?.score),
-      commentCount: optInt(req.post?.comments),
-      postedAt: optInt(req.post?.postedAt),
-    }),
+    fields,
+    publishedAt: optInt(req.publishedAt),
     updatedAt: now,
   }
-  const existing = db.select({ id: captures.id }).from(captures).where(and(eq(captures.kind, kind), eq(captures.key, key))).get()
+  // A page captured before its site had a handler is the same page: it takes the handler.
+  const existing =
+    db.select({ id: captures.id }).from(captures).where(and(eq(captures.handler, handler.id), eq(captures.key, key))).get() ??
+    (handler.id === 'page' ? undefined : db.select({ id: captures.id }).from(captures).where(and(eq(captures.handler, 'page'), inArray(captures.url, [url, req.url]))).get())
   captured++
   if (existing) {
     // The old screenshot's file stays in assets/, like a deleted image's.
-    db.update(captures).set(fields).where(eq(captures.id, existing.id)).run()
-    logEvent('capture', existing.id, 'edit', { recaptured: true, screenshot: fields.screenshot, title: fields.title })
-    return { kind, id: existing.id, title: fields.title, created: false, comment: false }
+    db.update(captures).set(cols).where(eq(captures.id, existing.id)).run()
+    logEvent('capture', existing.id, 'edit', { recaptured: true, handler: handler.id, screenshot: cols.screenshot, title: cols.title, fields })
+    return { handler: handler.id, id: existing.id, title: cols.title, created: false, comment: false }
   }
   const id = randomUUID()
   db.insert(captures)
-    .values({ id, kind, key, ...fields, capturedAt: now, capturedDate: toIsoDate(new Date(now)) })
+    .values({ id, ...cols, capturedAt: now, capturedDate: toIsoDate(new Date(now)) })
     .run()
-  logEvent('capture', id, 'create', { kind, url, title: fields.title, screenshot: fields.screenshot })
-  return { kind, id, title: fields.title, created: true, comment: false }
+  logEvent('capture', id, 'create', { handler: handler.id, url, title: cols.title, screenshot: cols.screenshot, fields })
+  return { handler: handler.id, id, title: cols.title, created: true, comment: false }
+}
+
+/**
+ * Pages captured before their site had a handler (Marketplace listings bookmarked before there was one) take it,
+ * when no capture of the handler has the same key already. Run at startup; returns how many changed.
+ */
+export function adoptPages(): number {
+  let n = 0
+  for (const r of db.select().from(captures).where(eq(captures.handler, 'page')).all()) {
+    const u = new URL(r.url)
+    const { handler, key } = handlerFor(u)
+    if (handler.id === 'page' || db.select({ id: captures.id }).from(captures).where(and(eq(captures.handler, handler.id), eq(captures.key, key))).get()) continue
+    const cols = { handler: handler.id, key, url: handler.canonical(u, key), title: handler.title?.(r.title) || r.title, site: handler.site(u, undefined, r.fields) }
+    db.update(captures).set(cols).where(eq(captures.id, r.id)).run()
+    logEvent('capture', r.id, 'edit', { adopted: true, ...cols })
+    n++
+  }
+  return n
 }
 
 function captureComment(req: CaptureRequest): CaptureResult {
-  const postId = redditPostId(req.url) ?? bad('comments go to a Reddit post: open the post (…/comments/<id>/…)')
-  const post = db.select().from(captures).where(and(eq(captures.kind, 'reddit'), eq(captures.key, postId))).get()
-  if (!post) throw new HTTPException(404, { message: 'This post isn’t in Logcadence yet: capture the post first' })
+  const { handler, key } = handlerFor(parseUrl(req.url))
+  if (!handler.sections.includes('comments')) bad(`${handler.name} ${handler.many} don’t keep comments: open a Reddit post (…/comments/<id>/…)`)
+  const item = db.select().from(captures).where(and(eq(captures.handler, handler.id), eq(captures.key, key))).get()
+  if (!item) throw new HTTPException(404, { message: `This ${handler.one} isn’t in Logcadence yet: capture it first` })
   const img = decodeImage(req.image, 'image')
-  addImage(post.id, 'comments', { id: randomUUID(), file: saveFile(img), mime: img.mime })
+  addImage(item.id, 'comments', { id: randomUUID(), file: saveFile(img), mime: img.mime })
   captured++
-  return { kind: 'reddit', id: post.id, title: post.title, created: false, comment: true }
+  return { handler: handler.id, id: item.id, title: item.title, created: false, comment: true }
 }
 
 // ── listing ────────────────────────────────────────────────────────────────
@@ -192,7 +184,7 @@ function withImages(): Record<CaptureSection, Set<string>> {
 function toSummary(r: Row, tags: string[], images: { notes: boolean; comments: boolean }): CaptureSummary {
   return {
     id: r.id,
-    kind: r.kind,
+    handler: r.handler,
     url: r.url,
     title: r.title,
     site: r.site,
@@ -201,10 +193,8 @@ function toSummary(r: Row, tags: string[], images: { notes: boolean; comments: b
     thumbUrl: r.thumb ? imageUrl(r.thumb) : null,
     width: r.screenshotWidth,
     height: r.screenshotHeight,
-    author: r.author,
-    score: r.score,
-    commentCount: r.commentCount,
-    postedAt: r.postedAt,
+    fields: r.fields,
+    publishedAt: r.publishedAt,
     capturedAt: r.capturedAt,
     capturedDate: r.capturedDate,
     updatedAt: r.updatedAt,
@@ -214,30 +204,28 @@ function toSummary(r: Row, tags: string[], images: { notes: boolean; comments: b
   }
 }
 
-export function tagInfos(kind: CaptureKind): TagInfo[] {
+export function tagInfos(): TagInfo[] {
   return db
     .select({ path: captureTags.path, active: sql<number>`count(${captureItemTags.captureId})` })
     .from(captureTags)
     .leftJoin(captureItemTags, eq(captureItemTags.tagId, captureTags.id))
-    .where(eq(captureTags.kind, kind))
     .groupBy(captureTags.id)
     .orderBy(asc(captureTags.path))
     .all()
     .map((t) => ({ ...t, archived: 0 }))
 }
 
-/** A tab's captures, most recently captured first. */
-export function library(kind: CaptureKind): CaptureLibraryDTO {
+/** Every capture, most recently captured first. */
+export function library(): CaptureLibraryDTO {
   const tags = tagsByCapture()
   const imgs = withImages()
   const items = db
     .select()
     .from(captures)
-    .where(eq(captures.kind, kind))
     .orderBy(sql`${captures.capturedDate} desc, ${captures.capturedAt} desc`)
     .all()
     .map((r) => toSummary(r, tags.get(r.id) ?? [], { notes: imgs.notes.has(r.id), comments: imgs.comments.has(r.id) }))
-  return { items, tags: tagInfos(kind) }
+  return { items, tags: tagInfos() }
 }
 
 export function getCapture(id: string): CaptureDTO | undefined {
@@ -260,15 +248,9 @@ export function getCapture(id: string): CaptureDTO | undefined {
 
 // ── editing ────────────────────────────────────────────────────────────────
 
-const kindOf = (id: string): CaptureKind => db.select({ kind: captures.kind }).from(captures).where(eq(captures.id, id)).get()?.kind ?? notFound('capture')
-
-function ensureTag(kind: CaptureKind, path: string): number {
-  db.insert(captureTags).values({ kind, path, createdAt: Date.now() }).onConflictDoNothing().run()
-  return db
-    .select({ id: captureTags.id })
-    .from(captureTags)
-    .where(and(eq(captureTags.kind, kind), eq(captureTags.path, path)))
-    .get()!.id
+function ensureTag(path: string): number {
+  db.insert(captureTags).values({ path, createdAt: Date.now() }).onConflictDoNothing().run()
+  return db.select({ id: captureTags.id }).from(captureTags).where(eq(captureTags.path, path)).get()!.id
 }
 
 /** Drops tags no capture carries any more. */
@@ -278,21 +260,25 @@ function pruneTags() {
     .run()
 }
 
-function setTags(id: string, kind: CaptureKind, paths: string[]) {
+function setTags(id: string, paths: string[]) {
   db.delete(captureItemTags).where(eq(captureItemTags.captureId, id)).run()
-  cleanTags(paths).forEach((p, position) => db.insert(captureItemTags).values({ captureId: id, tagId: ensureTag(kind, p), position }).run())
+  cleanTags(paths).forEach((p, position) => db.insert(captureItemTags).values({ captureId: id, tagId: ensureTag(p), position }).run())
   pruneTags()
 }
 
 export function updateCapture(id: string, b: UpdateCaptureBody): CaptureDTO {
-  const kind = kindOf(id)
+  const row = db.select().from(captures).where(eq(captures.id, id)).get() ?? notFound('capture')
+  const handler = handlerById(row.handler)
   db.transaction(() => {
-    const { tags, ...cols } = b
+    const { tags, fields: raw, ...cols } = b
+    // Fields edited by hand: the handler's only, and the site follows them where it comes from one (a listing's location).
+    const fields = raw && cleanFields(handler, raw)
+    const site = fields && handler.site(new URL(row.url), row.site, fields)
     db.update(captures)
-      .set({ ...cols, updatedAt: Date.now() })
+      .set({ ...cols, ...(fields && { fields, site }), updatedAt: Date.now() })
       .where(eq(captures.id, id))
       .run()
-    if (tags) setTags(id, kind, tags)
+    if (tags) setTags(id, tags)
   })
   logEvent('capture', id, 'edit', { ...b })
   return getCapture(id)!
@@ -303,7 +289,7 @@ export function deleteCapture(id: string) {
   const before = getCapture(id) ?? notFound('capture')
   db.delete(captures).where(eq(captures.id, id)).run()
   pruneTags()
-  logEvent('capture', id, 'delete', { kind: before.kind, url: before.url, title: before.title, notes: before.notes, comments: before.comments, tags: before.tags, capturedAt: before.capturedAt })
+  logEvent('capture', id, 'delete', { handler: before.handler, url: before.url, title: before.title, notes: before.notes, comments: before.comments, tags: before.tags, capturedAt: before.capturedAt })
 }
 
 export function addImage(captureId: string, section: CaptureSection, img: { id: string; file: string; mime: string }): { image: ImageDTO; activeImageId: string } {
@@ -362,23 +348,18 @@ export function deleteImage(id: string): { activeImageId: string | null } {
 
 // ── tags ───────────────────────────────────────────────────────────────────
 
-const subtree = (kind: CaptureKind, root: string) =>
-  and(eq(captureTags.kind, kind), sql`(${captureTags.path} = ${root} or substr(${captureTags.path}, 1, ${root.length + 1}) = ${root + ':'})`)
+const subtree = (root: string) => sql`(${captureTags.path} = ${root} or substr(${captureTags.path}, 1, ${root.length + 1}) = ${root + ':'})`
 
 /** Moves `from` and its subtree under `to`; where a target path exists, the tags merge. */
-export function moveTag(kind: CaptureKind, from: string, to: string) {
+export function moveTag(from: string, to: string) {
   if (from === to) return
   if (isUnder(to, from)) bad('cannot move a tag into its own subtree')
-  const rows = db.select().from(captureTags).where(subtree(kind, from)).all()
+  const rows = db.select().from(captureTags).where(subtree(from)).all()
   if (!rows.length) bad(`tag ${from} not found`)
   db.transaction(() => {
     for (const row of rows) {
       const target = to + row.path.slice(from.length)
-      const existing = db
-        .select()
-        .from(captureTags)
-        .where(and(eq(captureTags.kind, kind), eq(captureTags.path, target)))
-        .get()
+      const existing = db.select().from(captureTags).where(eq(captureTags.path, target)).get()
       if (!existing) {
         db.update(captureTags).set({ path: target }).where(eq(captureTags.id, row.id)).run()
         continue
@@ -392,11 +373,11 @@ export function moveTag(kind: CaptureKind, from: string, to: string) {
       db.delete(captureTags).where(eq(captureTags.id, row.id)).run()
     }
   })
-  logEvent('capture-tag', `${kind}:${from}`, 'edit', { kind, to })
+  logEvent('capture-tag', from, 'edit', { to })
 }
 
-/** Removes `path` and its subtree from every capture of the kind. */
-export function deleteTag(kind: CaptureKind, path: string) {
-  db.delete(captureTags).where(subtree(kind, path)).run()
-  logEvent('capture-tag', `${kind}:${path}`, 'delete', { kind })
+/** Removes `path` and its subtree from every capture. */
+export function deleteTag(path: string) {
+  db.delete(captureTags).where(subtree(path)).run()
+  logEvent('capture-tag', path, 'delete', {})
 }

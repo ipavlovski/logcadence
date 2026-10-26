@@ -9,7 +9,7 @@
 
 ## UI DESCRIPTION
 - each pane can have multiple tabs
-  - canvas has the journal tab (one day at a time, with back/forward through the days shown) and custom-based types depending on a rendering plugin (e.g. youtube, reddit, etc.)
+  - canvas has the journal tab (one day at a time, with back/forward through the days shown) and custom-based types depending on a rendering plugin (e.g. youtube, bookmarks, etc.)
   - tag pane has tabs corresponding to a tag (e.g. "system:windows")
 - each pane has a primary tab, which opens on load and cannot be closed
   - canvas -> 'journal' tab (today on load)
@@ -109,7 +109,7 @@
 
 
 ### CANVAS
-- tabs: journal (primary), youtube, reddit, bookmarks, images, ai
+- tabs: journal (primary), youtube, bookmarks (with handlers for Reddit, Facebook Marketplace…), images, ai
 - the rest of the old canvas (map, activity, progress, dashboard, checklists) moved to logtracker
 
 #### SHORTCUTS

@@ -1,6 +1,6 @@
 # logcadence
 
-Logcadence (a cadence of daily logs) is a journaling knowledge base with two panes: **canvas | tags**. The journal is the canvas's first tab; YouTube, Reddit, Bookmarks, Images and AI chats are its other tabs. See [PROJECT.md](PROJECT.md) for the product spec.
+Logcadence (a cadence of daily logs) is a journaling knowledge base with two panes: **canvas | tags**. The journal is the canvas's first tab; YouTube, Bookmarks, Images and AI chats are its other tabs. See [PROJECT.md](PROJECT.md) for the product spec.
 
 Activity tracking (Map, Activity, Progress, the dashboard and checklists) moved to [logtracker](../logtracker), a separate desktop app.
 
@@ -34,7 +34,7 @@ After changing a schema: `pnpm db:generate` (writes migrations for both database
 Logcadence used to be a journal plus an activity tracker. The tracker half moved to its own desktop app,
 [logtracker](../logtracker): the Map (GPS), Activity, Progress and dashboard tabs and the daily checklists, with the
 GPS / Google Drive sync and the activity recorder. Logcadence keeps the knowledge base: the journal (now the canvas's
-first tab), tags, YouTube, Reddit, Bookmarks, Images and AI chats. The two apps don't talk to each other; logtracker has
+first tab), tags, YouTube, Bookmarks, Images and AI chats. The two apps don't talk to each other; logtracker has
 its own copy of the AI import, for its AI history.
 
 - **The moved data**: migration `0013_drop_tracker_tables` drops `gps_*`, `activity_spans` and `checklist*` from
@@ -91,9 +91,17 @@ The **App shortcuts** window (`Ctrl+Shift+?`) draws an app's hotkeys on a keyboa
 
 Re-imports append new turns and refresh nodes and titles that still read as imported; anything edited by hand is left alone, and a deleted entry is not recreated. `LOGCADENCE_AI_HOMES` (path-delimited) overrides the home directories that are scanned.
 
-## Chrome extension: Reddit and Bookmarks
+## Chrome extension: Bookmarks
 
-The canvas **Reddit** and **Bookmarks** tabs are filled by the Chrome extension in `extension/`, which sends a screenshot of the page with its url, title and favicon to the running app. A Reddit post goes to **Reddit** as one screenshot of the whole post, scrolled through and stitched, with its subreddit, author, points, comment count and post date. Any other page goes to **Bookmarks** as what's on screen. Each capture gets tags and notes in the app, and Reddit posts also get comments. Capturing a page again replaces its screenshot and keeps the rest.
+The canvas **Bookmarks** tab is filled by the Chrome extension in `extension/`, which sends a screenshot of the page with its url, title and favicon to the running app. Each capture gets tags and notes in the app. Capturing a page again replaces its screenshot and keeps the rest.
+
+Some sites have a **handler** (`shared/handlers.ts`; the tab's **Handlers** button lists them and explains each) that decides how their pages are captured, what is read from them and how they show:
+
+- **Reddit**: one screenshot of the whole post, scrolled through and stitched, with its subreddit, author, points, comment count and post date. Posts also keep comments.
+- **Facebook Marketplace**: what's on screen, with the listing's price, condition, location, seller and when it was listed, read from its text. A field the extension couldn't read can be filled in on the listing's page.
+- **Any other page**: what's on screen.
+
+A handler is code: the app's `shared/handlers.ts` (what makes two captures the same page, the fields kept, how they're shown) and the extension's `common.js` and `background.js` (how the page is screenshotted and read). Pages captured before their site had a handler take it at the next start.
 
 **Install**
 
@@ -108,8 +116,8 @@ After `pnpm preview` brings a change to the extension, click its reload button o
 
 | keys | what it does |
 | --- | --- |
-| `Alt+Shift+S` | Opens the popup (same as the toolbar button). On a Reddit post it offers **Capture post → Reddit**, **Add as comment** and **Save as bookmark instead**; on any other page, **Bookmark this page** |
-| `Alt+Shift+D` | Captures right away: a Reddit post to Reddit, any other page to Bookmarks. The toolbar icon shows ✓ or !; hover it for the message |
+| `Alt+Shift+S` | Opens the popup (same as the toolbar button): **Bookmark this page** (on a Reddit post, **Capture post → Bookmarks (Reddit)**, and **Add as comment**) |
+| `Alt+Shift+D` | Captures right away, as the page's handler does. The toolbar icon shows ✓ or !; hover it for the message |
 
 Both can be changed at `chrome://extensions/shortcuts`.
 
@@ -121,7 +129,7 @@ The extension POSTs to `http://127.0.0.1:<port>/api/capture` (body: `CaptureRequ
 
 ```
 electron/        desktop app: main process (runs the server), preload bridge, setup window, import worker, updater
-extension/       Chrome extension (Manifest V3, no build step) that captures pages for the Reddit and Bookmarks tabs
+extension/       Chrome extension (Manifest V3, no build step) that captures pages for the Bookmarks tab
 shared/          domain types, tag paths, dates, ids, desktop bridge types (shared with the electron / future react-native apps)
 server/
   db/            schemas + migrations for content.db and events.db
@@ -131,7 +139,7 @@ server/
 src/
   state/         panes/tabs store, change bus, journal cursor, UI state
   components/    Journal, Tags, Canvas (frame only), Pane, Spotlight, dialogs
-  canvas/        canvas plugin registry (YouTube, Reddit, Bookmarks, Images and AI chats); the journal tab itself is in components/Pane
+  canvas/        canvas plugin registry (YouTube, Bookmarks, Images and AI chats); the journal tab itself is in components/Pane
   shortcuts.ts   every keyboard shortcut, used by the handler and the help overlay (press ?)
 ```
 

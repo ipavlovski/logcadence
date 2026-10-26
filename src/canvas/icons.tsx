@@ -15,12 +15,6 @@ export const ICONS: Record<string, ReactNode> = {
       <path d="m10 9 5 3-5 3z" />
     </Icon>
   ),
-  reddit: (
-    <Icon>
-      <path d="M20.5 12.5c0 3.6-3.8 6.5-8.5 6.5a10 10 0 0 1-3.9-.8L4 19.5l1.2-3.5a5.6 5.6 0 0 1-1.7-3.5c0-3.6 3.8-6.5 8.5-6.5s8.5 2.9 8.5 6.5z" />
-      <path d="M9 11.5h.01M15 11.5h.01M9.5 14.5c1.5 1 3.5 1 5 0" />
-    </Icon>
-  ),
   bookmarks: (
     <Icon>
       <path d="M6.5 3.5h11v17L12 16.5l-5.5 4z" />

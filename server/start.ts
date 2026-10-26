@@ -7,6 +7,7 @@ import { app } from './app.ts'
 import { closeDbs, db, JOURNALS_DIR } from './db/client.ts'
 import { entries } from './db/content-schema.ts'
 import { setClaudeWeb, type ClaudeWebClient } from './lib/ai/claudeWeb.ts'
+import { adoptPages } from './lib/captures.ts'
 import { flushJournalFiles, touchDates } from './lib/journalFiles.ts'
 import { importAll as importYoutube } from './lib/youtube/library.ts'
 import { loadSettings as youtubeSettings } from './lib/youtube/settings.ts'
@@ -49,6 +50,10 @@ export function startServer({ port, staticDir, claudeWeb }: StartOptions): Promi
     const dates = db.selectDistinct({ date: entries.date }).from(entries).all()
     if (dates.length) touchDates(...dates.map((d) => d.date))
   }
+
+  // Bookmarks of a site that has a handler since (a Marketplace listing) become what the handler makes them.
+  const adopted = adoptPages()
+  if (adopted) console.log(`bookmarks: ${adopted} page(s) taken by their site's handler`)
 
   const youtubeTick = () => {
     if (!youtubeSettings().auto) return

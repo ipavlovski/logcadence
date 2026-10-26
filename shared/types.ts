@@ -311,18 +311,21 @@ export interface YtThumbStatus {
   error: string | null
 }
 
-// ── Reddit and Bookmarks canvas tabs (pages captured by the Chrome extension) ──
+// ── Bookmarks canvas tab (pages captured by the Chrome extension) ──
 
-export type CaptureKind = 'reddit' | 'bookmark'
+/** The handler a capture's url picked (shared/handlers.ts): any page, a Reddit post, a Facebook Marketplace listing. */
+export type HandlerId = 'page' | 'reddit' | 'marketplace'
 export type CaptureSection = 'notes' | 'comments'
+/** What a handler read from the page (its `fields`), by key: Reddit's author, score…; a listing's price, seller… */
+export type CaptureFields = Record<string, string | number>
 
 /** A capture in the listing. */
 export interface CaptureSummary {
   id: string
-  kind: CaptureKind
+  handler: HandlerId
   url: string
   title: string
-  /** A bookmark's host ("example.com"); a Reddit post's subreddit ("r/selfhosted"). */
+  /** A page's host ("example.com"), a Reddit post's subreddit ("r/selfhosted"), a listing's location. */
   site: string
   /** Favicon, or the subreddit's icon. */
   iconUrl: string | null
@@ -331,17 +334,16 @@ export interface CaptureSummary {
   thumbUrl: string | null
   width: number | null
   height: number | null
-  /** Reddit posts, as the page showed them when captured. */
-  author: string | null
-  score: number | null
-  commentCount: number | null
-  postedAt: number | null
+  /** As the page showed them when captured (or as edited since). */
+  fields: CaptureFields
+  /** When the page says it was posted or listed (epoch ms). */
+  publishedAt: number | null
   /** First captured (epoch ms) and that local day. */
   capturedAt: number
   capturedDate: string
   /** Last edited or captured again. */
   updatedAt: number
-  /** Tag paths, primary first: the tab's own tags. */
+  /** Tag paths, primary first. */
   tags: string[]
   /** Notes or note images were added. */
   hasNotes: boolean
@@ -370,12 +372,15 @@ export interface UpdateCaptureBody {
   tags?: string[]
   activeImageId?: string | null
   commentsActiveImageId?: string | null
+  /** All of them: replaces what was read from the page. */
+  fields?: CaptureFields
+  publishedAt?: number | null
 }
 
 /** What the extension sends to POST /api/capture. Images are data: urls (jpeg, png or webp). */
 export interface CaptureRequest {
-  /** reddit: a post; bookmark: any page; comment: a screenshot for the comments of a Reddit post already captured. */
-  target: CaptureKind | 'comment'
+  /** bookmark: any page (its handler is picked by url); comment: a screenshot for the comments of a capture made before. */
+  target: 'bookmark' | 'comment'
   url: string
   title: string
   image: string
@@ -385,17 +390,20 @@ export interface CaptureRequest {
   height?: number
   /** Favicon, or the subreddit's icon. */
   icon?: string
-  /** Read from a Reddit post's page. */
-  post?: { subreddit?: string; author?: string; score?: number; comments?: number; postedAt?: number }
+  /** What the page says it belongs to: a Reddit post's subreddit. */
+  site?: string
+  /** Read from the page by the extension's handler; the server keeps only its handler's fields. */
+  fields?: CaptureFields
+  publishedAt?: number
 }
 
 export interface CaptureResult {
-  kind: CaptureKind
+  handler: HandlerId
   id: string
   title: string
   /** False when the page was captured before: its screenshot was replaced. */
   created: boolean
-  /** The image went to the post's comments. */
+  /** The image went to the capture's comments. */
   comment: boolean
 }
 

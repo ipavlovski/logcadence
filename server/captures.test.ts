@@ -7,11 +7,9 @@ import type { CaptureDTO, CaptureLibraryDTO, CaptureRequest, CaptureResult } fro
 const dataDir = mkdtempSync(path.join(os.tmpdir(), 'logcadence-captures-'))
 process.env.LOGCADENCE_DATA_DIR = dataDir
 let app: typeof import('./app.ts').app
-let lib: typeof import('./lib/captures.ts')
 
 beforeAll(async () => {
   app = (await import('./app.ts')).app
-  lib = await import('./lib/captures.ts')
 })
 beforeEach(async () => {
   const { db } = await import('./db/client.ts')
@@ -41,39 +39,45 @@ const send = (body: Partial<CaptureRequest>) => call('POST', '/api/capture', { t
 
 const POST_URL = 'https://www.reddit.com/r/selfhosted/comments/1kq2x3v/my_homelab_tour/?utm_source=share'
 const redditPost = (over: Partial<CaptureRequest> = {}) =>
-  send({ target: 'reddit', url: POST_URL, title: 'My homelab tour', thumb: img('thumb'), icon: img('icon', 'image/png'), width: 740, height: 2210, post: { subreddit: 'r/selfhosted', author: 'u/alice', score: 412, comments: 87, postedAt: 1_760_000_000_000 }, ...over })
-
-describe('Reddit post ids', () => {
-  it('reads the post from its link, a comment link, old reddit and redd.it', () => {
-    expect(lib.redditPostId(POST_URL)).toBe('1kq2x3v')
-    expect(lib.redditPostId('https://old.reddit.com/r/selfhosted/comments/1KQ2X3V/my_homelab_tour/mt0abcd/')).toBe('1kq2x3v')
-    expect(lib.redditPostId('https://www.reddit.com/comments/1kq2x3v')).toBe('1kq2x3v')
-    expect(lib.redditPostId('https://redd.it/1kq2x3v')).toBe('1kq2x3v')
-    expect(lib.redditPostId('https://www.reddit.com/r/selfhosted/')).toBeNull()
-    expect(lib.redditPostId('https://example.com/comments/1kq2x3v/')).toBeNull()
+  send({
+    target: 'bookmark',
+    url: POST_URL,
+    title: 'My homelab tour',
+    thumb: img('thumb'),
+    icon: img('icon', 'image/png'),
+    width: 740,
+    height: 2210,
+    site: 'r/selfhosted',
+    fields: { author: 'u/alice', score: 412, commentCount: 87 },
+    publishedAt: 1_760_000_000_000,
+    ...over,
   })
-})
+
+const LISTING_URL = 'https://www.facebook.com/marketplace/item/1234567890/?ref=search&referral_code=null'
+const listing = (over: Partial<CaptureRequest> = {}) =>
+  send({ target: 'bookmark', url: LISTING_URL, title: 'Standing desk', fields: { price: '€250', condition: 'Used – good', location: 'Berlin, Germany', seller: 'Bob', mood: 'great' }, publishedAt: 1_760_000_000_000, ...over })
+
+const library = () => req<CaptureLibraryDTO>('GET', '/api/captures/library')
 
 describe('capturing from the extension', () => {
   it('refuses requests without the extension header (a web page could send them otherwise)', async () => {
     const r = await call('POST', '/api/capture', { target: 'bookmark', url: 'https://example.com', title: 'x', image: img('shot') })
     expect(r.status).toBe(400)
-    expect(await req<CaptureLibraryDTO>('GET', '/api/captures/bookmark/library')).toEqual({ items: [], tags: [] })
+    expect(await library()).toEqual({ items: [], tags: [] })
   })
 
-  it('stores a Reddit post with its screenshot, icon and what the page showed', async () => {
+  it('stores a Reddit post with its handler: screenshot, icon and what the page showed', async () => {
     const r = await redditPost()
     expect(r.status).toBe(201)
     const res = r.json as CaptureResult
-    expect(res).toMatchObject({ kind: 'reddit', title: 'My homelab tour', created: true, comment: false })
+    expect(res).toMatchObject({ handler: 'reddit', title: 'My homelab tour', created: true, comment: false })
     const post = await req<CaptureDTO>('GET', `/api/captures/items/${res.id}`)
     expect(post).toMatchObject({
       url: 'https://www.reddit.com/r/selfhosted/comments/1kq2x3v/my_homelab_tour/',
+      handler: 'reddit',
       site: 'r/selfhosted',
-      author: 'alice',
-      score: 412,
-      commentCount: 87,
-      postedAt: 1_760_000_000_000,
+      fields: { author: 'alice', score: 412, commentCount: 87 },
+      publishedAt: 1_760_000_000_000,
       width: 740,
       height: 2210,
       tags: [],
@@ -89,13 +93,66 @@ describe('capturing from the extension', () => {
     const first = (await redditPost()).json as CaptureResult
     await req('PATCH', `/api/captures/items/${first.id}`, { notes: 'worth reading', tags: ['homelab'] })
     const before = await req<CaptureDTO>('GET', `/api/captures/items/${first.id}`)
-    const again = await redditPost({ url: 'https://old.reddit.com/r/selfhosted/comments/1kq2x3v/my_homelab_tour/', image: img('shot 2'), post: { score: 900 } })
+    const again = await redditPost({ url: 'https://old.reddit.com/r/selfhosted/comments/1kq2x3v/my_homelab_tour/', image: img('shot 2'), fields: { author: 'alice', score: 900 } })
     expect(again.status).toBe(200)
     expect(again.json).toMatchObject({ id: first.id, created: false })
     const after = await req<CaptureDTO>('GET', `/api/captures/items/${first.id}`)
-    expect(after).toMatchObject({ notes: 'worth reading', tags: ['homelab'], score: 900, capturedAt: before.capturedAt, iconUrl: before.iconUrl })
+    expect(after).toMatchObject({ notes: 'worth reading', tags: ['homelab'], fields: { author: 'alice', score: 900 }, capturedAt: before.capturedAt, iconUrl: before.iconUrl })
     expect(after.screenshotUrl).not.toBe(before.screenshotUrl)
-    expect((await req<CaptureLibraryDTO>('GET', '/api/captures/reddit/library')).items).toHaveLength(1)
+    expect((await library()).items).toHaveLength(1)
+  })
+
+  it('stores a Marketplace listing by its id, keeping only the handler’s fields; its location is its site', async () => {
+    const r = (await listing()).json as CaptureResult
+    expect(r).toMatchObject({ handler: 'marketplace', created: true })
+    const got = await req<CaptureDTO>('GET', `/api/captures/items/${r.id}`)
+    expect(got).toMatchObject({
+      url: 'https://www.facebook.com/marketplace/item/1234567890/',
+      site: 'Berlin, Germany',
+      fields: { price: '€250', condition: 'Used – good', location: 'Berlin, Germany', seller: 'Bob' },
+      publishedAt: 1_760_000_000_000,
+    })
+    expect(got.fields).not.toHaveProperty('mood')
+    const again = await listing({ url: 'https://m.facebook.com/marketplace/item/1234567890', fields: { price: '€200' } })
+    expect(again.json).toMatchObject({ id: r.id, created: false })
+    expect(await req<CaptureDTO>('GET', `/api/captures/items/${r.id}`)).toMatchObject({ site: 'Marketplace', fields: { price: '€200' } })
+  })
+
+  it('a page captured before its site had a handler takes the handler when captured again', async () => {
+    const { db } = await import('./db/client.ts')
+    const { captures } = await import('./db/content-schema.ts')
+    const old = (await send({ target: 'bookmark', url: 'https://www.facebook.com/marketplace/item/1234567890/', title: 'Desk' })).json as CaptureResult
+    // As 0014_capture_handlers left a bookmark made before the Marketplace handler.
+    db.update(captures).set({ handler: 'page', key: 'https://www.facebook.com/marketplace/item/1234567890/' }).run()
+    await req('PATCH', `/api/captures/items/${old.id}`, { tags: ['desk'] })
+    const r = (await listing()).json as CaptureResult
+    expect(r).toMatchObject({ id: old.id, handler: 'marketplace', created: false })
+    expect((await library()).items).toMatchObject([{ id: old.id, handler: 'marketplace', tags: ['desk'] }])
+  })
+
+  it('at startup, gives pages a handler claims to that handler, tidying their title', async () => {
+    const { db } = await import('./db/client.ts')
+    const { captures } = await import('./db/content-schema.ts')
+    const { adoptPages } = await import('./lib/captures.ts')
+    const old = (await send({ target: 'bookmark', url: 'https://example.com/a', title: '(2) Marketplace – Steel helmet | Facebook' })).json as CaptureResult
+    db.update(captures).set({ url: 'https://www.facebook.com/marketplace/item/1571269678353375/?ref=browse_tab' }).run()
+    await send({ target: 'bookmark', url: 'https://example.com/b' })
+    expect(adoptPages()).toBe(1)
+    expect(adoptPages()).toBe(0)
+    expect(await req<CaptureDTO>('GET', `/api/captures/items/${old.id}`)).toMatchObject({
+      handler: 'marketplace',
+      url: 'https://www.facebook.com/marketplace/item/1571269678353375/',
+      title: 'Steel helmet',
+      site: 'Marketplace',
+    })
+  })
+
+  it('edits fields by hand, as the handler takes them', async () => {
+    const r = (await listing()).json as CaptureResult
+    const got = await req<CaptureDTO>('PATCH', `/api/captures/items/${r.id}`, { fields: { price: '€180', location: 'Potsdam', mood: 'x' } })
+    expect(got).toMatchObject({ fields: { price: '€180', location: 'Potsdam' }, site: 'Potsdam' })
+    const post = (await redditPost()).json as CaptureResult
+    expect(await req<CaptureDTO>('PATCH', `/api/captures/items/${post.id}`, { fields: { score: '1,204' } })).toMatchObject({ fields: { score: 1204 }, site: 'r/selfhosted' })
   })
 
   it('adds comment screenshots to a captured post, from the post or a comment’s link', async () => {
@@ -113,12 +170,15 @@ describe('capturing from the extension', () => {
   it('explains that a post must be captured before its comments', async () => {
     const r = await send({ target: 'comment', url: POST_URL })
     expect(r.status).toBe(404)
-    expect((r.json as { error: string }).error).toBe('This post isn’t in Logcadence yet: capture the post first')
+    expect((r.json as { error: string }).error).toBe('This post isn’t in Logcadence yet: capture it first')
+    // Only handlers with comments take them.
     expect((await send({ target: 'comment', url: 'https://example.com/a' })).status).toBe(400)
+    await listing()
+    expect((await send({ target: 'comment', url: LISTING_URL })).status).toBe(400)
   })
 
-  it('refuses a Reddit capture of a page that is not a post, and screenshots that are not images', async () => {
-    expect((await send({ target: 'reddit', url: 'https://www.reddit.com/r/selfhosted/' })).status).toBe(400)
+  it('refuses old targets, screenshots that are not images, and pages that are not on the web', async () => {
+    expect((await send({ target: 'reddit' as 'bookmark', url: POST_URL })).status).toBe(400)
     expect((await send({ target: 'bookmark', url: 'https://example.com', image: img('<svg/>', 'image/svg+xml') })).status).toBe(400)
     expect((await send({ target: 'bookmark', url: 'https://example.com', image: 'not a data url' })).status).toBe(400)
     expect((await send({ target: 'bookmark', url: 'file:///etc/passwd' })).status).toBe(400)
@@ -136,7 +196,7 @@ describe('capturing from the extension', () => {
     const c = (await send({ target: 'bookmark', url: 'https://www.example.com/blog', title: '', icon: img('fav', 'image/x-icon') })).json as CaptureResult
     expect(b.id).toBe(a.id)
     expect(c.id).not.toBe(a.id)
-    const lib = await req<CaptureLibraryDTO>('GET', '/api/captures/bookmark/library')
+    const lib = await library()
     expect(lib.items.map((i) => [i.title, i.site, i.url])).toEqual([
       ['https://www.example.com/blog', 'example.com', 'https://www.example.com/blog'],
       ['Docs again', 'example.com', 'https://www.example.com/docs?page=2'],
@@ -152,25 +212,30 @@ describe('capturing from the extension', () => {
   })
 })
 
-describe('the tabs', () => {
-  it('keeps Reddit and Bookmarks apart, with tag sets of their own', async () => {
+describe('the tab', () => {
+  it('lists every handler’s captures together, with one tag set', async () => {
     const post = (await redditPost()).json as CaptureResult
     const mark = (await send({ target: 'bookmark', url: 'https://example.com/a', title: 'A' })).json as CaptureResult
     await req('PATCH', `/api/captures/items/${post.id}`, { tags: ['homelab:storage', 'nas'] })
     await req('PATCH', `/api/captures/items/${mark.id}`, { tags: ['homelab'] })
-    const reddit = await req<CaptureLibraryDTO>('GET', '/api/captures/reddit/library')
-    const marks = await req<CaptureLibraryDTO>('GET', '/api/captures/bookmark/library')
-    expect(reddit.items.map((i) => i.id)).toEqual([post.id])
-    expect(reddit.tags.map((t) => t.path)).toEqual(['homelab:storage', 'nas'])
-    expect(marks.tags).toEqual([{ path: 'homelab', active: 1, archived: 0 }])
+    const all = await library()
+    expect(all.items.map((i) => [i.id, i.handler])).toEqual([
+      [mark.id, 'page'],
+      [post.id, 'reddit'],
+    ])
+    expect(all.tags.map((t) => [t.path, t.active])).toEqual([
+      ['homelab', 1],
+      ['homelab:storage', 1],
+      ['nas', 1],
+    ])
 
-    // Renaming a Reddit tag leaves the bookmark's tag of the same name alone.
-    await req('POST', '/api/captures/reddit/tags/move', { from: 'homelab', to: 'lab' })
+    // A tag is the same tag on a post and a page.
+    await req('POST', '/api/captures/tags/move', { from: 'homelab', to: 'lab' })
     expect((await req<CaptureDTO>('GET', `/api/captures/items/${post.id}`)).tags).toEqual(['lab:storage', 'nas'])
-    expect((await req<CaptureDTO>('GET', `/api/captures/items/${mark.id}`)).tags).toEqual(['homelab'])
-    await req('POST', '/api/captures/reddit/tags/delete', { path: 'lab' })
+    expect((await req<CaptureDTO>('GET', `/api/captures/items/${mark.id}`)).tags).toEqual(['lab'])
+    await req('POST', '/api/captures/tags/delete', { path: 'lab' })
     expect((await req<CaptureDTO>('GET', `/api/captures/items/${post.id}`)).tags).toEqual(['nas'])
-    expect((await req<CaptureLibraryDTO>('GET', '/api/captures/bookmark/library')).tags).toHaveLength(1)
+    expect((await library()).tags.map((t) => t.path)).toEqual(['nas'])
   })
 
   it('takes pasted images into notes, reorders and deletes them', async () => {
@@ -187,14 +252,14 @@ describe('the tabs', () => {
     await req('POST', `/api/captures/items/${mark.id}/images/notes/order`, { ids: [b, a] })
     expect((await req<CaptureDTO>('GET', `/api/captures/items/${mark.id}`)).images.map((i) => i.id)).toEqual([b, a])
     expect(await req('DELETE', `/api/captures/images/${a}`)).toEqual({ activeImageId: b })
-    expect((await req<CaptureLibraryDTO>('GET', '/api/captures/bookmark/library')).items[0]).toMatchObject({ hasNotes: true, hasComments: false })
+    expect((await library()).items[0]).toMatchObject({ hasNotes: true, hasComments: false })
   })
 
   it('deletes a capture with its tags', async () => {
     const mark = (await send({ target: 'bookmark', url: 'https://example.com/a' })).json as CaptureResult
     await req('PATCH', `/api/captures/items/${mark.id}`, { tags: ['gone'] })
     await req('DELETE', `/api/captures/items/${mark.id}`)
-    expect(await req<CaptureLibraryDTO>('GET', '/api/captures/bookmark/library')).toEqual({ items: [], tags: [] })
+    expect(await library()).toEqual({ items: [], tags: [] })
     expect((await call('GET', `/api/captures/items/${mark.id}`)).status).toBe(404)
   })
 })

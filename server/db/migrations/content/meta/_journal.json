@@ -99,6 +99,13 @@
       "when": 1792754574425,
       "tag": "0013_drop_tracker_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1793011671769,
+      "tag": "0014_capture_handlers",
+      "breakpoints": true
     }
   ]
 }
