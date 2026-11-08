@@ -6,6 +6,7 @@ export type SettingsSection = 'general' | 'journal' | PaneId
 
 export interface NewEntryDefaults {
   date: string
+  category?: string | null
   tags: string[]
   afterEntryId?: string
 }

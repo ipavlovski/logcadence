@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { cleanTags, isUnder, normalizeTag } from '../shared/tags.ts'
-import type { UpdateYtVideoBody, YtLibraryDTO, YtVideoDTO, YtVideoSummary } from '../shared/types.ts'
+import type { CategoryInfo, UpdateYtVideoBody, YtLibraryDTO, YtVideoDTO, YtVideoSummary } from '../shared/types.ts'
 import type { LogcadenceApi } from './api.ts'
 
 // The Logcadence MCP server: tools for Claude Desktop (or any MCP client) to read and tag the YouTube tab's
@@ -9,9 +9,11 @@ import type { LogcadenceApi } from './api.ts'
 // scripts/build-mcp.ts.
 
 const INSTRUCTIONS = `Logcadence is the user's journaling app; its YouTube tab holds videos imported from their playlists.
-Tags are hierarchical, lowercase paths joined by "/" (e.g. "build/well/drilling"); ancestors are implicit, so a video tagged
-"build/well/drilling" also shows under "build". The first tag of a video is its primary tag. The YouTube tab has its own tag
-set, apart from the journal's. Before tagging, read the existing tags with yt_list_tags and reuse them where they fit;
+Every item in the app (journal entries, videos, bookmarks…) is an entry with at most one category and any number of tags.
+Categories are a short fixed list (list_categories), e.g. design, build, dev. Tags are hierarchical, lowercase paths joined
+by "/" (e.g. "build/well/drilling"); ancestors are implicit, so a video tagged "build/well/drilling" also shows under
+"build". All entries share one tag set; tags under "youtube/" are the ones videos had before the sets were merged, still to
+be sorted into the main hierarchy. Before tagging, read the existing tags with yt_list_tags and reuse them where they fit;
 create new paths only when nothing fits. Show the user what you plan to tag before applying large batches.`
 
 const MAX_LIMIT = 500
@@ -25,12 +27,13 @@ function row(v: YtVideoSummary) {
     duration: v.duration,
     published: v.publishedAt ? new Date(v.publishedAt).toISOString().slice(0, 10) : v.published,
     added: v.addedDate,
+    category: v.category,
     tags: v.tags,
     hasNotes: v.hasNotes,
   }
 }
 
-const FIELDS = ['id', 'title', 'channel', 'duration', 'published', 'added', 'tags', 'hasNotes'] as const
+const FIELDS = ['id', 'title', 'channel', 'duration', 'published', 'added', 'category', 'tags', 'hasNotes'] as const
 
 // Compact JSON: listings of thousands of videos go into the model's context.
 const text = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value) }] })
@@ -43,7 +46,7 @@ export function createServer(api: LogcadenceApi): McpServer {
     'yt_list_tags',
     {
       title: 'List YouTube tags',
-      description: 'Every tag path used in the YouTube tab, with how many videos carry exactly that path.',
+      description: 'Every tag path videos carry, with how many videos carry exactly that path. The rest of the tag set (journal entries, bookmarks) is the same one.',
       annotations: { readOnlyHint: true },
     },
     async () => text((await library()).tags.map((t) => ({ path: t.path, videos: t.active }))),
@@ -93,7 +96,7 @@ export function createServer(api: LogcadenceApi): McpServer {
     'yt_set_tags',
     {
       title: 'Tag YouTube videos',
-      description: 'Sets the tags of one or more videos. mode "add" (default) keeps their current tags and appends these; "replace" overwrites them (an empty list clears them). Order matters: the first tag is the primary one. Answers with how many were updated and the ones that failed.',
+      description: 'Sets the tags of one or more videos. mode "add" (default) keeps their current tags and appends these; "replace" overwrites them (an empty list clears them). Answers with how many were updated and the ones that failed.',
       inputSchema: {
         items: z.array(z.object({ id: z.string(), tags: z.array(z.string()) })).min(1).describe('Videos and their tags'),
         mode: z.enum(['add', 'replace']).optional(),
@@ -122,10 +125,46 @@ export function createServer(api: LogcadenceApi): McpServer {
   )
 
   server.registerTool(
+    'list_categories',
+    {
+      title: 'List categories',
+      description: 'The categories an entry can be filed under (at most one each), in order, with how many entries each has.',
+      annotations: { readOnlyHint: true },
+    },
+    async () => text((await api.get<{ categories: CategoryInfo[] }>('/categories')).categories.map((c) => ({ name: c.name, entries: c.active }))),
+  )
+
+  server.registerTool(
+    'yt_set_category',
+    {
+      title: 'Categorize YouTube videos',
+      description: 'Files one or more videos under a category (one of list_categories), or null to leave them uncategorized. Answers with how many were updated and the ones that failed.',
+      inputSchema: {
+        items: z.array(z.object({ id: z.string(), category: z.string().nullable() })).min(1).describe('Videos and their category'),
+      },
+      annotations: { destructiveHint: false, idempotentHint: true },
+    },
+    async ({ items }) => {
+      let updated = 0
+      const errors: { id: string; error: string }[] = []
+      for (const { id, category } of items) {
+        try {
+          const body: UpdateYtVideoBody = { category }
+          await api.send<YtVideoDTO>('PATCH', `/youtube/videos/${encodeURIComponent(id)}`, body)
+          updated++
+        } catch (err) {
+          errors.push({ id, error: (err as Error).message })
+        }
+      }
+      return text({ updated, ...(errors.length && { errors }) })
+    },
+  )
+
+  server.registerTool(
     'yt_move_tag',
     {
-      title: 'Rename a YouTube tag',
-      description: 'Renames a tag path (and everything under it) on every video, merging into the target if it already exists.',
+      title: 'Rename a tag',
+      description: 'Renames a tag path (and everything under it) on every entry that carries it (videos, journal entries, bookmarks), merging into the target if it already exists.',
       inputSchema: { from: z.string(), to: z.string() },
       annotations: { destructiveHint: true },
     },

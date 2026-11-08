@@ -1,11 +1,11 @@
-import { and, asc, desc, eq, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { validator } from 'hono/validator'
 import { normalizeTag } from '../../shared/tags.ts'
-import type { TagInfo } from '../../shared/types.ts'
+import type { MetaDTO, TagInfo } from '../../shared/types.ts'
 import { db } from '../db/client.ts'
 import { entries, entryTags, tags } from '../db/content-schema.ts'
-import { branchTag, deleteTag, loadEntries, moveTag, tagSubtree } from '../lib/content.ts'
+import { branchTag, createCategory, deleteCategory, deleteTag, listCategories, loadEntries, moveTag, orderCategories, renameCategory, tagSubtree } from '../lib/content.ts'
 import { logEvent } from '../lib/events.ts'
 import { touchDates } from '../lib/journalFiles.ts'
 import { bad, obj, optStrArr, str, type Obj } from '../lib/validate.ts'
@@ -21,9 +21,8 @@ const parseMove = (v: unknown) => {
   return { from: tagField(o, 'from'), to: tagField(o, 'to') }
 }
 
-export const tagRoutes = new Hono()
-  .get('/tags', (c) => {
-    const list: TagInfo[] = db
+function tagInfos(): TagInfo[] {
+  return db
       .select({
         path: tags.path,
         active: sql<number>`coalesce(sum(${entries.archived} = 0), 0)`,
@@ -35,8 +34,57 @@ export const tagRoutes = new Hono()
       .groupBy(tags.id)
       .orderBy(asc(tags.path))
       .all()
-    return c.json({ tags: list })
+}
+
+const counts = { active: sql<number>`coalesce(sum(${entries.archived} = 0), 0)`, archived: sql<number>`coalesce(sum(${entries.archived} = 1), 0)` }
+
+export const tagRoutes = new Hono()
+  .get('/tags', (c) => c.json({ tags: tagInfos() }))
+  // Everything entries can be told apart by, with counts: types and subtypes, categories, tags.
+  .get('/meta', (c) => {
+    const meta: MetaDTO = {
+      types: db.select({ type: entries.type, subtype: entries.subtype, ...counts }).from(entries).groupBy(entries.type, entries.subtype).orderBy(asc(entries.type), asc(entries.subtype)).all(),
+      categories: listCategories(),
+      uncategorized: db.select(counts).from(entries).where(isNull(entries.category)).get() ?? { active: 0, archived: 0 },
+      tags: tagInfos(),
+    }
+    return c.json(meta)
   })
+  // ── categories ──
+  .get('/categories', (c) => c.json({ categories: listCategories() }))
+  .post(
+    '/categories',
+    validator('json', (v) => ({ name: str(obj(v), 'name') })),
+    (c) => c.json({ name: createCategory(c.req.valid('json').name) }, 201),
+  )
+  .post(
+    '/categories/rename',
+    validator('json', (v) => {
+      const o = obj(v)
+      return { from: str(o, 'from'), to: str(o, 'to') }
+    }),
+    (c) => {
+      const { from, to } = c.req.valid('json')
+      touchDates(...db.transaction(() => renameCategory(from, to)))
+      return c.json({ ok: true })
+    },
+  )
+  .post(
+    '/categories/delete',
+    validator('json', (v) => ({ name: str(obj(v), 'name') })),
+    (c) => {
+      touchDates(...db.transaction(() => deleteCategory(c.req.valid('json').name)))
+      return c.json({ ok: true })
+    },
+  )
+  .post(
+    '/categories/order',
+    validator('json', (v) => ({ names: optStrArr(obj(v), 'names') ?? bad('names is required') })),
+    (c) => {
+      orderCategories(c.req.valid('json').names)
+      return c.json({ ok: true })
+    },
+  )
   // Entries under a tag, newest day first. `sub=0` excludes descendant tags; `archived=1` includes archived items.
   .get(
     '/tags/entries',

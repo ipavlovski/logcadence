@@ -4,11 +4,11 @@ import os from 'node:os'
 import path from 'node:path'
 import { and, desc, eq, inArray, like, sql } from 'drizzle-orm'
 import { toIsoDate } from '../../../shared/dates.ts'
-import { chatTag } from '../../../shared/tags.ts'
+import { CHAT_SUBTYPE } from '../../../shared/entryTypes.ts'
 import type { ChatDTO, ChatMessage, ChatSource, ChatSummary, DayCount, ImportCounts, ImportReport } from '../../../shared/types.ts'
 import { db } from '../../db/client.ts'
 import { chats, entries, nodes } from '../../db/content-schema.ts'
-import { entryPositionAfter, setEntryTags } from '../content.ts'
+import { entryPositionAfter } from '../content.ts'
 import { logEvent } from '../events.ts'
 import { touchDates } from '../journalFiles.ts'
 import { listAntigravity, parseAntigravity } from './antigravity.ts'
@@ -97,9 +97,9 @@ export function upsertChat(p: ParsedChat, stamp: string | null = null): Outcome 
     const date = toIsoDate(new Date(p.startedAt))
     const entryId = randomUUID()
     const nodeIds = contents.map(() => randomUUID())
-    const tags = db.transaction(() => {
+    db.transaction(() => {
       db.insert(entries)
-        .values({ id: entryId, date, title, position: entryPositionAfter(date, undefined), createdAt: now, updatedAt: now })
+        .values({ id: entryId, type: 'ai', subtype: CHAT_SUBTYPE[p.source], date, title, position: entryPositionAfter(date, undefined), createdAt: now, updatedAt: now })
         .run()
       contents.forEach((content, i) =>
         db
@@ -110,9 +110,8 @@ export function upsertChat(p: ParsedChat, stamp: string | null = null): Outcome 
       db.insert(chats)
         .values({ id, source: p.source, externalId: p.externalId, entryId, nodeIds, ...row })
         .run()
-      return setEntryTags(entryId, [chatTag(p.source)])
     })
-    logEvent('entry', entryId, 'create', { date, title, tags, chatId: id })
+    logEvent('entry', entryId, 'create', { date, title, type: 'ai', subtype: CHAT_SUBTYPE[p.source], chatId: id })
     contents.forEach((content, i) => logEvent('node', nodeIds[i]!, 'create', { entryId, content }))
     touchDates(date)
     return 'created'

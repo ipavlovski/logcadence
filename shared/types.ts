@@ -1,5 +1,7 @@
 // Domain types shared by the server and every client (web now; electron and react-native later).
 
+import type { EntryType } from './entryTypes.ts'
+
 /** A gallery item: an image, gif or (in journal nodes) a video, told apart by `mime`. */
 export interface ImageDTO {
   id: string
@@ -10,6 +12,8 @@ export interface ImageDTO {
 /** An image, gif or video on the image board, in a row under a day. */
 export interface BoardItemDTO {
   id: string
+  /** The item's entry (`media:<id>`). */
+  entryId: string
   date: string
   row: number
   position: number
@@ -54,17 +58,47 @@ export interface NodeDTO {
   updatedAt: number
 }
 
+/** When things happened to an entry (epoch ms); which of them there are depends on its type. */
+export interface EntryDates {
+  created: number
+  updated: number
+  /** Posted by its author: a video's publish date, what a captured page says. */
+  published?: number
+  /** Added to a YouTube playlist. */
+  added?: number
+  /** First imported into the app (videos, AI chats). */
+  imported?: number
+  /** A bookmark's first capture. */
+  captured?: number
+  /** An AI chat's start. */
+  started?: number
+}
+
+/** What a video, bookmark or media entry's card shows; the full item comes from its own tab's API. */
+export type EntryDetail =
+  | { kind: 'video'; id: string; channel: string; channelAvatar: string | null; duration: string | null; thumbUrl: string | null }
+  | { kind: 'bookmark'; id: string; handler: HandlerId; url: string; site: string; iconUrl: string | null; thumbUrl: string | null }
+  | { kind: 'media'; id: string; url: string; thumbUrl: string | null; mime: string; width: number; height: number }
+
 export interface EntryDTO {
   id: string
+  type: EntryType
+  /** See SUBTYPES (shared/entryTypes.ts); null for journal entries. */
+  subtype: string | null
+  /** At most one; null when uncategorized. */
+  category: string | null
   /** Journal day, YYYY-MM-DD. */
   date: string
   title: string
   /** Fractional order within the day. */
   position: number
   archived: boolean
-  /** Tag paths; the first one is the primary tag that groups the entry in the journal. */
+  /** Tag paths, in display order. */
   tags: string[]
+  /** A journal (or AI chat) entry's children; none for the other types. */
   nodes: NodeDTO[]
+  detail: EntryDetail | null
+  dates: EntryDates
   /**
    * Set when the entry was imported from an AI chat. Such entries are read-only in the journal; the full
    * transcript lives in the AI canvas tab. `nodeIds[i]` is the node for the chat's i-th prompt.
@@ -141,6 +175,39 @@ export interface ChatSourceInfo {
   connected?: boolean
 }
 
+export interface CategoryInfo {
+  name: string
+  /** Unarchived entries filed under it. */
+  active: number
+  archived: number
+}
+
+/** GET /meta: what entries can be filtered by, with counts. */
+export interface MetaDTO {
+  types: { type: EntryType; subtype: string | null; active: number; archived: number }[]
+  categories: CategoryInfo[]
+  uncategorized: { active: number; archived: number }
+  tags: TagInfo[]
+}
+
+/** GET /entries: a query over every entry. Each field narrows it; repeated ones (types, tags) match any / all. */
+export interface EntryQuery {
+  /** "video" or "video/youtube"; any of them. */
+  types?: string[]
+  category?: string
+  /** Only entries without a category. */
+  uncategorized?: boolean
+  /** Every one of them (with its subtree, unless `exact`). */
+  tags?: string[]
+  exact?: boolean
+  archived?: boolean
+  date?: string
+  /** A video's channel. */
+  channel?: string
+  /** A bookmark's site ("example.com", "r/selfhosted"). */
+  site?: string
+}
+
 export interface TagInfo {
   path: string
   /** Unarchived entries tagged with exactly this path. */
@@ -164,6 +231,7 @@ export interface CreateEntryBody {
   date: string
   title?: string
   tags?: string[]
+  category?: string | null
   /** Place right after this entry; otherwise appended to the day. */
   afterEntryId?: string
   /** Initial child nodes; defaults to one empty node. */
@@ -173,6 +241,8 @@ export interface CreateEntryBody {
 export interface UpdateEntryBody {
   title?: string
   tags?: string[]
+  /** null: uncategorized. */
+  category?: string | null
   archived?: boolean
   date?: string
   position?: number
@@ -249,7 +319,10 @@ export interface YtVideoSummary {
   addedDate: string
   /** First imported (epoch ms). */
   importedAt: number
-  /** Tag paths, primary first. These are YouTube tags, separate from the journal's. */
+  /** The video's entry (`yt:<id>`), which holds its tags and category. */
+  entryId: string
+  category: string | null
+  /** Tag paths, in order. */
   tags: string[]
   /** Notes or images were added. */
   hasNotes: boolean
@@ -343,7 +416,10 @@ export interface CaptureSummary {
   capturedDate: string
   /** Last edited or captured again. */
   updatedAt: number
-  /** Tag paths, primary first. */
+  /** The capture's entry (`cap:<id>`), which holds its tags and category. */
+  entryId: string
+  category: string | null
+  /** Tag paths, in order. */
   tags: string[]
   /** Notes or note images were added. */
   hasNotes: boolean
@@ -370,6 +446,7 @@ export interface UpdateCaptureBody {
   notes?: string
   comments?: string
   tags?: string[]
+  category?: string | null
   activeImageId?: string | null
   commentsActiveImageId?: string | null
   /** All of them: replaces what was read from the page. */
@@ -411,6 +488,7 @@ export interface UpdateYtVideoBody {
   notes?: string
   comments?: string
   tags?: string[]
+  category?: string | null
   activeImageId?: string | null
   commentsActiveImageId?: string | null
 }

@@ -1,0 +1,30 @@
+.picker {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 20px;
+  height: 22px;
+  padding: 0 4px;
+  color: var(--date);
+  background: color-mix(in srgb, var(--date) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--date) 50%, transparent);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.picker:hover,
+.picker:focus-visible {
+  border-color: var(--date);
+  outline: none;
+}
+
+.none {
+  color: var(--text-faint);
+  background: none;
+  border-color: var(--border);
+  border-style: dashed;
+}
+
+.picker option {
+  color: var(--text);
+  background: var(--surface);
+}

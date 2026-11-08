@@ -1,10 +1,12 @@
 import path from 'node:path'
 import { and, asc, eq, inArray, sql, type SQL } from 'drizzle-orm'
-import type { ChatSource, EntryDTO, ImageDTO, NodeDTO } from '../../shared/types.ts'
-import { chatTag, cleanTags, holdsChatTag, isChatTag, isUnder, TAG_SEP } from '../../shared/tags.ts'
+import { DAY_TYPES, type EntryType } from '../../shared/entryTypes.ts'
+import type { CategoryInfo, ChatSource, EntryDates, EntryDetail, EntryDTO, ImageDTO, NodeDTO } from '../../shared/types.ts'
+import { cleanTags, isUnder, normalizeTag, TAG_SEP } from '../../shared/tags.ts'
 import { db } from '../db/client.ts'
-import { chats, entries, entryTags, images, nodes, tags } from '../db/content-schema.ts'
-import { bad } from './validate.ts'
+import { boardItems, captures, categories, chats, entries, entryTags, images, nodes, tags, ytVideos } from '../db/content-schema.ts'
+import { logEvent } from './events.ts'
+import { bad, notFound } from './validate.ts'
 
 type NodeRow = typeof nodes.$inferSelect
 type ImageRow = typeof images.$inferSelect
@@ -45,7 +47,7 @@ function imagesByNode(where: SQL): Map<string, ImageDTO[]> {
   return map
 }
 
-/** Tag paths per entry, primary first. */
+/** Tag paths per entry, in order. */
 export function tagsFor(entryIds: string[]): Map<string, string[]> {
   const map = new Map<string, string[]>()
   if (!entryIds.length) return map
@@ -60,21 +62,20 @@ export function tagsFor(entryIds: string[]): Map<string, string[]> {
   return map
 }
 
-/** Full entries (tags, nodes, images) in the order of `ids`. */
+/** Full entries (tags, nodes, images, the type's details) in the order of `ids`. */
 export function loadEntries(ids: string[]): EntryDTO[] {
   if (!ids.length) return []
   const entryRows = db.select().from(entries).where(inArray(entries.id, ids)).all()
   const nodeRows = db.select().from(nodes).where(inArray(nodes.entryId, ids)).orderBy(asc(nodes.position)).all()
   const imgs = imagesByNode(inArray(nodes.entryId, ids))
   const tagMap = tagsFor(ids)
-  const chatMap = new Map(
-    db
-      .select({ id: chats.id, source: chats.source, entryId: chats.entryId, nodeIds: chats.nodeIds })
-      .from(chats)
-      .where(inArray(chats.entryId, ids))
-      .all()
-      .map((c) => [c.entryId!, { id: c.id, source: c.source as ChatSource, nodeIds: c.nodeIds }]),
-  )
+  const chatRows = db
+    .select({ id: chats.id, source: chats.source, entryId: chats.entryId, nodeIds: chats.nodeIds, startedAt: chats.startedAt, importedAt: chats.importedAt })
+    .from(chats)
+    .where(inArray(chats.entryId, ids))
+    .all()
+  const chatMap = new Map(chatRows.map((c) => [c.entryId!, c]))
+  const details = detailsFor(entryRows)
 
   const nodesByEntry = new Map<string, NodeDTO[]>()
   for (const n of nodeRows) {
@@ -86,8 +87,48 @@ export function loadEntries(ids: string[]): EntryDTO[] {
   return ids.flatMap((id) => {
     const e = byId.get(id)
     if (!e) return []
-    return [{ ...e, tags: tagMap.get(id) ?? [], nodes: nodesByEntry.get(id) ?? [], chat: chatMap.get(id) ?? null }]
+    const chat = chatMap.get(id)
+    const d = details.get(id)
+    const dates: EntryDates = { created: e.createdAt, updated: e.updatedAt, ...d?.dates, ...(chat && { started: chat.startedAt, imported: chat.importedAt }) }
+    return [
+      {
+        ...e,
+        tags: tagMap.get(id) ?? [],
+        nodes: nodesByEntry.get(id) ?? [],
+        chat: chat ? { id: chat.id, source: chat.source as ChatSource, nodeIds: chat.nodeIds } : null,
+        detail: d?.detail ?? null,
+        dates,
+      },
+    ]
   })
+}
+
+/** The details of video, bookmark and media entries: what their cards show, and their own dates. */
+function detailsFor(rows: { id: string; type: EntryType }[]): Map<string, { detail: EntryDetail; dates: Partial<EntryDates> }> {
+  const out = new Map<string, { detail: EntryDetail; dates: Partial<EntryDates> }>()
+  const of = (type: EntryType) => rows.filter((r) => r.type === type).map((r) => r.id)
+  const videoIds = of('video')
+  if (videoIds.length)
+    for (const v of db.select().from(ytVideos).where(inArray(ytVideos.entryId, videoIds)).all())
+      out.set(v.entryId!, {
+        detail: { kind: 'video', id: v.id, channel: v.channel, channelAvatar: v.channelAvatar, duration: v.duration, thumbUrl: v.thumbSmall ? imageUrl(v.thumbSmall) : null },
+        dates: { added: v.addedAt, imported: v.importedAt || undefined, published: v.publishedAt ?? undefined },
+      })
+  const captureIds = of('bookmark')
+  if (captureIds.length)
+    for (const c of db.select().from(captures).where(inArray(captures.entryId, captureIds)).all())
+      out.set(c.entryId!, {
+        detail: { kind: 'bookmark', id: c.id, handler: c.handler, url: c.url, site: c.site, iconUrl: c.icon ? imageUrl(c.icon) : null, thumbUrl: c.thumb ? imageUrl(c.thumb) : null },
+        dates: { captured: c.capturedAt, published: c.publishedAt ?? undefined },
+      })
+  const mediaIds = of('media')
+  if (mediaIds.length)
+    for (const m of db.select().from(boardItems).where(inArray(boardItems.entryId, mediaIds)).all())
+      out.set(m.entryId!, {
+        detail: { kind: 'media', id: m.id, url: imageUrl(m.file), thumbUrl: m.thumb ? imageUrl(m.thumb) : null, mime: m.mime, width: m.width, height: m.height },
+        dates: {},
+      })
+  return out
 }
 
 export function loadNode(id: string): NodeDTO | undefined {
@@ -95,12 +136,20 @@ export function loadNode(id: string): NodeDTO | undefined {
   return row && toNode(row, imagesByNode(eq(nodes.id, id)).get(id) ?? [])
 }
 
+/** Entries of the journal day: journal entries and AI chats (videos, bookmarks and media have their own tabs, for now). */
+export const dayTypes = () => inArray(entries.type, [...DAY_TYPES])
+
 export function entriesForDate(date: string): EntryDTO[] {
-  const ids = db.select({ id: entries.id }).from(entries).where(eq(entries.date, date)).orderBy(asc(entries.position)).all()
+  const ids = db
+    .select({ id: entries.id })
+    .from(entries)
+    .where(and(eq(entries.date, date), dayTypes()))
+    .orderBy(asc(entries.position))
+    .all()
   return loadEntries(ids.map((r) => r.id))
 }
 
-/** Position for a new entry: right after `afterId` (between it and its successor), else at the end of the day. */
+/** Position for a new journal entry: right after `afterId` (between it and its successor), else at the end of the day. */
 export function entryPositionAfter(date: string, afterId: string | undefined): number {
   if (afterId) {
     const after = db.select().from(entries).where(eq(entries.id, afterId)).get()
@@ -108,7 +157,7 @@ export function entryPositionAfter(date: string, afterId: string | undefined): n
       const next = db
         .select({ p: sql<number | null>`min(${entries.position})` })
         .from(entries)
-        .where(and(eq(entries.date, date), sql`${entries.position} > ${after.position}`))
+        .where(and(eq(entries.date, date), dayTypes(), sql`${entries.position} > ${after.position}`))
         .get()?.p
       return next == null ? after.position + 1 : (after.position + next) / 2
     }
@@ -116,10 +165,101 @@ export function entryPositionAfter(date: string, afterId: string | undefined): n
   const max = db
     .select({ p: sql<number | null>`max(${entries.position})` })
     .from(entries)
-    .where(eq(entries.date, date))
+    .where(and(eq(entries.date, date), dayTypes()))
     .get()?.p
   return (max ?? 0) + 1
 }
+
+/** The entry of a video, capture or board item: created with it, then kept in step with its title and day. */
+export function upsertItemEntry(id: string, v: { type: EntryType; subtype: string; date: string; title: string; position: number; createdAt: number; updatedAt: number }) {
+  db.insert(entries)
+    .values({ id, ...v })
+    .onConflictDoUpdate({ target: entries.id, set: { subtype: v.subtype, date: v.date, title: v.title, updatedAt: v.updatedAt } })
+    .run()
+}
+
+// ── categories ─────────────────────────────────────────────────────────────
+
+export function listCategories(): CategoryInfo[] {
+  return db
+    .select({
+      name: categories.name,
+      active: sql<number>`coalesce(sum(${entries.archived} = 0), 0)`,
+      archived: sql<number>`coalesce(sum(${entries.archived} = 1), 0)`,
+    })
+    .from(categories)
+    .leftJoin(entries, eq(entries.category, categories.name))
+    .groupBy(categories.name)
+    .orderBy(asc(categories.position))
+    .all()
+}
+
+/** A category name: one segment, as a tag's would be. */
+export function categoryName(raw: string): string {
+  const name = normalizeTag(raw).replaceAll(TAG_SEP, '-')
+  if (!name) bad('category name is empty')
+  return name
+}
+
+const categoryExists = (name: string) => !!db.select({ name: categories.name }).from(categories).where(eq(categories.name, name)).get()
+
+/** Files an entry under a category (null: none). Returns the entry's date. */
+export function setEntryCategory(entryId: string, category: string | null): string {
+  const e = db.select({ date: entries.date }).from(entries).where(eq(entries.id, entryId)).get() ?? notFound('entry')
+  if (category !== null && !categoryExists(category)) bad(`no category ${category}`)
+  db.update(entries).set({ category, updatedAt: Date.now() }).where(eq(entries.id, entryId)).run()
+  logEvent('entry', entryId, 'edit', { category })
+  return e.date
+}
+
+export function createCategory(raw: string): string {
+  const name = categoryName(raw)
+  if (categoryExists(name)) bad(`category ${name} exists`)
+  const max = db.select({ p: sql<number | null>`max(${categories.position})` }).from(categories).get()?.p
+  db.insert(categories).values({ name, position: (max ?? 0) + 1, createdAt: Date.now() }).run()
+  logEvent('category', name, 'create')
+  return name
+}
+
+/** Renames a category; its entries follow (ON UPDATE CASCADE). Returns the days affected. */
+export function renameCategory(from: string, raw: string): string[] {
+  const to = categoryName(raw)
+  if (!categoryExists(from)) notFound('category')
+  if (from === to) return []
+  if (categoryExists(to)) bad(`category ${to} exists`)
+  const dates = datesForCategory(from)
+  db.update(categories).set({ name: to }).where(eq(categories.name, from)).run()
+  logEvent('category', from, 'edit', { renameTo: to })
+  return dates
+}
+
+/** Deletes a category; its entries become uncategorized. Returns the days affected. */
+export function deleteCategory(name: string): string[] {
+  if (!categoryExists(name)) notFound('category')
+  const dates = datesForCategory(name)
+  db.delete(categories).where(eq(categories.name, name)).run()
+  logEvent('category', name, 'delete')
+  return dates
+}
+
+/** New display order; `names` must list every category once. */
+export function orderCategories(names: string[]) {
+  const current = db.select({ name: categories.name }).from(categories).all().map((r) => r.name)
+  if (names.length !== current.length || new Set(names).size !== names.length || !names.every((n) => current.includes(n))) bad('names must list each category once')
+  db.transaction(() => names.forEach((name, i) => db.update(categories).set({ position: i + 1 }).where(eq(categories.name, name)).run()))
+  logEvent('category', '', 'edit', { order: names })
+}
+
+function datesForCategory(name: string): string[] {
+  return db
+    .selectDistinct({ date: entries.date })
+    .from(entries)
+    .where(eq(entries.category, name))
+    .all()
+    .map((r) => r.date)
+}
+
+// ── tags ───────────────────────────────────────────────────────────────────
 
 export function ensureTag(path: string): number {
   db.insert(tags).values({ path, createdAt: Date.now() }).onConflictDoNothing().run()
@@ -128,10 +268,7 @@ export function ensureTag(path: string): number {
 
 /** Replaces an entry's tags; returns the stored (normalized) list. */
 export function setEntryTags(entryId: string, paths: string[]): string[] {
-  // An imported chat's source tag stays its primary tag.
-  const chat = db.select({ source: chats.source }).from(chats).where(eq(chats.entryId, entryId)).get()
-  const locked = chat && chatTag(chat.source as ChatSource)
-  const clean = cleanTags(locked ? [locked, ...paths.filter((p) => p !== locked)] : paths)
+  const clean = cleanTags(paths)
   db.delete(entryTags).where(eq(entryTags.entryId, entryId)).run()
   clean.forEach((p, position) =>
     db
@@ -171,7 +308,6 @@ function datesForTags(tagIds: number[]): string[] {
 export function moveTag(from: string, to: string): string[] {
   if (from === to) return []
   if (isUnder(to, from)) bad('cannot move a tag into its own subtree')
-  if (holdsChatTag(from)) bad(`${from} holds the source tags of imported AI chats and cannot be renamed`)
   const rows = db.select().from(tags).where(tagSubtree(from)).all()
   if (!rows.length) bad(`tag ${from} not found`)
   const affectedDates = datesForTags(rows.map((r) => r.id))
@@ -201,7 +337,6 @@ export function moveTag(from: string, to: string): string[] {
 
 /** Removes `path` and its subtree from every entry. */
 export function deleteTag(path: string): string[] {
-  if (holdsChatTag(path)) bad(`${path} holds the source tags of imported AI chats and cannot be deleted`)
   const ids = db
     .select({ id: tags.id })
     .from(tags)
@@ -215,7 +350,6 @@ export function deleteTag(path: string): string[] {
 
 /** Re-tags the given entries from `from` to `to` (e.g. into a new sub-tag), keeping tag order. */
 export function branchTag(from: string, to: string, entryIds: string[]): string[] {
-  if (isChatTag(from)) bad(`${from} is the source tag of imported AI chats and cannot be moved`)
   const src = db.select().from(tags).where(eq(tags.path, from)).get()
   if (!src || !entryIds.length) return []
   const targetId = ensureTag(to)

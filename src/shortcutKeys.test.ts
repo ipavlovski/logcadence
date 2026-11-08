@@ -4,6 +4,11 @@ import { clashes, comboId, formatCombo, parseCombo, parseShortcuts, shortcutApps
 
 const entry = (id: string, tags: string[], nodes: string[]): EntryDTO => ({
   id,
+  type: 'journal',
+  subtype: null,
+  category: null,
+  detail: null,
+  dates: { created: 0, updated: 0 },
   date: '2026-09-30',
   title: `title ${id}`,
   position: 1,
@@ -50,7 +55,7 @@ describe('shortcuts', () => {
     expect(formatCombo(parseShortcuts(e)[5]!)).toBe('Ctrl+Shift+J')
   })
 
-  it('groups entries by the app in their primary tag', () => {
+  it('groups entries by the app in their shortcuts/ tag', () => {
     const apps = shortcutApps([
       entry('a', ['shortcuts/illustrator'], []),
       entry('b', ['shortcuts/davinci-resolve/edit'], []),
@@ -61,6 +66,7 @@ describe('shortcuts', () => {
     expect([...apps].map(([app, es]) => [app, es.map((e) => e.id)])).toEqual([
       ['illustrator', ['a', 'e']],
       ['davinci-resolve/edit', ['b']],
+      ['revit', ['c']],
     ])
   })
 

@@ -16,10 +16,6 @@
   background: color-mix(in srgb, var(--tag) 20%, transparent);
 }
 
-.primary {
-  border-color: var(--tag);
-  font-weight: 600;
-}
 
 .inline {
   padding: 0 4px;

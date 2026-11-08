@@ -2,20 +2,20 @@ import { createHash, randomUUID } from 'node:crypto'
 import { existsSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { and, asc, eq, inArray, sql } from 'drizzle-orm'
+import { captureEntryId } from '../../shared/entryTypes.ts'
 import { HTTPException } from 'hono/http-exception'
 import { toIsoDate } from '../../shared/dates.ts'
 import { cleanFields, handlerById, handlerFor } from '../../shared/handlers.ts'
-import { cleanTags, isUnder, TAG_SEP } from '../../shared/tags.ts'
 import type { CaptureDTO, CaptureLibraryDTO, CaptureRequest, CaptureResult, CaptureSection, CaptureSummary, ImageDTO, TagInfo, UpdateCaptureBody } from '../../shared/types.ts'
 import { ASSETS_DIR, db } from '../db/client.ts'
-import { captureImages, captureItemTags, captures, captureTags } from '../db/content-schema.ts'
-import { imageUrl } from './content.ts'
+import { captureImages, captures, entries, entryTags, tags as tagTable } from '../db/content-schema.ts'
+import { imageUrl, pruneTags, setEntryCategory, setEntryTags, tagsFor, upsertItemEntry } from './content.ts'
 import { logEvent } from './events.ts'
 import { bad, notFound } from './validate.ts'
 
 // Pages captured by the Chrome extension (extension/), for the Bookmarks tab. A capture is a screenshot with the
-// page's url, title and icon, and what its handler (shared/handlers.ts) read from the page; notes, comments, images
-// and tags are added in the app. Capturing a page again replaces its screenshot and fields, keeping the rest.
+// page's url, title and icon, and what its handler (shared/handlers.ts) read from the page; notes, comments and
+// images are added in the app. Each is an entry (bookmark/<handler>, `cap:<id>`) that holds its tags and category. Capturing a page again replaces its screenshot and fields, keeping the rest.
 
 type Row = typeof captures.$inferSelect
 
@@ -117,14 +117,21 @@ export function capture(req: CaptureRequest): CaptureResult {
   captured++
   if (existing) {
     // The old screenshot's file stays in assets/, like a deleted image's.
-    db.update(captures).set(cols).where(eq(captures.id, existing.id)).run()
+    db.transaction(() => {
+      db.update(captures).set(cols).where(eq(captures.id, existing.id)).run()
+      db.update(entries).set({ subtype: handler.id, title: cols.title, updatedAt: now }).where(eq(entries.id, captureEntryId(existing.id))).run()
+    })
     logEvent('capture', existing.id, 'edit', { recaptured: true, handler: handler.id, screenshot: cols.screenshot, title: cols.title, fields })
     return { handler: handler.id, id: existing.id, title: cols.title, created: false, comment: false }
   }
   const id = randomUUID()
-  db.insert(captures)
-    .values({ id, ...cols, capturedAt: now, capturedDate: toIsoDate(new Date(now)) })
-    .run()
+  const capturedDate = toIsoDate(new Date(now))
+  db.transaction(() => {
+    upsertItemEntry(captureEntryId(id), { type: 'bookmark', subtype: handler.id, date: capturedDate, title: cols.title, position: now, createdAt: now, updatedAt: now })
+    db.insert(captures)
+      .values({ id, entryId: captureEntryId(id), ...cols, capturedAt: now, capturedDate })
+      .run()
+  })
   logEvent('capture', id, 'create', { handler: handler.id, url, title: cols.title, screenshot: cols.screenshot, fields })
   return { handler: handler.id, id, title: cols.title, created: true, comment: false }
 }
@@ -141,6 +148,7 @@ export function adoptPages(): number {
     if (handler.id === 'page' || db.select({ id: captures.id }).from(captures).where(and(eq(captures.handler, handler.id), eq(captures.key, key))).get()) continue
     const cols = { handler: handler.id, key, url: handler.canonical(u, key), title: handler.title?.(r.title) || r.title, site: handler.site(u, undefined, r.fields) }
     db.update(captures).set(cols).where(eq(captures.id, r.id)).run()
+    db.update(entries).set({ subtype: handler.id, title: cols.title }).where(eq(entries.id, captureEntryId(r.id))).run()
     logEvent('capture', r.id, 'edit', { adopted: true, ...cols })
     n++
   }
@@ -160,17 +168,23 @@ function captureComment(req: CaptureRequest): CaptureResult {
 
 // ── listing ────────────────────────────────────────────────────────────────
 
+/** Tags per capture id. */
 function tagsByCapture(ids?: string[]): Map<string, string[]> {
-  const rows = db
-    .select({ id: captureItemTags.captureId, path: captureTags.path })
-    .from(captureItemTags)
-    .innerJoin(captureTags, eq(captureTags.id, captureItemTags.tagId))
-    .where(ids ? inArray(captureItemTags.captureId, ids) : undefined)
-    .orderBy(asc(captureItemTags.position))
-    .all()
-  const map = new Map<string, string[]>()
-  for (const r of rows) map.set(r.id, [...(map.get(r.id) ?? []), r.path])
-  return map
+  const entryIds = ids ? ids.map(captureEntryId) : db.select({ id: captures.entryId }).from(captures).all().map((r) => r.id!)
+  return new Map([...tagsFor(entryIds)].map(([entryId, paths]) => [entryId.slice(4), paths]))
+}
+
+/** Category per capture id. */
+function categoryByCapture(ids?: string[]): Map<string, string | null> {
+  return new Map(
+    db
+      .select({ id: captures.id, category: entries.category })
+      .from(captures)
+      .innerJoin(entries, eq(entries.id, captures.entryId))
+      .where(ids ? inArray(captures.id, ids) : undefined)
+      .all()
+      .map((r) => [r.id, r.category]),
+  )
 }
 
 /** Captures with images in each section. */
@@ -181,9 +195,11 @@ function withImages(): Record<CaptureSection, Set<string>> {
   return out
 }
 
-function toSummary(r: Row, tags: string[], images: { notes: boolean; comments: boolean }): CaptureSummary {
+function toSummary(r: Row, tags: string[], category: string | null, images: { notes: boolean; comments: boolean }): CaptureSummary {
   return {
     id: r.id,
+    entryId: captureEntryId(r.id),
+    category,
     handler: r.handler,
     url: r.url,
     title: r.title,
@@ -204,13 +220,16 @@ function toSummary(r: Row, tags: string[], images: { notes: boolean; comments: b
   }
 }
 
+/** The tags captures carry, with how many carry each. */
 export function tagInfos(): TagInfo[] {
   return db
-    .select({ path: captureTags.path, active: sql<number>`count(${captureItemTags.captureId})` })
-    .from(captureTags)
-    .leftJoin(captureItemTags, eq(captureItemTags.tagId, captureTags.id))
-    .groupBy(captureTags.id)
-    .orderBy(asc(captureTags.path))
+    .select({ path: tagTable.path, active: sql<number>`count(*)` })
+    .from(tagTable)
+    .innerJoin(entryTags, eq(entryTags.tagId, tagTable.id))
+    .innerJoin(entries, eq(entries.id, entryTags.entryId))
+    .where(eq(entries.type, 'bookmark'))
+    .groupBy(tagTable.id)
+    .orderBy(asc(tagTable.path))
     .all()
     .map((t) => ({ ...t, archived: 0 }))
 }
@@ -218,13 +237,14 @@ export function tagInfos(): TagInfo[] {
 /** Every capture, most recently captured first. */
 export function library(): CaptureLibraryDTO {
   const tags = tagsByCapture()
+  const cats = categoryByCapture()
   const imgs = withImages()
   const items = db
     .select()
     .from(captures)
     .orderBy(sql`${captures.capturedDate} desc, ${captures.capturedAt} desc`)
     .all()
-    .map((r) => toSummary(r, tags.get(r.id) ?? [], { notes: imgs.notes.has(r.id), comments: imgs.comments.has(r.id) }))
+    .map((r) => toSummary(r, tags.get(r.id) ?? [], cats.get(r.id) ?? null, { notes: imgs.notes.has(r.id), comments: imgs.comments.has(r.id) }))
   return { items, tags: tagInfos() }
 }
 
@@ -236,7 +256,7 @@ export function getCapture(id: string): CaptureDTO | undefined {
   const notesImages = images('notes')
   const commentImages = images('comments')
   return {
-    ...toSummary(r, tagsByCapture([id]).get(id) ?? [], { notes: notesImages.length > 0, comments: commentImages.length > 0 }),
+    ...toSummary(r, tagsByCapture([id]).get(id) ?? [], categoryByCapture([id]).get(id) ?? null, { notes: notesImages.length > 0, comments: commentImages.length > 0 }),
     notes: r.notes,
     activeImageId: r.activeImageId,
     images: notesImages,
@@ -248,37 +268,22 @@ export function getCapture(id: string): CaptureDTO | undefined {
 
 // ── editing ────────────────────────────────────────────────────────────────
 
-function ensureTag(path: string): number {
-  db.insert(captureTags).values({ path, createdAt: Date.now() }).onConflictDoNothing().run()
-  return db.select({ id: captureTags.id }).from(captureTags).where(eq(captureTags.path, path)).get()!.id
-}
-
-/** Drops tags no capture carries any more. */
-function pruneTags() {
-  db.delete(captureTags)
-    .where(sql`${captureTags.id} not in (select ${captureItemTags.tagId} from ${captureItemTags})`)
-    .run()
-}
-
-function setTags(id: string, paths: string[]) {
-  db.delete(captureItemTags).where(eq(captureItemTags.captureId, id)).run()
-  cleanTags(paths).forEach((p, position) => db.insert(captureItemTags).values({ captureId: id, tagId: ensureTag(p), position }).run())
-  pruneTags()
-}
-
 export function updateCapture(id: string, b: UpdateCaptureBody): CaptureDTO {
   const row = db.select().from(captures).where(eq(captures.id, id)).get() ?? notFound('capture')
   const handler = handlerById(row.handler)
   db.transaction(() => {
-    const { tags, fields: raw, ...cols } = b
+    const { tags, category, fields: raw, ...cols } = b
     // Fields edited by hand: the handler's only, and the site follows them where it comes from one (a listing's location).
     const fields = raw && cleanFields(handler, raw)
     const site = fields && handler.site(new URL(row.url), row.site, fields)
+    const now = Date.now()
     db.update(captures)
-      .set({ ...cols, ...(fields && { fields, site }), updatedAt: Date.now() })
+      .set({ ...cols, ...(fields && { fields, site }), updatedAt: now })
       .where(eq(captures.id, id))
       .run()
-    if (tags) setTags(id, tags)
+    db.update(entries).set({ updatedAt: now }).where(eq(entries.id, captureEntryId(id))).run()
+    if (tags) setEntryTags(captureEntryId(id), tags)
+    if (category !== undefined) setEntryCategory(captureEntryId(id), category)
   })
   logEvent('capture', id, 'edit', { ...b })
   return getCapture(id)!
@@ -287,8 +292,12 @@ export function updateCapture(id: string, b: UpdateCaptureBody): CaptureDTO {
 /** Removes a capture, with its notes, comments and tags (its files stay in assets/, as the event keeps them). */
 export function deleteCapture(id: string) {
   const before = getCapture(id) ?? notFound('capture')
-  db.delete(captures).where(eq(captures.id, id)).run()
-  pruneTags()
+  db.transaction(() => {
+    // The entry is the capture's parent: deleting it deletes the capture, its images and tags.
+    db.delete(entries).where(eq(entries.id, captureEntryId(id))).run()
+    db.delete(captures).where(eq(captures.id, id)).run()
+    pruneTags()
+  })
   logEvent('capture', id, 'delete', { handler: before.handler, url: before.url, title: before.title, notes: before.notes, comments: before.comments, tags: before.tags, capturedAt: before.capturedAt })
 }
 
@@ -344,40 +353,4 @@ export function deleteImage(id: string): { activeImageId: string | null } {
   })
   logEvent('capture-image', id, 'delete', { captureId: row.id, section: img.section, file: img.file, mime: img.mime, position: img.position, createdAt: img.createdAt })
   return { activeImageId }
-}
-
-// ── tags ───────────────────────────────────────────────────────────────────
-
-const subtree = (root: string) => sql`(${captureTags.path} = ${root} or substr(${captureTags.path}, 1, ${root.length + 1}) = ${root + TAG_SEP})`
-
-/** Moves `from` and its subtree under `to`; where a target path exists, the tags merge. */
-export function moveTag(from: string, to: string) {
-  if (from === to) return
-  if (isUnder(to, from)) bad('cannot move a tag into its own subtree')
-  const rows = db.select().from(captureTags).where(subtree(from)).all()
-  if (!rows.length) bad(`tag ${from} not found`)
-  db.transaction(() => {
-    for (const row of rows) {
-      const target = to + row.path.slice(from.length)
-      const existing = db.select().from(captureTags).where(eq(captureTags.path, target)).get()
-      if (!existing) {
-        db.update(captureTags).set({ path: target }).where(eq(captureTags.id, row.id)).run()
-        continue
-      }
-      const already = db.select({ id: captureItemTags.captureId }).from(captureItemTags).where(eq(captureItemTags.tagId, existing.id)).all().map((r) => r.id)
-      if (already.length)
-        db.delete(captureItemTags)
-          .where(and(eq(captureItemTags.tagId, row.id), inArray(captureItemTags.captureId, already)))
-          .run()
-      db.update(captureItemTags).set({ tagId: existing.id }).where(eq(captureItemTags.tagId, row.id)).run()
-      db.delete(captureTags).where(eq(captureTags.id, row.id)).run()
-    }
-  })
-  logEvent('capture-tag', from, 'edit', { to })
-}
-
-/** Removes `path` and its subtree from every capture. */
-export function deleteTag(path: string) {
-  db.delete(captureTags).where(subtree(path)).run()
-  logEvent('capture-tag', path, 'delete', {})
 }

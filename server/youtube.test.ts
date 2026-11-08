@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, onTestFinished } from 'vitest'
-import type { YtLibraryDTO, YtVideoDTO } from '../shared/types.ts'
+import type { EntryDTO, YtLibraryDTO, YtVideoDTO } from '../shared/types.ts'
 import { parsePlaylistId, parsePlaylistPage } from './lib/youtube/playlist.ts'
 
 const dataDir = mkdtempSync(path.join(os.tmpdir(), 'logcadence-yt-'))
@@ -395,7 +395,7 @@ describe('large imports: retries, failures, thumbnails', () => {
 })
 
 describe('tags, notes and comments', () => {
-  it('tags videos with their own hierarchical tags, apart from the journal', async () => {
+  it('tags videos with hierarchical tags from the one tag set, and files them under a category', async () => {
     const v = await req<YtVideoDTO>('PATCH', `/api/youtube/videos/${V(1).id}`, { tags: ['Build:Well', '#build/well/drilling', 'build/well'] })
     expect(v.tags).toEqual(['build/well', 'build/well/drilling'])
     await req('PATCH', `/api/youtube/videos/${V(2).id}`, { tags: ['build/pump'] })
@@ -405,8 +405,16 @@ describe('tags, notes and comments', () => {
       ['build/well', 1],
       ['build/well/drilling', 1],
     ])
-    const journal = await req<{ tags: unknown[] }>('GET', '/api/tags')
-    expect(journal.tags).toEqual([])
+    // The videos' entries carry them: the tags pane lists and finds them like any entry's.
+    const all = await req<{ tags: { path: string }[] }>('GET', '/api/tags')
+    expect(all.tags.map((t) => t.path)).toEqual(['build/pump', 'build/well', 'build/well/drilling'])
+    const found = await req<{ entries: EntryDTO[] }>('GET', '/api/tags/entries?tag=build/well')
+    expect(found.entries.map((e) => [e.id, e.type, e.subtype, e.title])).toEqual([[`yt:${V(1).id}`, 'video', 'youtube', V(1).title]])
+    expect(found.entries[0]!.detail).toMatchObject({ kind: 'video', id: V(1).id })
+
+    expect((await req<YtVideoDTO>('PATCH', `/api/youtube/videos/${V(1).id}`, { category: 'build' })).category).toBe('build')
+    expect((await req<YtLibraryDTO>('GET', '/api/youtube/library')).videos.find((x) => x.id === V(1).id)).toMatchObject({ entryId: `yt:${V(1).id}`, category: 'build' })
+    expect((await req<{ entries: EntryDTO[] }>('GET', '/api/entries?category=build')).entries.map((e) => e.id)).toEqual([`yt:${V(1).id}`])
   })
 
   it('renames (merging), then deletes a tag subtree', async () => {

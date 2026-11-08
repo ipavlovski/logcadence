@@ -1,10 +1,10 @@
-import { and, desc, eq, gte, isNull, sql } from 'drizzle-orm'
+import { and, desc, eq, gte, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { isIsoDate } from '../../shared/dates.ts'
 import type { DayCount } from '../../shared/types.ts'
 import { db } from '../db/client.ts'
-import { chats, entries } from '../db/content-schema.ts'
-import { entriesForDate } from '../lib/content.ts'
+import { entries } from '../db/content-schema.ts'
+import { dayTypes, entriesForDate } from '../lib/content.ts'
 import { bad } from '../lib/validate.ts'
 
 export const journalRoutes = new Hono()
@@ -18,7 +18,7 @@ export const journalRoutes = new Hono()
     const dates = db
       .select({ date: entries.date, count: sql<number>`count(*)` })
       .from(entries)
-      .where(eq(entries.archived, false))
+      .where(and(eq(entries.archived, false), dayTypes()))
       .groupBy(entries.date)
       .orderBy(desc(entries.date))
       .all()
@@ -31,8 +31,7 @@ export const journalRoutes = new Hono()
     const days: DayCount[] = db
       .select({ date: entries.date, count: sql<number>`count(*)` })
       .from(entries)
-      .leftJoin(chats, eq(chats.entryId, entries.id))
-      .where(and(eq(entries.archived, false), isNull(chats.id), gte(entries.date, from)))
+      .where(and(eq(entries.archived, false), eq(entries.type, 'journal'), gte(entries.date, from)))
       .groupBy(entries.date)
       .all()
     return c.json({ days })

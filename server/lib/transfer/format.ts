@@ -18,10 +18,12 @@ export const LEGACY_FORMATS = ['logseq-rewrite-export']
 // rows from older versions (see upgradeRow in import.ts) and refuses newer ones.
 // 2: Reddit merged into Bookmarks (captures' kind became handler, Reddit's columns became fields; one capture tag set).
 // 3: tag paths are separated by '/' instead of ':'.
-export const FORMAT_VERSION = 3
+// 4: every item is an entry with a type, a subtype and a category; one tag set (0016_unified_entries).
+export const FORMAT_VERSION = 4
 
 // Insert order: parents before the rows that reference them.
 export const CONTENT_TABLES = {
+  categories: content.categories,
   tags: content.tags,
   entries: content.entries,
   nodes: content.nodes,
@@ -30,15 +32,30 @@ export const CONTENT_TABLES = {
   chats: content.chats,
   yt_playlists: content.ytPlaylists,
   yt_videos: content.ytVideos,
-  yt_tags: content.ytTags,
-  yt_video_tags: content.ytVideoTags,
   yt_images: content.ytImages,
   captures: content.captures,
-  capture_tags: content.captureTags,
-  capture_item_tags: content.captureItemTags,
   capture_images: content.captureImages,
   board_items: content.boardItems,
 }
+/** The content tables of formats 1–3, in their insert order (upgrades run in it). */
+export const V3_CONTENT_TABLES = [
+  'tags',
+  'entries',
+  'nodes',
+  'entry_tags',
+  'images',
+  'chats',
+  'yt_playlists',
+  'yt_videos',
+  'yt_tags',
+  'yt_video_tags',
+  'yt_images',
+  'captures',
+  'capture_tags',
+  'capture_item_tags',
+  'capture_images',
+  'board_items',
+]
 export const EVENTS_TABLES = { events: events.events }
 
 export interface FileSet {

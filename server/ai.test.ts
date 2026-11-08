@@ -207,7 +207,7 @@ describe('AI chat import', () => {
     const [claude, ag, cc] = await chatList()
     const ccEntry = await entryOf(cc!)
     expect(ccEntry.title).toBe('Fix flaky test')
-    expect(ccEntry.tags).toEqual(['ai/claude-code'])
+    expect(ccEntry).toMatchObject({ type: 'ai', subtype: 'claude-code', category: null, tags: [] })
     expect(ccEntry.chat).toEqual({ id: cc!.id, source: 'claude-code', nodeIds: ccEntry.nodes.map((n) => n.id) })
     // IDE context and paste wrappers stripped; interrupts, notifications and synthetic replies skipped.
     expect(ccEntry.nodes.map((n) => n.content)).toEqual(['Fix the flaky test'])
@@ -267,20 +267,18 @@ describe('AI chat import', () => {
     expect((await entryOf(cc)).nodes[1]!.content).toBe('Now add a regression test')
   })
 
-  it('takes extra tags but keeps the chat source tag as the locked primary', async () => {
+  it('takes tags and a category like any entry; its subtype says where it came from', async () => {
     const cc = (await chatList()).find((c) => c.source === 'claude-code')!
     const entry = await entryOf(cc)
-    const patch = (tags: string[]) => req<EntryDTO>('PATCH', `/api/entries/${entry.id}`, { tags })
-    expect((await patch(['ai/claude-code', 'project/x'])).tags).toEqual(['ai/claude-code', 'project/x'])
-    expect((await patch(['project/x', 'ai/claude-code'])).tags).toEqual(['ai/claude-code', 'project/x'])
-    expect((await patch(['project/y'])).tags).toEqual(['ai/claude-code', 'project/y'])
+    const patch = (body: object) => req<EntryDTO>('PATCH', `/api/entries/${entry.id}`, body)
+    expect((await patch({ tags: ['project/x', 'dev/tests'] })).tags).toEqual(['project/x', 'dev/tests'])
+    expect(await patch({ category: 'dev' })).toMatchObject({ type: 'ai', subtype: 'claude-code', category: 'dev', tags: ['project/x', 'dev/tests'] })
 
     const post = (url: string, body: object) => app.request(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
-    expect((await post('/api/tags/rename', { from: 'ai/claude-code', to: 'ai/cc' })).status).toBe(400)
-    expect((await post('/api/tags/rename', { from: 'ai', to: 'assistants' })).status).toBe(400)
-    expect((await post('/api/tags/delete', { tag: 'ai/claude-code' })).status).toBe(400)
-    expect((await post('/api/tags/branch', { from: 'ai/claude-code', to: 'ai/claude-code/x', entryIds: [entry.id] })).status).toBe(400)
-    expect((await entryOf(cc)).tags).toEqual(['ai/claude-code', 'project/y'])
+    expect((await post('/api/tags/rename', { from: 'project/x', to: 'project/y' })).status).toBe(200)
+    expect((await entryOf(cc)).tags).toEqual(['project/y', 'dev/tests'])
+    expect((await req<{ entries: EntryDTO[] }>('GET', '/api/entries?type=ai/claude-code')).entries.map((e) => e.id)).toEqual([entry.id])
+    expect((await patch({ category: 'nope' }).catch((e: Error) => e.message))).toMatch(/no category/)
   })
 
   it('does not bring back an entry the user deleted', async () => {

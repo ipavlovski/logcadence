@@ -6,7 +6,7 @@ import type { SearchHit } from '../../shared/types.ts'
 import { db, eventsDb } from '../db/client.ts'
 import { entries, nodes } from '../db/content-schema.ts'
 import { events } from '../db/events-schema.ts'
-import { tagsFor } from '../lib/content.ts'
+import { dayTypes, tagsFor } from '../lib/content.ts'
 
 const LIMIT = 60
 
@@ -33,7 +33,8 @@ export const searchRoutes = new Hono()
       const entryRows = db
         .select({ id: entries.id, date: entries.date, title: entries.title, archived: entries.archived })
         .from(entries)
-        .where(allTerms(entries.title, terms))
+        // Entries a hit can open in the journal (the other types' titles are searched in their tabs, for now).
+        .where(and(allTerms(entries.title, terms), dayTypes()))
         .orderBy(desc(entries.date))
         .limit(LIMIT)
         .all()

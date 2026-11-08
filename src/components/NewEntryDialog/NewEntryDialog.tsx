@@ -4,6 +4,7 @@ import { createEntry } from '../../actions.ts'
 import { useStore } from '../../state/store.ts'
 import { openNewEntry, uiStore, type NewEntryDefaults } from '../../state/ui.ts'
 import { AutoTextarea } from '../AutoTextarea/AutoTextarea.tsx'
+import { CategoryPicker } from '../CategoryPicker/CategoryPicker.tsx'
 import { Modal, ModalActions } from '../Modal/Modal.tsx'
 import { TagInput } from '../TagInput/TagInput.tsx'
 import styles from './NewEntryDialog.module.css'
@@ -13,10 +14,11 @@ export function NewEntryDialog() {
   return defaults ? <Dialog defaults={defaults} /> : null
 }
 
-/** Ctrl+Shift+N: new entry with date, title, tags (pre-filled from the cursor) and first note. */
+/** Ctrl+Shift+N: new entry with date, title, category and tags (pre-filled from the cursor) and first note. */
 function Dialog({ defaults }: { defaults: NewEntryDefaults }) {
   const [date, setDate] = useState(defaults.date)
   const [title, setTitle] = useState('')
+  const [category, setCategory] = useState(defaults.category ?? null)
   const [tags, setTags] = useState(defaults.tags)
   const [content, setContent] = useState('')
   const close = () => openNewEntry(null)
@@ -26,6 +28,7 @@ function Dialog({ defaults }: { defaults: NewEntryDefaults }) {
     close()
     void createEntry({
       date,
+      category,
       tags,
       title: title.trim(),
       content,
@@ -58,9 +61,15 @@ function Dialog({ defaults }: { defaults: NewEntryDefaults }) {
           <input value={title} autoFocus onChange={(e) => setTitle(e.target.value)} placeholder="What is this about?" />
         </label>
         <div className={styles.field}>
+          <span>Category</span>
+          <div>
+            <CategoryPicker value={category} onChange={setCategory} />
+          </div>
+        </div>
+        <div className={styles.field}>
           <span>Tags</span>
           <div className={styles.box}>
-            <TagInput value={tags} onChange={setTags} placeholder="first tag is primary…" />
+            <TagInput value={tags} onChange={setTags} placeholder="add tags…" />
           </div>
         </div>
         <label>

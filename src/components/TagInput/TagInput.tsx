@@ -16,14 +16,14 @@ interface Props {
   onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void
   onFocus?: () => void
   className?: string
-  /** Tag paths to suggest, for a tag set other than the journal's (the YouTube tab's). */
+  /** Tag paths to suggest instead of every tag. */
   paths?: string[]
   /** What a chip click does; by default it opens the tag in the tags pane. */
   onOpen?: (tag: string, opts: { newTab: boolean }) => void
 }
 
 /** Tag chips + an input with autocomplete, a level at a time: Tab (or → at the end) completes the next segment of the
- *  path, Enter adds the tag. The first chip is the primary tag. */
+ *  path, Enter adds the tag. */
 export function TagInput({ value, onChange, placeholder = 'add tag…', autoFocus, single, onSubmit, onKeyDown, onFocus, className, paths: ownPaths, onOpen = openTag }: Props) {
   const [text, setText] = useState('')
   const [open, setOpen] = useState(false)
@@ -50,13 +50,7 @@ export function TagInput({ value, onChange, placeholder = 'add tag…', autoFocu
     else if (!value.includes(t)) onChange([...value, t])
   }
   const remove = (t: string) => onChange(value.filter((x) => x !== t))
-  const makePrimary = (t: string) => onChange([t, ...value.filter((x) => x !== t)])
-
-  const chipTitle = (t: string, i: number) => {
-    if (single) return t
-    if (i === 0) return 'Primary tag · click to open'
-    return 'Click to open · ★ makes it primary'
-  }
+  const chipTitle = (t: string) => (single ? t : `${t} · click to open`)
 
   const complete = (s: TagSuggestion) => {
     setText(completion(s))
@@ -100,11 +94,11 @@ export function TagInput({ value, onChange, placeholder = 'add tag…', autoFocu
 
   return (
     <div className={`${styles.wrap} ${className ?? ''}`} onClick={() => inputRef.current?.focus()}>
-      {value.map((t, i) => (
-        <span key={t} className={`${styles.chip} ${i === 0 && !single ? styles.primary : ''}`}>
+      {value.map((t) => (
+        <span key={t} className={styles.chip}>
           <button
             className={styles.chipLabel}
-            title={chipTitle(t, i)}
+            title={chipTitle(t)}
             onClick={(e) => {
               e.stopPropagation()
               onOpen(t, { newTab: e.ctrlKey || e.metaKey })
@@ -112,11 +106,6 @@ export function TagInput({ value, onChange, placeholder = 'add tag…', autoFocu
           >
             #{t}
           </button>
-          {i > 0 && (
-            <button className={styles.chipBtn} title="Make primary" onClick={(e) => (e.stopPropagation(), makePrimary(t))}>
-              ★
-            </button>
-          )}
           <button className={styles.chipBtn} title="Remove" onClick={(e) => (e.stopPropagation(), remove(t))}>
             ×
           </button>

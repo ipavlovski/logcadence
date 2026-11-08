@@ -275,6 +275,27 @@
   margin-top: 2px;
 }
 
+.entryType {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 4px;
+  margin-right: 6px;
+  vertical-align: 2px;
+}
+
+.entryCategory {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--date);
+  border: 1px solid color-mix(in srgb, var(--date) 50%, transparent);
+  border-radius: 4px;
+  padding: 0 6px;
+}
+
 .thumb {
   width: 56px;
   height: 42px;

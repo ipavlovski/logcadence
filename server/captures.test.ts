@@ -13,9 +13,11 @@ beforeAll(async () => {
 })
 beforeEach(async () => {
   const { db } = await import('./db/client.ts')
-  const { captures, captureTags } = await import('./db/content-schema.ts')
+  const { captures, entries, tags } = await import('./db/content-schema.ts')
+  const { eq } = await import('drizzle-orm')
+  db.delete(entries).where(eq(entries.type, 'bookmark')).run()
   db.delete(captures).run()
-  db.delete(captureTags).run()
+  db.delete(tags).run()
 })
 afterAll(async () => {
   const { closeDbs } = await import('./db/client.ts')

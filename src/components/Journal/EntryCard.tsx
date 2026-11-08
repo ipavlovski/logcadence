@@ -1,6 +1,7 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import type { EntryDTO } from '../../../shared/types.ts'
 import { AutoTextarea } from '../AutoTextarea/AutoTextarea.tsx'
+import { CategoryPicker } from '../CategoryPicker/CategoryPicker.tsx'
 import { mark } from '../Markdown/Markdown.tsx'
 import { TagInput } from '../TagInput/TagInput.tsx'
 import { useDayApi, type FocusTarget } from './dayContext.ts'
@@ -26,7 +27,7 @@ function foldOnShiftClick(e: MouseEvent, toggle: () => void) {
 export const EntryCard = memo(function EntryCard({ entry, focus, find, flashId, folded }: Props) {
   const day = useDayApi()
   const titleFocus = focus?.kind === 'title' && focus.entryId === entry.id ? focus : null
-  const isEmpty = !entry.title && !entry.tags.length && entry.nodes.every((n) => !n.content && !n.images.length)
+  const isEmpty = !entry.title && !entry.tags.length && !entry.category && entry.nodes.every((n) => !n.content && !n.images.length)
   const toggleFold = () => day.toggleFold(entry.id)
 
   return (
@@ -37,12 +38,15 @@ export const EntryCard = memo(function EntryCard({ entry, focus, find, flashId, 
       <header className={styles.entryHead}>
         <div className={styles.entryHeadMain}>
           <EntryTitle entry={entry} focus={titleFocus} find={find} isEmpty={isEmpty} toggleFold={toggleFold} />
-          <TagInput
-            className={styles.entryTags}
-            value={entry.tags}
-            onChange={(tags) => day.updateEntry(entry.id, { tags })}
-            onFocus={() => day.touch(entry.id)}
-          />
+          <div className={styles.entryMeta}>
+            <CategoryPicker value={entry.category} onChange={(category) => day.updateEntry(entry.id, { category })} />
+            <TagInput
+              className={styles.entryTags}
+              value={entry.tags}
+              onChange={(tags) => day.updateEntry(entry.id, { tags })}
+              onFocus={() => day.touch(entry.id)}
+            />
+          </div>
         </div>
         <div className={styles.rowActions}>
           <button title={entry.archived ? 'Unarchive entry' : 'Archive entry'} onClick={() => day.updateEntry(entry.id, { archived: !entry.archived })}>

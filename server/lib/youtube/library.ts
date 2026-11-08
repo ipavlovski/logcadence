@@ -1,10 +1,10 @@
-import { and, asc, eq, inArray, sql } from 'drizzle-orm'
+import { and, asc, eq, sql } from 'drizzle-orm'
 import { toIsoDate } from '../../../shared/dates.ts'
-import { cleanTags, isUnder, TAG_SEP } from '../../../shared/tags.ts'
+import { videoEntryId } from '../../../shared/entryTypes.ts'
 import type { ImageDTO, TagInfo, UpdateYtVideoBody, YtImageSection, YtImportResult, YtLibraryDTO, YtPlaylistDTO, YtVideoDTO, YtVideoSummary } from '../../../shared/types.ts'
 import { db } from '../../db/client.ts'
-import { ytImages, ytPlaylists, ytTags, ytVideos, ytVideoTags } from '../../db/content-schema.ts'
-import { imageUrl } from '../content.ts'
+import { entries, entryTags, tags as tagTable, ytImages, ytPlaylists, ytVideos } from '../../db/content-schema.ts'
+import { imageUrl, pruneTags, setEntryCategory, setEntryTags, tagsFor, upsertItemEntry } from '../content.ts'
 import { logEvent } from '../events.ts'
 import { bad, notFound } from '../validate.ts'
 import { fetchPlaylistApi } from './dataApi.ts'
@@ -12,8 +12,8 @@ import { fetchPlaylist, parsePlaylistId, YoutubeError, type ImportProgress, type
 import { apiKey } from './settings.ts'
 import { downloadThumbs } from './thumbs.ts'
 
-// The YouTube catalog: videos imported from playlists, with notes, comments, images and tags of their own. A
-// video's day is when it was added to a playlist: from the Data API when an API key is set, else when an import
+// The YouTube catalog: videos imported from playlists, with notes, comments and images. Each video is an entry
+// (video/youtube, `yt:<id>`) that holds its tags and category, on the day it was added. A video's day is when it was added to a playlist: from the Data API when an API key is set, else when an import
 // first saw it. Later imports refresh what YouTube shows (title, views…) and can only move that day earlier;
 // notes, comments and tags stay. Which playlist a video came from is not kept.
 
@@ -24,17 +24,22 @@ const ACTIVE = { notes: 'activeImageId', comments: 'commentsActiveImageId' } as 
 
 // ── listing ────────────────────────────────────────────────────────────────
 
+/** Tags per video id. */
 function tagsByVideo(ids?: string[]): Map<string, string[]> {
-  const rows = db
-    .select({ videoId: ytVideoTags.videoId, path: ytTags.path })
-    .from(ytVideoTags)
-    .innerJoin(ytTags, eq(ytTags.id, ytVideoTags.tagId))
-    .where(ids ? inArray(ytVideoTags.videoId, ids) : undefined)
-    .orderBy(asc(ytVideoTags.position))
-    .all()
-  const map = new Map<string, string[]>()
-  for (const r of rows) map.set(r.videoId, [...(map.get(r.videoId) ?? []), r.path])
-  return map
+  const entryIds = ids ? ids.map(videoEntryId) : db.select({ id: ytVideos.entryId }).from(ytVideos).all().map((r) => r.id!)
+  return new Map([...tagsFor(entryIds)].map(([entryId, paths]) => [entryId.slice(3), paths]))
+}
+
+/** Category per video id. */
+function categoryByVideo(): Map<string, string | null> {
+  return new Map(
+    db
+      .select({ id: ytVideos.id, category: entries.category })
+      .from(ytVideos)
+      .innerJoin(entries, eq(entries.id, ytVideos.entryId))
+      .all()
+      .map((r) => [r.id, r.category]),
+  )
 }
 
 /** Videos with images in their notes. */
@@ -49,9 +54,11 @@ function withNoteImages(): Set<string> {
   )
 }
 
-function toSummary(v: VideoRow, tags: string[], hasImages: boolean): YtVideoSummary {
+function toSummary(v: VideoRow, tags: string[], category: string | null, hasImages: boolean): YtVideoSummary {
   return {
     id: v.id,
+    entryId: videoEntryId(v.id),
+    category,
     title: v.title,
     channel: v.channel,
     channelUrl: v.channelUrl,
@@ -80,13 +87,16 @@ export function listPlaylists(): YtPlaylistDTO[] {
     .map((p) => ({ id: p.id, title: p.title, channel: p.channel, count: p.lastImportCount, lastImportAt: p.lastImportAt, lastError: p.lastError, progress: progress.get(p.id) ?? null }))
 }
 
+/** The tags videos carry, with how many carry each. */
 export function tagInfos(): TagInfo[] {
   return db
-    .select({ path: ytTags.path, active: sql<number>`count(${ytVideoTags.videoId})` })
-    .from(ytTags)
-    .leftJoin(ytVideoTags, eq(ytVideoTags.tagId, ytTags.id))
-    .groupBy(ytTags.id)
-    .orderBy(asc(ytTags.path))
+    .select({ path: tagTable.path, active: sql<number>`count(*)` })
+    .from(tagTable)
+    .innerJoin(entryTags, eq(entryTags.tagId, tagTable.id))
+    .innerJoin(entries, eq(entries.id, entryTags.entryId))
+    .where(eq(entries.type, 'video'))
+    .groupBy(tagTable.id)
+    .orderBy(asc(tagTable.path))
     .all()
     .map((t) => ({ ...t, archived: 0 }))
 }
@@ -94,13 +104,14 @@ export function tagInfos(): TagInfo[] {
 /** Every video, most recently added first (videos imported together without dates: in playlist order). */
 export function library(): YtLibraryDTO {
   const tags = tagsByVideo()
+  const cats = categoryByVideo()
   const imgs = withNoteImages()
   const videos = db
     .select()
     .from(ytVideos)
     .orderBy(sql`${ytVideos.addedDate} desc, ${ytVideos.addedAt} desc, rowid asc`)
     .all()
-    .map((v) => toSummary(v, tags.get(v.id) ?? [], imgs.has(v.id)))
+    .map((v) => toSummary(v, tags.get(v.id) ?? [], cats.get(v.id) ?? null, imgs.has(v.id)))
   return { videos, tags: tagInfos() }
 }
 
@@ -111,7 +122,7 @@ export function getVideo(id: string): YtVideoDTO | undefined {
   const images = (section: YtImageSection): ImageDTO[] => rows.filter((r) => r.section === section).map((r) => ({ id: r.id, url: imageUrl(r.file), mime: r.mime }))
   const notesImages = images('notes')
   return {
-    ...toSummary(v, tagsByVideo([id]).get(id) ?? [], notesImages.length > 0),
+    ...toSummary(v, tagsByVideo([id]).get(id) ?? [], db.select({ c: entries.category }).from(entries).where(eq(entries.id, videoEntryId(id))).get()?.c ?? null, notesImages.length > 0),
     notes: v.notes,
     activeImageId: v.activeImageId,
     images: notesImages,
@@ -123,34 +134,18 @@ export function getVideo(id: string): YtVideoDTO | undefined {
 
 // ── editing ────────────────────────────────────────────────────────────────
 
-function ensureTag(path: string): number {
-  db.insert(ytTags).values({ path, createdAt: Date.now() }).onConflictDoNothing().run()
-  return db.select({ id: ytTags.id }).from(ytTags).where(eq(ytTags.path, path)).get()!.id
-}
-
-/** Drops tags no video carries any more. */
-function pruneTags() {
-  db.delete(ytTags)
-    .where(sql`${ytTags.id} not in (select ${ytVideoTags.tagId} from ${ytVideoTags})`)
-    .run()
-}
-
-function setVideoTags(videoId: string, paths: string[]) {
-  const clean = cleanTags(paths)
-  db.delete(ytVideoTags).where(eq(ytVideoTags.videoId, videoId)).run()
-  clean.forEach((p, position) => db.insert(ytVideoTags).values({ videoId, tagId: ensureTag(p), position }).run())
-  pruneTags()
-}
-
 export function updateVideo(id: string, b: UpdateYtVideoBody): YtVideoDTO {
   db.select({ id: ytVideos.id }).from(ytVideos).where(eq(ytVideos.id, id)).get() ?? notFound('video')
   db.transaction(() => {
-    const { tags, ...cols } = b
+    const { tags, category, ...cols } = b
+    const now = Date.now()
     db.update(ytVideos)
-      .set({ ...cols, updatedAt: Date.now() })
+      .set({ ...cols, updatedAt: now })
       .where(eq(ytVideos.id, id))
       .run()
-    if (tags) setVideoTags(id, tags)
+    db.update(entries).set({ updatedAt: now }).where(eq(entries.id, videoEntryId(id))).run()
+    if (tags) setEntryTags(videoEntryId(id), tags)
+    if (category !== undefined) setEntryCategory(videoEntryId(id), category)
   })
   logEvent('yt-video', id, 'edit', { ...b })
   return getVideo(id)!
@@ -159,8 +154,12 @@ export function updateVideo(id: string, b: UpdateYtVideoBody): YtVideoDTO {
 /** Removes a video from the catalog (it comes back with a later import while it is still in a playlist). */
 export function deleteVideo(id: string) {
   const before = getVideo(id) ?? notFound('video')
-  db.delete(ytVideos).where(eq(ytVideos.id, id)).run()
-  pruneTags()
+  db.transaction(() => {
+    // The entry is the video's parent: deleting it deletes the video, its images and tags.
+    db.delete(entries).where(eq(entries.id, videoEntryId(id))).run()
+    db.delete(ytVideos).where(eq(ytVideos.id, id)).run()
+    pruneTags()
+  })
   logEvent('yt-video', id, 'delete', { title: before.title, notes: before.notes, comments: before.comments, tags: before.tags, addedAt: before.addedAt })
 }
 
@@ -216,42 +215,6 @@ export function deleteImage(id: string): { activeImageId: string | null } {
   })
   logEvent('yt-image', id, 'delete', { videoId: video.id, section: img.section, file: img.file, mime: img.mime, position: img.position, createdAt: img.createdAt })
   return { activeImageId }
-}
-
-// ── tags ───────────────────────────────────────────────────────────────────
-
-const subtree = (root: string) => sql`(${ytTags.path} = ${root} or substr(${ytTags.path}, 1, ${root.length + 1}) = ${root + TAG_SEP})`
-
-/** Moves `from` and its subtree under `to`; where a target path exists, the tags merge. */
-export function moveTag(from: string, to: string) {
-  if (from === to) return
-  if (isUnder(to, from)) bad('cannot move a tag into its own subtree')
-  const rows = db.select().from(ytTags).where(subtree(from)).all()
-  if (!rows.length) bad(`tag ${from} not found`)
-  db.transaction(() => {
-    for (const row of rows) {
-      const target = to + row.path.slice(from.length)
-      const existing = db.select().from(ytTags).where(eq(ytTags.path, target)).get()
-      if (!existing) {
-        db.update(ytTags).set({ path: target }).where(eq(ytTags.id, row.id)).run()
-        continue
-      }
-      const already = db.select({ videoId: ytVideoTags.videoId }).from(ytVideoTags).where(eq(ytVideoTags.tagId, existing.id)).all().map((r) => r.videoId)
-      if (already.length)
-        db.delete(ytVideoTags)
-          .where(and(eq(ytVideoTags.tagId, row.id), inArray(ytVideoTags.videoId, already)))
-          .run()
-      db.update(ytVideoTags).set({ tagId: existing.id }).where(eq(ytVideoTags.tagId, row.id)).run()
-      db.delete(ytTags).where(eq(ytTags.id, row.id)).run()
-    }
-  })
-  logEvent('yt-tag', from, 'edit', { to })
-}
-
-/** Removes `path` and its subtree from every video. */
-export function deleteTag(path: string) {
-  db.delete(ytTags).where(subtree(path)).run()
-  logEvent('yt-tag', path, 'delete')
 }
 
 // ── import ─────────────────────────────────────────────────────────────────
@@ -406,15 +369,23 @@ function store(playlist: Fetched, fetchFn?: typeof fetch): YtImportResult {
         const addedAt = v.addedAt !== undefined && v.addedAt < prev ? v.addedAt : prev
         if (addedAt !== prev) redated++
         if (!details && addedAt === prev) continue
+        const addedDate = toIsoDate(new Date(addedAt))
         db.update(ytVideos)
-          .set({ ...details, addedAt, addedDate: toIsoDate(new Date(addedAt)) })
+          .set({ ...details, addedAt, addedDate })
           .where(eq(ytVideos.id, v.id))
+          .run()
+        db.update(entries)
+          .set({ date: addedDate, position: addedAt, ...(details && { title: details.title }) })
+          .where(eq(entries.id, videoEntryId(v.id)))
           .run()
       } else if (details) {
         const addedAt = v.addedAt ?? now
+        const addedDate = toIsoDate(new Date(addedAt))
+        const entryId = videoEntryId(v.id)
+        upsertItemEntry(entryId, { type: 'video', subtype: 'youtube', date: addedDate, title: details.title, position: addedAt, createdAt: now, updatedAt: now })
         // Inserted in playlist order, so the rowid keeps videos imported together (same time) in that order.
         db.insert(ytVideos)
-          .values({ id: v.id, ...details, addedAt, addedDate: toIsoDate(new Date(addedAt)), importedAt: now, updatedAt: now })
+          .values({ id: v.id, entryId, ...details, addedAt, addedDate, importedAt: now, updatedAt: now })
           .run()
         logEvent('yt-video', v.id, 'create', { title: info!.title, addedAt })
         known.set(v.id, addedAt)

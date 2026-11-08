@@ -16,7 +16,7 @@ const MIGRATIONS = path.join(ROOT, 'server/db/migrations/content')
 
 /** The content migrations up to (without) `tag`. */
 function migrationsBefore(tag: string): string {
-  const dir = path.join(tmp, 'before')
+  const dir = path.join(tmp, tag)
   cpSync(MIGRATIONS, dir, { recursive: true })
   const file = path.join(dir, 'meta/_journal.json')
   const journal = JSON.parse(readFileSync(file, 'utf8')) as { entries: { tag: string }[] }
@@ -49,7 +49,8 @@ describe('migration 0015_tag_slash', () => {
     sqlite.prepare(`INSERT INTO yt_tags (id, path, created_at) VALUES (1, 'build:well', 1)`).run()
     sqlite.prepare(`INSERT INTO capture_tags (id, path, created_at) VALUES (1, 'homelab:nas', 1)`).run()
 
-    migrate(db, { migrationsFolder: MIGRATIONS })
+    // Up to this migration: 0016_unified_entries merges the tag sets this one keeps apart.
+    migrate(db, { migrationsFolder: migrationsBefore('0016_unified_entries') })
 
     expect(sqlite.prepare('SELECT id, path FROM tags ORDER BY id').all()).toEqual([
       { id: 1, path: 'dev/frontend/react' },

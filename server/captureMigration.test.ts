@@ -16,7 +16,7 @@ const MIGRATIONS = path.join(ROOT, 'server/db/migrations/content')
 
 /** The content migrations up to (without) `tag`. */
 function migrationsBefore(tag: string): string {
-  const dir = path.join(tmp, 'before')
+  const dir = path.join(tmp, tag)
   cpSync(MIGRATIONS, dir, { recursive: true })
   const file = path.join(dir, 'meta/_journal.json')
   const journal = JSON.parse(readFileSync(file, 'utf8')) as { entries: { tag: string }[] }
@@ -48,7 +48,8 @@ describe('migration 0014_capture_handlers', () => {
     itemTag.run('mark', 2, 0)
     sqlite.prepare(`INSERT INTO capture_images (id, capture_id, section, file, mime, position, created_at) VALUES ('img', 'post', 'comments', 'c.jpg', 'image/jpeg', 1, 1)`).run()
 
-    migrate(db, { migrationsFolder: MIGRATIONS })
+    // Up to this migration: 0016_unified_entries merges the tag sets this one keeps apart.
+    migrate(db, { migrationsFolder: migrationsBefore('0016_unified_entries') })
 
     expect(sqlite.prepare('SELECT id, handler, key, site, fields, published_at AS publishedAt FROM captures ORDER BY id').all()).toEqual([
       { id: 'mark', handler: 'page', key: 'https://example.com/', site: 'example.com', fields: '{}', publishedAt: null },

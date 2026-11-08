@@ -1,11 +1,12 @@
 import { createStore } from './store.ts'
 
-// Where the journal "cursor" is (last focused entry), used to inherit tags for new entries,
+// Where the journal "cursor" is (last focused entry), used to inherit the category and tags for new entries,
 // and pending requests to reveal an entry/node once its day has loaded.
 
 export interface Cursor {
   date: string
   entryId: string
+  category: string | null
   tags: string[]
 }
 
@@ -21,7 +22,7 @@ export const journalStore = createStore<{ cursor: Cursor | null; reveal: Reveal 
 
 export function setCursor(cursor: Cursor | null) {
   journalStore.set((s) =>
-    s.cursor?.entryId === cursor?.entryId && s.cursor?.tags.join() === cursor?.tags.join() && s.cursor?.date === cursor?.date ? s : { ...s, cursor },
+    s.cursor?.entryId === cursor?.entryId && s.cursor?.tags.join() === cursor?.tags.join() && s.cursor?.category === cursor?.category && s.cursor?.date === cursor?.date ? s : { ...s, cursor },
   )
 }
 

@@ -65,3 +65,10 @@ export function optDate(o: Obj, k: string): string | undefined {
 export function defined<T extends object>(o: T): T {
   return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T
 }
+
+/** A string, null, or absent: for fields that can be cleared (a category). */
+export function optStrOrNull(o: Obj, k: string): string | null | undefined {
+  const v = o[k]
+  if (v !== undefined && v !== null && typeof v !== 'string') bad(`${k} must be a string or null`)
+  return v as string | null | undefined
+}

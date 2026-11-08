@@ -5,6 +5,7 @@ import { createEntry } from '../../actions.ts'
 import { matches } from '../../markdown.ts'
 import { useCommand } from '../../state/commands.ts'
 import { dayFoldStore, foldStore, setFolded } from '../../state/fold.ts'
+import { categoryOrder, useCategories } from '../../state/categories.ts'
 import { journalStore, requestReveal, setCursor } from '../../state/journal.ts'
 import { useStore } from '../../state/store.ts'
 import { DayContext, type DayApi, type FocusRequest, type FocusTarget } from './dayContext.ts'
@@ -17,7 +18,7 @@ interface Props {
   find: string
 }
 
-/** One journal day: entries clustered by primary tag (a gap between clusters), each with its child nodes. */
+/** One journal day: entries grouped by category (in the categories' order, uncategorized last), each with its child nodes. */
 export function JournalDay({ date, find }: Props) {
   const { entries, error, actions } = useDay(date)
   const [focus, setFocus] = useState<FocusTarget | null>(null)
@@ -44,12 +45,14 @@ export function JournalDay({ date, find }: Props) {
     })
   }, [entries, q, focus])
 
-  // Entries grouped by primary tag, groups in order of their first entry.
+  // Entries grouped by category, in the categories' order; within a group, in the day's order.
+  const categories = useCategories()
   const groups = useMemo(() => {
-    const m = new Map<string, EntryDTO[]>()
-    for (const e of visible) m.set(e.tags[0] ?? '', [...(m.get(e.tags[0] ?? '') ?? []), e])
-    return [...m]
-  }, [visible])
+    const m = new Map<string | null, EntryDTO[]>()
+    for (const e of visible) m.set(e.category, [...(m.get(e.category) ?? []), e])
+    const order = categoryOrder(categories)
+    return [...m].sort(([a], [b]) => order(a) - order(b))
+  }, [visible, categories])
 
   const orderRef = useRef<EntryDTO[]>([])
   orderRef.current = groups.flatMap(([, list]) => list)
@@ -60,7 +63,7 @@ export function JournalDay({ date, find }: Props) {
   useEffect(() => {
     const c = journalStore.get().cursor
     const e = c?.date === date ? entries?.find((x) => x.id === c.entryId) : undefined
-    if (e) setCursor({ date, entryId: e.id, tags: e.tags })
+    if (e) setCursor({ date, entryId: e.id, category: e.category, tags: e.tags })
   }, [entries, date])
 
   // Reveal requests: a new entry to type into, or an item to scroll to (from the tags pane / search).
@@ -163,7 +166,7 @@ export function JournalDay({ date, find }: Props) {
       },
       touch(entryId) {
         const e = entriesRef.current?.find((x) => x.id === entryId)
-        if (e) setCursor({ date, entryId, tags: e.tags })
+        if (e) setCursor({ date, entryId, category: e.category, tags: e.tags })
       },
       toggleFold: (entryId) => fold([entryId], !foldStore.get().folded.includes(entryId)),
     }),
@@ -197,8 +200,9 @@ export function JournalDay({ date, find }: Props) {
         )}
         {entries && entries.length > 0 && !visible.length && <p className={styles.muted}>Nothing on this day matches “{q}”.</p>}
 
-        {groups.map(([tag, list]) => (
-          <section key={tag || '_untagged'} className={styles.group}>
+        {groups.map(([category, list]) => (
+          <section key={category ?? '_uncategorized'} className={styles.group}>
+            {(category || groups.length > 1) && <h2 className={`${styles.categoryHead} ${category ? '' : styles.uncategorized}`}>{category ?? 'uncategorized'}</h2>}
             {list.map((e) => (
               <EntryCard key={e.id} entry={e} focus={focusFor(e)} find={q} flashId={flashId} folded={folded.has(e.id)} />
             ))}

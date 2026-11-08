@@ -275,7 +275,7 @@ function Empty() {
   return (
     <div className={styles.empty}>
       <p>
-        No shortcut lists yet. Give an entry the primary tag <code>#shortcuts/&lt;app&gt;</code> (e.g. <code>#shortcuts/illustrator</code>) and list one
+        No shortcut lists yet. Tag an entry <code>#shortcuts/&lt;app&gt;</code> (e.g. <code>#shortcuts/illustrator</code>) and list one
         hotkey per line:
       </p>
       <pre>{`TOOLS:

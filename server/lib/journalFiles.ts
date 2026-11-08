@@ -38,6 +38,8 @@ export function renderJournal(date: string, list: EntryDTO[]): string {
   const out = [`# ${formatJournalDate(date)}`, '']
   for (const e of list) {
     out.push(`## ${e.title || '(untitled)'}`)
+    if (e.type !== 'journal') out.push(`type:: ${e.subtype ? `${e.type}/${e.subtype}` : e.type}`)
+    if (e.category) out.push(`category:: ${e.category}`)
     if (e.tags.length) out.push(`tags:: ${e.tags.join(', ')}`)
     if (e.archived) out.push('archived:: true')
     out.push(`id:: ${e.id}`, '')

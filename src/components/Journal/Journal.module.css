@@ -115,8 +115,34 @@ kbd {
   font-weight: 400;
 }
 
-.entryTags {
+.entryMeta {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
   margin: 2px 0 4px;
+}
+
+.entryMeta > select {
+  flex: none;
+  margin-top: 1px;
+}
+
+.entryTags {
+  flex: 1;
+  min-width: 0;
+}
+
+/* A day's entries of one category, under its name. */
+.categoryHead {
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--date);
+  margin: 0 0 4px 2px;
+}
+
+.categoryHead.uncategorized {
+  color: var(--text-faint);
 }
 
 .nodes {

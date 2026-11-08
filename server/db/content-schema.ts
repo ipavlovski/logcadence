@@ -1,21 +1,35 @@
 import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import { ENTRY_TYPES } from '../../shared/entryTypes.ts'
 import type { CaptureFields, ChatMessage } from '../../shared/types.ts'
 
-// content.db: the notes. Entries belong to a journal day; nodes are an entry's children.
+// content.db: the notes. Every item is an entry (shared/entryTypes.ts): a journal entry, a video, a bookmark, a
+// media item or an AI chat, on a day, with one category and any number of tags. A type's own data is in its
+// table (yt_videos, captures, board_items, chats), which points at the entry; a journal entry's nodes are its children.
+
+// The categories an entry can be filed under (one at most), in display order.
+export const categories = sqliteTable('categories', {
+  name: text('name').primaryKey(),
+  position: real('position').notNull(),
+  createdAt: integer('created_at').notNull(),
+})
 
 export const entries = sqliteTable(
   'entries',
   {
     id: text('id').primaryKey(),
+    type: text('type', { enum: ENTRY_TYPES }).notNull().default('journal'),
+    subtype: text('subtype'), // see SUBTYPES; null for a journal entry
+    category: text('category').references(() => categories.name, { onUpdate: 'cascade', onDelete: 'set null' }),
     date: text('date').notNull(), // YYYY-MM-DD journal day
     title: text('title').notNull().default(''),
-    // Fractional order within the day, so inserts never renumber neighbours.
+    // Fractional order within the day, so inserts never renumber neighbours. Entries of other types than journal
+    // and ai are ordered by time (epoch ms).
     position: real('position').notNull(),
     archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
     createdAt: integer('created_at').notNull(), // epoch ms
     updatedAt: integer('updated_at').notNull(),
   },
-  (t) => [index('entries_date_idx').on(t.date, t.position)],
+  (t) => [index('entries_date_idx').on(t.date, t.position), index('entries_type_idx').on(t.type, t.subtype), index('entries_category_idx').on(t.category)],
 )
 
 export const nodes = sqliteTable(
@@ -52,14 +66,13 @@ export const entryTags = sqliteTable(
     tagId: integer('tag_id')
       .notNull()
       .references(() => tags.id, { onDelete: 'cascade' }),
-    // Lowest position is the primary tag, which groups the entry in the journal view.
-    position: integer('position').notNull(),
+    position: integer('position').notNull(), // display order
   },
   (t) => [primaryKey({ columns: [t.entryId, t.tagId] }), index('entry_tags_tag_idx').on(t.tagId)],
 )
 
-// Imported AI chats. Each one owns a journal entry (one node per prompt); the full transcript
-// stays here for the AI canvas tab.
+// Imported AI chats. Each one owns an entry (ai/<subtype>, one node per prompt); the full transcript stays here
+// for the AI canvas tab.
 export const chats = sqliteTable(
   'chats',
   {
@@ -98,8 +111,8 @@ export const images = sqliteTable(
   (t) => [index('images_node_idx').on(t.nodeId, t.position)],
 )
 
-// YouTube videos for the canvas YouTube tab, imported from playlists (see server/lib/youtube/). Their tags are a
-// set of their own, apart from the journal's. Which playlist a video came from is not kept.
+// YouTube videos for the canvas YouTube tab, imported from playlists (see server/lib/youtube/). Each is an entry
+// (video/youtube, id `yt:<video id>`), which holds its tags and category. Which playlist a video came from is not kept.
 
 export const ytPlaylists = sqliteTable('yt_playlists', {
   id: text('id').primaryKey(), // YouTube's list id (PL…)
@@ -115,6 +128,8 @@ export const ytVideos = sqliteTable(
   'yt_videos',
   {
     id: text('id').primaryKey(), // YouTube's video id
+    // Always set (null only in the column's definition: it was added by ALTER, see 0016_unified_entries).
+    entryId: text('entry_id').references(() => entries.id, { onDelete: 'cascade' }),
     title: text('title').notNull(),
     channel: text('channel').notNull().default(''),
     channelUrl: text('channel_url'),
@@ -142,27 +157,7 @@ export const ytVideos = sqliteTable(
     thumbSize: text('thumb_size', { enum: ['maxres', 'sd', 'hq', 'none'] }),
     updatedAt: integer('updated_at').notNull(),
   },
-  (t) => [index('yt_videos_added_idx').on(t.addedDate, t.addedAt)],
-)
-
-export const ytTags = sqliteTable('yt_tags', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  path: text('path').notNull().unique(), // "build/well/drilling"; ancestors are implicit
-  createdAt: integer('created_at').notNull(),
-})
-
-export const ytVideoTags = sqliteTable(
-  'yt_video_tags',
-  {
-    videoId: text('video_id')
-      .notNull()
-      .references(() => ytVideos.id, { onDelete: 'cascade' }),
-    tagId: integer('tag_id')
-      .notNull()
-      .references(() => ytTags.id, { onDelete: 'cascade' }),
-    position: integer('position').notNull(), // lowest is the primary tag
-  },
-  (t) => [primaryKey({ columns: [t.videoId, t.tagId] }), index('yt_video_tags_tag_idx').on(t.tagId)],
+  (t) => [index('yt_videos_added_idx').on(t.addedDate, t.addedAt), uniqueIndex('yt_videos_entry_idx').on(t.entryId)],
 )
 
 // Images and gifs pasted into a video's notes or comments; files live under data/assets like the journal's.
@@ -183,14 +178,15 @@ export const ytImages = sqliteTable(
 )
 
 // Web pages captured by the Chrome extension (extension/) for the canvas Bookmarks tab (see server/lib/captures.ts):
-// a screenshot with the page's url, title and icon, plus notes, comments, images and tags of their own (one tag
-// set, apart from the journal's). A capture's handler (shared/handlers.ts) is what its url made it: a Reddit post,
+// a screenshot with the page's url, title and icon, plus notes, comments and images. Each is an entry
+// (bookmark/<handler>, id `cap:<capture id>`), which holds its tags and category. A capture's handler (shared/handlers.ts) is what its url made it: a Reddit post,
 // a Marketplace listing, any other page.
 
 export const captures = sqliteTable(
   'captures',
   {
     id: text('id').primaryKey(),
+    entryId: text('entry_id').references(() => entries.id, { onDelete: 'cascade' }), // always set, as yt_videos'
     handler: text('handler', { enum: ['page', 'reddit', 'marketplace'] }).notNull(),
     // What makes two captures the same page, from the handler: a Reddit post's id ("1kq2x3v"), a listing's id, a page's url without its #fragment.
     key: text('key').notNull(),
@@ -214,31 +210,7 @@ export const captures = sqliteTable(
     commentsActiveImageId: text('comments_active_image_id'),
     updatedAt: integer('updated_at').notNull(),
   },
-  (t) => [uniqueIndex('captures_handler_key_idx').on(t.handler, t.key), index('captures_date_idx').on(t.capturedDate, t.capturedAt)],
-)
-
-export const captureTags = sqliteTable(
-  'capture_tags',
-  {
-    id: integer('id').primaryKey({ autoIncrement: true }),
-    path: text('path').notNull(), // ancestors are implicit
-    createdAt: integer('created_at').notNull(),
-  },
-  (t) => [uniqueIndex('capture_tags_path_idx').on(t.path)],
-)
-
-export const captureItemTags = sqliteTable(
-  'capture_item_tags',
-  {
-    captureId: text('capture_id')
-      .notNull()
-      .references(() => captures.id, { onDelete: 'cascade' }),
-    tagId: integer('tag_id')
-      .notNull()
-      .references(() => captureTags.id, { onDelete: 'cascade' }),
-    position: integer('position').notNull(), // lowest is the primary tag
-  },
-  (t) => [primaryKey({ columns: [t.captureId, t.tagId] }), index('capture_item_tags_tag_idx').on(t.tagId)],
+  (t) => [uniqueIndex('captures_handler_key_idx').on(t.handler, t.key), index('captures_date_idx').on(t.capturedDate, t.capturedAt), uniqueIndex('captures_entry_idx').on(t.entryId)],
 )
 
 // Images pasted or dropped into a capture's notes or comments, and comment screenshots sent by the extension.
@@ -258,11 +230,13 @@ export const captureImages = sqliteTable(
   (t) => [index('capture_images_capture_idx').on(t.captureId, t.position)],
 )
 
-// The image board (Images tab): pasted images, gifs and videos kept as a scratchpad, in rows under a day.
+// The image board (Images tab): pasted images, gifs and videos kept as a scratchpad, in rows under a day. Each is an
+// entry (media/image or media/video, id `media:<item id>`).
 export const boardItems = sqliteTable(
   'board_items',
   {
     id: text('id').primaryKey(),
+    entryId: text('entry_id').references(() => entries.id, { onDelete: 'cascade' }), // always set, as yt_videos'
     date: text('date').notNull(), // YYYY-MM-DD day it's shown under
     row: real('row').notNull(), // fractional order of the item's row within the day
     position: real('position').notNull(), // fractional order within the row
@@ -273,5 +247,5 @@ export const boardItems = sqliteTable(
     height: integer('height').notNull(),
     createdAt: integer('created_at').notNull(),
   },
-  (t) => [index('board_items_day_idx').on(t.date, t.row, t.position)],
+  (t) => [index('board_items_day_idx').on(t.date, t.row, t.position), uniqueIndex('board_items_entry_idx').on(t.entryId)],
 )

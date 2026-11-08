@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type MouseEvent, type Ref, type RefObject } from 'react'
 import { formatJournalDate, isIsoDate, shiftDate, today, weekday } from '../../../shared/dates.ts'
-import { allTagPaths, isUnder } from '../../../shared/tags.ts'
+import { isUnder } from '../../../shared/tags.ts'
 import type { ImageDTO, UpdateYtVideoBody, YtImageSection, YtLibraryDTO, YtVideoDTO, YtVideoSummary } from '../../../shared/types.ts'
 import { api, unwrap } from '../../api.ts'
 import type { CanvasPluginProps } from '../../canvas/plugins.ts'
@@ -33,6 +33,7 @@ import {
 import { AutoTextarea } from '../AutoTextarea/AutoTextarea.tsx'
 import { ImageGallery } from '../ImageGallery/ImageGallery.tsx'
 import { Markdown } from '../Markdown/Markdown.tsx'
+import { CategoryPicker } from '../CategoryPicker/CategoryPicker.tsx'
 import { TagInput } from '../TagInput/TagInput.tsx'
 import { YoutubeImport } from './YoutubeImport.tsx'
 import styles from './Youtube.module.css'
@@ -554,7 +555,6 @@ function VideoPage({ id, lib }: { id: string; lib: YtLibraryDTO | undefined }) {
   const i = list.findIndex((x) => x.id === id)
   const prev = i > 0 ? list[i - 1] : undefined
   const next = i >= 0 ? list[i + 1] : undefined
-  const tagPaths = useMemo(() => allTagPaths(lib?.tags ?? []), [lib])
   const pageRef = useRef<HTMLDivElement>(null)
   // A video opens at its top, not at the listing's scroll position.
   useLayoutEffect(() => {
@@ -641,11 +641,14 @@ function VideoPage({ id, lib }: { id: string; lib: YtLibraryDTO | undefined }) {
               <span>{fullDate(v.importedAt)}</span>
             </div>
             <div className={styles.infoRow}>
+              <span className={styles.label}>Category</span>
+              <CategoryPicker value={v.category} onChange={(category) => save({ category })} />
+            </div>
+            <div className={styles.infoRow}>
               <span className={styles.label}>Tags</span>
               <TagInput
                 className={styles.tags}
                 value={v.tags}
-                paths={tagPaths}
                 onChange={(tags) => save({ tags })}
                 onOpen={(path) => setYtFilter({ kind: 'tag', path })}
                 placeholder="add tag… (e.g. build/well)"

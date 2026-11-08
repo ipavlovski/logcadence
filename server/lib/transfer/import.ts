@@ -5,7 +5,9 @@ import path from 'node:path'
 import type { SQLiteTable } from 'drizzle-orm/sqlite-core'
 import { openContentDb, openEventsDb } from '../../db/open.ts'
 import { withZip, type ZipMember } from '../zip.ts'
-import { CONTENT_TABLES, EVENTS_TABLES, FORMAT, FORMAT_VERSION, LEGACY_FORMATS, type FileSet, type Manifest, type Progress } from './format.ts'
+import { CHAT_SUBTYPE, captureEntryId, mediaEntryId, mediaSubtype, videoEntryId } from '../../../shared/entryTypes.ts'
+import { CHAT_SOURCES, type ChatSource } from '../../../shared/types.ts'
+import { CONTENT_TABLES, EVENTS_TABLES, FORMAT, FORMAT_VERSION, LEGACY_FORMATS, V3_CONTENT_TABLES, type FileSet, type Manifest, type Progress } from './format.ts'
 
 export interface ImportOptions {
   /** The library folder to import into; it must be empty (no entries, events or assets). */
@@ -39,16 +41,19 @@ export function importFrom(zipFile: string, { dataDir, onProgress }: ImportOptio
     mkdirSync(path.join(staging, 'assets'))
     try {
       const all = { ...CONTENT_TABLES, ...EVENTS_TABLES }
-      for (const name of Object.keys(manifest.tables)) if (!(name in all)) warnings.push(`skipped unknown table "${name}"`)
+      const known = new Set([...Object.keys(all), ...(manifest.formatVersion < 4 ? V3_CONTENT_TABLES : [])])
+      for (const name of Object.keys(manifest.tables)) if (!known.has(name)) warnings.push(`skipped unknown table "${name}"`)
       const total = Object.keys(all).length
       let done = 0
       const progress = () => onProgress?.({ phase: 'tables', done: ++done, total })
 
-      const upgrade = upgrader(manifest.formatVersion)
+      const tables = upgradeTables(manifest.formatVersion, (name) => readTable(byName, manifest, name))
       const content = openContentDb(path.join(staging, 'db'))
       try {
         content.transaction((tx) => {
-          for (const [name, table] of Object.entries(CONTENT_TABLES)) insertRows(tx, table, upgrade(name, readTable(byName, manifest, name))), progress()
+          // A fresh library has the default categories (0016_unified_entries); the export's replace them.
+          tx.delete(CONTENT_TABLES.categories).run()
+          for (const [name, table] of Object.entries(CONTENT_TABLES)) insertRows(tx, table, tables[name] ?? []), progress()
         })
       } finally {
         content.$client.close()
@@ -128,10 +133,15 @@ function readTable(byName: Map<string, ZipMember>, manifest: Manifest, name: str
 
 type Row = Record<string, unknown>
 
-/**
- * Brings a table's rows from an older export format up to FORMAT_VERSION, in insert order (a step can depend on an
- * earlier table's). Add a step per version bump.
- */
+/** Every content table's rows, brought from the export's format up to FORMAT_VERSION. */
+function upgradeTables(fromVersion: number, read: (name: string) => Row[]): Record<string, Row[]> {
+  if (fromVersion >= 4) return Object.fromEntries(Object.keys(CONTENT_TABLES).map((name) => [name, read(name)]))
+  // Formats 1–3 upgrade table by table, in their insert order (a step can depend on an earlier table's).
+  const upgrade = upgrader(fromVersion)
+  return toV4(Object.fromEntries(V3_CONTENT_TABLES.map((name) => [name, upgrade(name, read(name))])))
+}
+
+/** Brings a table's rows from format `fromVersion` (1–3) up to 3. */
 function upgrader(fromVersion: number): (table: string, rows: Row[]) => Row[] {
   const steps = [toV2(), toV3()].slice(fromVersion - 1)
   return (table, rows) => steps.reduce((r, step) => step(table, r), rows)
@@ -191,6 +201,101 @@ function toV3(): (table: string, rows: Row[]) => Row[] {
         const key = JSON.stringify([r.entryId ?? r.videoId ?? r.captureId, r.tagId])
         return !seen.has(key) && !!seen.add(key)
       })
+  }
+}
+
+// v3 → 4: every item an entry, one tag set, categories (as migration 0016_unified_entries, which see).
+const V4_CATEGORIES = ['design', 'build', 'fabrication', 'dev', 'notes']
+const CHAT_SOURCE_TAGS = new Set(CHAT_SOURCES.map((s) => `ai/${s}`))
+
+export function toV4(t: Record<string, Row[]>): Record<string, Row[]> {
+  const get = (name: string) => t[name] ?? []
+  const root = (path: string) => path.split('/')[0]!
+  const categoryOf = (path: string | undefined) => (path !== undefined && V4_CATEGORIES.includes(root(path)) ? root(path) : null)
+  /** The path of each item's first (lowest position) tag. */
+  const firstPaths = (links: Row[], key: string, pathOf: Map<unknown, string>) => {
+    const first = new Map<unknown, { position: number; path: string }>()
+    for (const l of links) {
+      const path = pathOf.get(l.tagId)
+      const cur = first.get(l[key])
+      if (path !== undefined && (!cur || Number(l.position) < cur.position)) first.set(l[key], { position: Number(l.position), path })
+    }
+    return new Map([...first].map(([k, v]) => [k, v.path]))
+  }
+
+  const tags = get('tags').map((r) => ({ ...r }))
+  const pathOf = new Map(tags.map((r) => [r.id, String(r.path)]))
+  const byPath = new Map(tags.map((r) => [String(r.path), r]))
+  let nextId = Math.max(0, ...tags.map((r) => Number(r.id))) + 1
+  const tagId = (path: string, createdAt: unknown) => {
+    let r = byPath.get(path)
+    if (!r) {
+      r = { id: nextId++, path, createdAt }
+      tags.push(r)
+      byPath.set(path, r)
+    }
+    return r.id
+  }
+
+  const chatSource = new Map(get('chats').filter((c) => c.entryId).map((c) => [c.entryId, c.source as ChatSource]))
+  const entryTags = get('entry_tags').filter((l) => !(chatSource.has(l.entryId) && CHAT_SOURCE_TAGS.has(pathOf.get(l.tagId) ?? '')))
+  const first = firstPaths(entryTags, 'entryId', pathOf)
+  const entries: Row[] = get('entries').map((e) => {
+    const source = chatSource.get(e.id)
+    return { ...e, type: source ? 'ai' : 'journal', subtype: source ? CHAT_SUBTYPE[source] : null, category: categoryOf(first.get(e.id)) }
+  })
+
+  /** Items of a type with tags of their own: each gets an entry, its tags go under `prefix`. */
+  const items = (rows: Row[], tagRows: Row[], links: Row[], key: string, entryIdOf: (id: string) => string, prefix: string, entry: (r: Row) => Row) => {
+    const ownPath = new Map(tagRows.map((r) => [r.id, String(r.path)]))
+    const created = new Map(tagRows.map((r) => [r.id, r.createdAt]))
+    const firstOwn = firstPaths(links, key, ownPath)
+    const have = new Set(entries.map((e) => e.id))
+    for (const r of rows) if (!have.has(entryIdOf(String(r.id)))) entries.push({ id: entryIdOf(String(r.id)), archived: false, category: categoryOf(firstOwn.get(r.id)), ...entry(r) })
+    for (const l of links) {
+      const path = ownPath.get(l.tagId)
+      if (path !== undefined) entryTags.push({ entryId: entryIdOf(String(l[key])), tagId: tagId(`${prefix}/${path}`, created.get(l.tagId)), position: l.position })
+    }
+    return rows.map((r) => ({ ...r, entryId: entryIdOf(String(r.id)) }))
+  }
+  const ytVideos = items(get('yt_videos'), get('yt_tags'), get('yt_video_tags'), 'videoId', videoEntryId, 'youtube', (v) => ({
+    type: 'video',
+    subtype: 'youtube',
+    date: v.addedDate,
+    title: v.title,
+    position: v.addedAt,
+    createdAt: Number(v.importedAt) > 0 ? v.importedAt : v.addedAt,
+    updatedAt: v.updatedAt,
+  }))
+  const captures = items(get('captures'), get('capture_tags'), get('capture_item_tags'), 'captureId', captureEntryId, 'bookmark', (c) => ({
+    type: 'bookmark',
+    subtype: c.handler,
+    date: c.capturedDate,
+    title: c.title,
+    position: c.capturedAt,
+    createdAt: c.capturedAt,
+    updatedAt: c.updatedAt,
+  }))
+  const boardItems = items(get('board_items'), [], [], 'id', mediaEntryId, 'media', (b) => ({
+    type: 'media',
+    subtype: mediaSubtype(String(b.mime)),
+    date: b.date,
+    title: '',
+    position: b.createdAt,
+    createdAt: b.createdAt,
+    updatedAt: b.createdAt,
+  }))
+
+  const used = new Set(entryTags.map((l) => l.tagId))
+  return {
+    ...t,
+    categories: V4_CATEGORIES.map((name, i) => ({ name, position: i + 1, createdAt: 0 })),
+    tags: tags.filter((r) => used.has(r.id)),
+    entries,
+    entry_tags: entryTags,
+    yt_videos: ytVideos,
+    captures,
+    board_items: boardItems,
   }
 }
 

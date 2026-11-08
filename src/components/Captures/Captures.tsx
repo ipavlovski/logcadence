@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type Ref, type RefObject } from 'react'
 import { formatJournalDate } from '../../../shared/dates.ts'
 import { HANDLERS, handlerById, type CaptureHandler } from '../../../shared/handlers.ts'
-import { allTagPaths, isUnder } from '../../../shared/tags.ts'
+import { isUnder } from '../../../shared/tags.ts'
 import type { CaptureDTO, CaptureLibraryDTO, CaptureSection, CaptureSummary, HandlerId, UpdateCaptureBody } from '../../../shared/types.ts'
 import { api, unwrap } from '../../api.ts'
 import type { CanvasPluginProps } from '../../canvas/plugins.ts'
@@ -12,6 +12,7 @@ import { useCommand } from '../../state/commands.ts'
 import { openDate, panesStore } from '../../state/panes.ts'
 import { useStore } from '../../state/store.ts'
 import { notify } from '../../state/ui.ts'
+import { CategoryPicker } from '../CategoryPicker/CategoryPicker.tsx'
 import { TagInput } from '../TagInput/TagInput.tsx'
 import { ArrowIcon, dayLabel, scrollParent, SearchIcon, TextSection } from '../Youtube/Youtube.tsx'
 import yt from '../Youtube/Youtube.module.css'
@@ -476,7 +477,6 @@ function ItemPage({ id, lib }: { id: string; lib: CaptureLibraryDTO | undefined 
   const i = list.findIndex((x) => x.id === id)
   const prev = i > 0 ? list[i - 1] : undefined
   const next = i >= 0 ? list[i + 1] : undefined
-  const tagPaths = useMemo(() => allTagPaths(lib?.tags ?? []), [lib])
   const pageRef = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
     const scroller = pageRef.current && scrollParent(pageRef.current)
@@ -584,8 +584,12 @@ function ItemPage({ id, lib }: { id: string; lib: CaptureLibraryDTO | undefined 
               </div>
             ))}
             <div className={yt.infoRow}>
+              <span className={yt.label}>Category</span>
+              <CategoryPicker value={c.category} onChange={(category) => save({ category })} />
+            </div>
+            <div className={yt.infoRow}>
               <span className={yt.label}>Tags</span>
-              <TagInput className={yt.tags} value={c.tags} paths={tagPaths} onChange={(tags) => save({ tags })} onOpen={(path) => nav.setFilter({ kind: 'tag', path })} placeholder="add tag… (e.g. homelab/nas)" />
+              <TagInput className={yt.tags} value={c.tags} onChange={(tags) => save({ tags })} onOpen={(path) => nav.setFilter({ kind: 'tag', path })} placeholder="add tag… (e.g. homelab/nas)" />
             </div>
           </section>
 

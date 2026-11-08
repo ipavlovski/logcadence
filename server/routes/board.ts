@@ -7,21 +7,24 @@ import { validator } from 'hono/validator'
 import { isIsoDate, today } from '../../shared/dates.ts'
 import type { BoardItemDTO, BoardPageDTO, MoveBoardItemBody } from '../../shared/types.ts'
 import { ASSETS_DIR, db } from '../db/client.ts'
-import { boardItems } from '../db/content-schema.ts'
-import { extension, imageUrl } from '../lib/content.ts'
+import { mediaEntryId, mediaSubtype } from '../../shared/entryTypes.ts'
+import { boardItems, entries } from '../db/content-schema.ts'
+import { extension, imageUrl, pruneTags, upsertItemEntry } from '../lib/content.ts'
 import { logEvent } from '../lib/events.ts'
 import { saveUpload } from '../lib/media.ts'
 import { bad, date, notFound, num, obj, optDate } from '../lib/validate.ts'
 
-// The image board (Images tab): a scratchpad of pasted images, gifs and videos, in rows under a day.
+// The image board (Images tab): a scratchpad of pasted images, gifs and videos, in rows under a day. Each item is an
+// entry (media/image or media/video, `media:<id>`).
 
 const MAX_UPLOAD = 500 * 1024 * 1024
 const PAGE_DAYS = 14
 
 type BoardRow = typeof boardItems.$inferSelect
 
-const toItem = (r: BoardRow): BoardItemDTO => ({
+const toItem = (r: Omit<BoardRow, 'entryId'>): BoardItemDTO => ({
   id: r.id,
+  entryId: mediaEntryId(r.id),
   date: r.date,
   row: r.row,
   position: r.position,
@@ -116,8 +119,14 @@ export const boardRoutes = new Hono()
         .from(boardItems)
         .where(and(eq(boardItems.date, b.date), eq(boardItems.row, row)))
         .get()?.p ?? 0) + 1
-    const values = { id, date: b.date, row, position, file, thumb, mime, width: b.width, height: b.height, createdAt: Date.now() }
-    db.insert(boardItems).values(values).run()
+    const now = Date.now()
+    const values = { id, date: b.date, row, position, file, thumb, mime, width: b.width, height: b.height, createdAt: now }
+    db.transaction(() => {
+      upsertItemEntry(mediaEntryId(id), { type: 'media', subtype: mediaSubtype(mime), date: b.date, title: '', position: now, createdAt: now, updatedAt: now })
+      db.insert(boardItems)
+        .values({ ...values, entryId: mediaEntryId(id) })
+        .run()
+    })
     logEvent('board-item', id, 'create', { ...values })
     return c.json(toItem(values), 201)
   })
@@ -126,7 +135,10 @@ export const boardRoutes = new Hono()
     const id = c.req.param('id')
     db.select({ id: boardItems.id }).from(boardItems).where(eq(boardItems.id, id)).get() ?? notFound('board item')
     const b = c.req.valid('json')
-    db.update(boardItems).set(b).where(eq(boardItems.id, id)).run()
+    db.transaction(() => {
+      db.update(boardItems).set(b).where(eq(boardItems.id, id)).run()
+      db.update(entries).set({ date: b.date, updatedAt: Date.now() }).where(eq(entries.id, mediaEntryId(id))).run()
+    })
     logEvent('board-item', id, 'edit', { ...b })
     return c.json(toItem(db.select().from(boardItems).where(eq(boardItems.id, id)).get()!))
   })
@@ -134,7 +146,11 @@ export const boardRoutes = new Hono()
   .delete('/board/:id', (c) => {
     const id = c.req.param('id')
     const row = db.select().from(boardItems).where(eq(boardItems.id, id)).get() ?? notFound('board item')
-    db.delete(boardItems).where(eq(boardItems.id, id)).run()
+    db.transaction(() => {
+      db.delete(entries).where(eq(entries.id, mediaEntryId(id))).run()
+      db.delete(boardItems).where(eq(boardItems.id, id)).run()
+      pruneTags()
+    })
     logEvent('board-item', id, 'delete', { ...row })
     return c.json({ ok: true })
   })

@@ -16,8 +16,13 @@ let client: Client
 beforeAll(async () => {
   const { app } = await import('../server/app.ts')
   const { db } = await import('../server/db/client.ts')
+  const { upsertItemEntry } = await import('../server/lib/content.ts')
   const { ytVideos } = await import('../server/db/content-schema.ts')
-  const video = (id: string, title: string, channel: string, day: number) => ({ id, title, channel, addedAt: day, addedDate: `2026-10-${String(day).padStart(2, '0')}`, updatedAt: 0 })
+  const video = (id: string, title: string, channel: string, day: number) => {
+    const addedDate = `2026-10-${String(day).padStart(2, '0')}`
+    upsertItemEntry(`yt:${id}`, { type: 'video', subtype: 'youtube', date: addedDate, title, position: day, createdAt: 0, updatedAt: 0 })
+    return { id, entryId: `yt:${id}`, title, channel, addedAt: day, addedDate, updatedAt: 0 }
+  }
   db.insert(ytVideos)
     .values([video('v1', 'Drilling a water well by hand', 'WellCo', 1), video('v2', 'PowerToys tips', 'WinTips', 2), video('v3', 'Casing a well', 'WellCo', 3)])
     .run()
@@ -46,7 +51,7 @@ const ids = (p: Page) => p.videos.map((v) => v.id)
 
 describe('mcp server', () => {
   it('lists its tools', async () => {
-    expect((await client.listTools()).tools.map((t) => t.name).sort()).toEqual(['yt_get_video', 'yt_list_tags', 'yt_list_videos', 'yt_move_tag', 'yt_set_tags'])
+    expect((await client.listTools()).tools.map((t) => t.name).sort()).toEqual(['list_categories', 'yt_get_video', 'yt_list_tags', 'yt_list_videos', 'yt_move_tag', 'yt_set_category', 'yt_set_tags'])
   })
 
   it('lists videos newest first, paged and filtered', async () => {
@@ -70,6 +75,14 @@ describe('mcp server', () => {
     ])
     expect(ids(await call<Page>('yt_list_videos', { tag: 'build' }))).toEqual(['v3', 'v1'])
     expect(ids(await call<Page>('yt_list_videos', { untagged: true }))).toEqual(['v2'])
+  })
+
+  it('files videos under a category', async () => {
+    expect((await call<{ name: string }[]>('list_categories')).map((c) => c.name)).toEqual(['design', 'build', 'fabrication', 'dev', 'notes'])
+    expect(await call('yt_set_category', { items: [{ id: 'v1', category: 'build' }, { id: 'v2', category: 'nope' }] })).toMatchObject({ updated: 1, errors: [{ id: 'v2' }] })
+    expect(await call('yt_get_video', { id: 'v1' })).toMatchObject({ category: 'build' })
+    expect(await call('list_categories')).toContainEqual({ name: 'build', entries: 1 })
+    expect(await call('yt_set_category', { items: [{ id: 'v1', category: null }] })).toEqual({ updated: 1 })
   })
 
   it('renames a tag and reads one video', async () => {

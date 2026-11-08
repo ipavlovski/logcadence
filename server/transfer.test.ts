@@ -129,7 +129,7 @@ describe('data export / import', () => {
     expect(readdirSync(target)).not.toContain('gps')
   })
 
-  it('imports Reddit and Bookmarks captures from a format 1 export as handlers, with one tag set of / paths', async () => {
+  it('imports Reddit and Bookmarks captures from a format 1 export as handlers and entries, their tags of / paths under bookmark/', async () => {
     const { ZipWriter, withZip } = await import('./lib/zip.ts')
     const ndjson = (rows: object[]) => Buffer.from(rows.map((r) => JSON.stringify(r) + '\n').join(''))
     const row = { url: '', title: 'T', site: '', icon: null, screenshot: 's.jpg', screenshotWidth: null, screenshotHeight: null, thumb: null, capturedAt: 1, capturedDate: '2026-09-20', notes: '', activeImageId: null, comments: '', commentsActiveImageId: null, updatedAt: 1 }
@@ -179,15 +179,66 @@ describe('data export / import', () => {
         { id: 'mark', handler: 'page', fields: '{}', publishedAt: null },
         { id: 'post', handler: 'reddit', fields: JSON.stringify({ author: 'alice', score: 5 }), publishedAt: 7 },
       ])
-      expect(sqlite.prepare('SELECT capture_id AS id, path FROM capture_item_tags JOIN capture_tags ON capture_tags.id = tag_id ORDER BY capture_id, position').all()).toEqual([
-        { id: 'mark', path: 'homelab' },
-        { id: 'mark', path: 'nas/disk' },
-        { id: 'post', path: 'homelab' },
-        { id: 'post', path: 'nas/disk' },
+      expect(sqlite.prepare(`SELECT id, type, subtype, date, title FROM entries WHERE type = 'bookmark' ORDER BY id`).all()).toEqual([
+        { id: 'cap:mark', type: 'bookmark', subtype: 'page', date: '2026-09-20', title: 'T' },
+        { id: 'cap:post', type: 'bookmark', subtype: 'reddit', date: '2026-09-20', title: 'T' },
       ])
-      expect(sqlite.prepare('SELECT count(*) AS n FROM capture_tags').get()).toEqual({ n: 2 })
+      expect(sqlite.prepare(`SELECT entry_id AS id, path FROM entry_tags JOIN tags ON tags.id = tag_id WHERE entry_id LIKE 'cap:%' ORDER BY entry_id, position`).all()).toEqual([
+        { id: 'cap:mark', path: 'bookmark/homelab' },
+        { id: 'cap:mark', path: 'bookmark/nas/disk' },
+        { id: 'cap:post', path: 'bookmark/homelab' },
+        { id: 'cap:post', path: 'bookmark/nas/disk' },
+      ])
+      expect(sqlite.prepare(`SELECT entry_id FROM captures ORDER BY id`).all()).toEqual([{ entry_id: 'cap:mark' }, { entry_id: 'cap:post' }])
+      expect(sqlite.prepare('PRAGMA foreign_key_check').all()).toEqual([])
     } finally {
       sqlite.close()
     }
+  })
+
+  it('upgrades format 3 rows as migration 0016 does: entries for every item, one tag set, categories', () => {
+    const t = transfer.toV4({
+      tags: [
+        { id: 1, path: 'build/well', createdAt: 1 },
+        { id: 2, path: 'ai/claude', createdAt: 1 },
+        { id: 3, path: 'dev', createdAt: 1 },
+      ],
+      entries: [
+        { id: 'j', date: '2026-10-01', title: 'J', position: 1, archived: false, createdAt: 1, updatedAt: 1 },
+        { id: 'c', date: '2026-10-01', title: 'C', position: 2, archived: false, createdAt: 1, updatedAt: 1 },
+      ],
+      entry_tags: [
+        { entryId: 'j', tagId: 1, position: 0 },
+        { entryId: 'c', tagId: 2, position: 0 },
+        { entryId: 'c', tagId: 3, position: 1 },
+      ],
+      chats: [{ id: 'claude:x', source: 'claude', entryId: 'c' }],
+      yt_videos: [{ id: 'v', title: 'V', addedAt: 5, addedDate: '2026-10-02', importedAt: 0, updatedAt: 6 }],
+      yt_tags: [{ id: 1, path: 'build/well', createdAt: 2 }],
+      yt_video_tags: [{ videoId: 'v', tagId: 1, position: 0 }],
+      captures: [],
+      capture_tags: [],
+      capture_item_tags: [],
+      board_items: [{ id: 'b', date: '2026-10-03', mime: 'video/mp4', createdAt: 7 }],
+    })
+    expect(t.entries!.map((e) => [e.id, e.type, e.subtype, e.category, e.date])).toEqual([
+      ['j', 'journal', null, 'build', '2026-10-01'],
+      ['c', 'ai', 'claude-chat', 'dev', '2026-10-01'],
+      ['yt:v', 'video', 'youtube', 'build', '2026-10-02'],
+      ['media:b', 'media', 'video', null, '2026-10-03'],
+    ])
+    expect(t.tags!.map((r) => [r.id, r.path])).toEqual([
+      [1, 'build/well'],
+      [3, 'dev'],
+      [4, 'youtube/build/well'],
+    ])
+    expect(t.entry_tags).toEqual([
+      { entryId: 'j', tagId: 1, position: 0 },
+      { entryId: 'c', tagId: 3, position: 1 },
+      { entryId: 'yt:v', tagId: 4, position: 0 },
+    ])
+    expect(t.yt_videos![0]).toMatchObject({ id: 'v', entryId: 'yt:v' })
+    expect(t.board_items![0]).toMatchObject({ id: 'b', entryId: 'media:b' })
+    expect(t.categories!.map((c) => c.name)).toEqual(['design', 'build', 'fabrication', 'dev', 'notes'])
   })
 })
