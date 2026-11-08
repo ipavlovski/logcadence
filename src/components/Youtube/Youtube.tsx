@@ -3,7 +3,7 @@ import { formatJournalDate, isIsoDate, shiftDate, today, weekday } from '../../.
 import { isUnder } from '../../../shared/tags.ts'
 import type { ImageDTO, UpdateYtVideoBody, YtImageSection, YtLibraryDTO, YtVideoDTO, YtVideoSummary } from '../../../shared/types.ts'
 import { api, unwrap } from '../../api.ts'
-import type { CanvasPluginProps } from '../../canvas/plugins.ts'
+import type { TypeViewProps } from '../../canvas/plugins.ts'
 import { useFetch } from '../../hooks/useFetch.ts'
 import { mediaFiles, pasteMedia } from '../../media.ts'
 import { openDate, panesStore } from '../../state/panes.ts'
@@ -35,6 +35,7 @@ import { ImageGallery } from '../ImageGallery/ImageGallery.tsx'
 import { Markdown } from '../Markdown/Markdown.tsx'
 import { CategoryPicker } from '../CategoryPicker/CategoryPicker.tsx'
 import { TagInput } from '../TagInput/TagInput.tsx'
+import { startTagOp } from '../Tags/tagOps.ts'
 import { YoutubeImport } from './YoutubeImport.tsx'
 import styles from './Youtube.module.css'
 
@@ -84,11 +85,11 @@ function useShown(lib: YtLibraryDTO | undefined, filter: YtFilter, query: string
   }, [lib, filter, query])
 }
 
-export function Youtube(_: CanvasPluginProps) {
+export function Youtube(_: TypeViewProps) {
   const videoId = useStore(youtubeStore, (s) => s.videoId)
   const jumpOpen = useStore(ytJumpOpen, (o) => o)
-  useCommand('canvas.back', () => goYtHistory(-1))
-  useCommand('canvas.forward', () => goYtHistory(1))
+  useCommand('tags.back', () => goYtHistory(-1))
+  useCommand('tags.forward', () => goYtHistory(1))
   // Following the journal's day (ctrl+l): the listing scrolls to it, leaving an open video alone.
   useFollowJournal((d) => youtubeStore.get().videoId === null && jumpToDate(d), { key: YOUTUBE_PLUGIN })
   const [importOpen, setImportOpen] = useState(false)
@@ -385,21 +386,9 @@ function ChannelBar({ name, lib, count }: { name: string; lib: YtLibraryDTO; cou
 }
 
 function TagActions({ path, count }: { path: string; count: number }) {
-  const rename = () => {
-    const to = prompt(`Rename #${path} (and the tags under it) to:`, path)
-    if (!to || to === path) return
-    unwrap(api.youtube.tags.move.$post({ json: { from: path, to } })).then(() => {
-      setYtFilter({ kind: 'tag', path: to.trim().toLowerCase() })
-      bumpYt()
-    }, fail)
-  }
-  const remove = () => {
-    if (!confirm(`Remove #${path} and the tags under it from every video? The videos stay.`)) return
-    unwrap(api.youtube.tags.delete.$post({ json: { path } })).then(() => {
-      setYtFilter(null)
-      bumpYt()
-    }, fail)
-  }
+  // The tag set is every entry's: the tags pane's dialogs rename and delete it everywhere.
+  const rename = () => startTagOp({ op: 'rename', tag: path })
+  const remove = () => startTagOp({ op: 'delete', tag: path })
   return (
     <div className={styles.tagBar}>
       <span className={styles.tagName}>#{path}</span>

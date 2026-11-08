@@ -1,8 +1,8 @@
 import { CHAT_SOURCES, type ChatSource } from '../../shared/types.ts'
-import { openLoc, pluginKey } from './panes.ts'
+import { showTypeView } from './panes.ts'
 import { persistedStore } from './store.ts'
 
-// AI canvas tab: which chat is open (null = the chat list), the list's source filter, and a
+// The AI view (chats in the tags pane): which chat is open (null = the chat list), the list's source filter, and a
 // prompt of the open chat to scroll to.
 
 interface AiState {
@@ -30,10 +30,10 @@ export const SOURCE_LABEL: Record<ChatSource, string> = {
   antigravity: 'Antigravity',
 }
 
-/** Shows a chat's transcript in the canvas AI tab, scrolled to prompt `turn` when given. */
-export function openChat(chatId: string | null, opts: { newTab?: boolean; turn?: number } = {}) {
+/** Shows a chat's transcript in the AI view, scrolled to prompt `turn` when given. */
+export function openChat(chatId: string | null, opts: { turn?: number } = {}) {
   aiStore.set((s) => ({ ...s, chatId, turn: opts.turn ?? null }))
-  openLoc('canvas', pluginKey(AI_PLUGIN), { newTab: opts.newTab })
+  showTypeView('ai')
 }
 
 export function clearChatTurn() {

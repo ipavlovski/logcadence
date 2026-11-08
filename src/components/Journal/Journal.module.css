@@ -365,6 +365,9 @@ kbd {
 
 .itemType {
   flex: none;
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
   font-size: 11px;
   color: var(--text-muted);
   border: 1px solid var(--border);

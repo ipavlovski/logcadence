@@ -1,10 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { versionLabel } from '../../../shared/versions.ts'
 import { pluginIcon } from '../../canvas/icons.tsx'
-import { PLUGINS } from '../../canvas/plugins.ts'
+import { TYPE_VIEWS } from '../../canvas/plugins.ts'
 import { formatCombo, paneBindings } from '../../shortcuts.ts'
 import { setFollowJournal } from '../../state/canvasDay.ts'
-import { canvasTabsStore, moveCanvasTab, resetCanvasTabs, setCanvasTabShown } from '../../state/canvasTabs.ts'
 import { panesStore, setPaneOpen, type PaneId } from '../../state/panes.ts'
 import { useStore } from '../../state/store.ts'
 import { openSettings, prefsStore, setPref, toggleHelp, uiStore, type SettingsSection } from '../../state/ui.ts'
@@ -157,8 +156,7 @@ function UpdatesGroup() {
 function Canvas() {
   return (
     <>
-      <FollowJournal />
-      <CanvasTabs />
+      <p className={styles.note}>The canvas shows days: Today, the days pinned (double-click the preview day tab, or Ctrl+click a date), and the day opened last.</p>
       <Shortcuts pane="canvas" />
     </>
   )
@@ -167,7 +165,7 @@ function Canvas() {
 function Journal() {
   return (
     <>
-      <p className={styles.note}>The journal is the canvas’s first tab, which is always there.</p>
+      <p className={styles.note}>Today is the canvas’s first tab, which is always there.</p>
       <Shortcuts pane="journal" />
     </>
   )
@@ -181,6 +179,8 @@ function Tags() {
       <Group title="Pane">
         <PaneToggle pane="tags" label="Show the tags pane" />
       </Group>
+      <FollowJournal />
+      <TypeViews />
       <Group title="Tag views">
         <Check checked={showArchived} onChange={(v) => setPref('showArchived', v)} label="Show archived entries and nodes" hint="Greyed out, in the tag tree and tag views." />
         <Check checked={includeSub} onChange={(v) => setPref('includeSubtags', v)} label="Include sub-tags" hint="A tag view also lists the entries of its sub-tags." />
@@ -198,48 +198,30 @@ function FollowJournal() {
         checked={follows}
         onChange={setFollowJournal}
         label={`Follow the journal’s day (${formatCombo('mod+l')})`}
-        hint="On, YouTube, Bookmarks and AI chats scroll to the day open in the journal tab. Off, they keep their own place."
+        hint="On, the YouTube, Bookmarks, Media and AI views scroll to the day open in the canvas. Off, they keep their own place."
       />
     </Group>
   )
 }
 
-/** Which plugins have a tab in the canvas tab bar, and their order. */
-function CanvasTabs() {
-  const { order, hidden } = useStore(canvasTabsStore, (s) => s)
+/** The types with a view of their own, shown in the tags pane. */
+function TypeViews() {
   return (
-    <Group title="Tabs">
-      <p className={styles.note}>Each shown tab is an icon in the canvas tab bar, in this order, after the journal.</p>
+    <Group title="Type views">
+      <p className={styles.note}>A query of one of these types shows in its own view. The icons at the end of the tags pane’s tab bar open them.</p>
       <ul className={styles.tabList}>
-        {order.map((type, i) => {
-          const p = PLUGINS.find((x) => x.type === type)
-          if (!p) return null
-          const shown = !hidden.includes(type)
-          return (
-            <li key={type} className={shown ? '' : styles.off}>
-              <label>
-                <input type="checkbox" checked={shown} onChange={(e) => setCanvasTabShown(type, e.target.checked)} />
-                <span className={styles.icon}>{pluginIcon(type)}</span>
-                <span>
-                  <b>{p.title}</b>
-                  <span className={styles.hint}>{p.description}</span>
-                </span>
-              </label>
-              <span className={styles.move}>
-                <button onClick={() => moveCanvasTab(type, -1)} disabled={i === 0} title="Move up (left in the tab bar)" aria-label={`Move ${p.title} up`}>
-                  ↑
-                </button>
-                <button onClick={() => moveCanvasTab(type, 1)} disabled={i === order.length - 1} title="Move down (right in the tab bar)" aria-label={`Move ${p.title} down`}>
-                  ↓
-                </button>
+        {TYPE_VIEWS.map((v) => (
+          <li key={v.type}>
+            <label>
+              <span className={styles.icon}>{pluginIcon(v.icon)}</span>
+              <span>
+                <b>{v.title}</b>
+                <span className={styles.hint}>{v.description}</span>
               </span>
-            </li>
-          )
-        })}
+            </label>
+          </li>
+        ))}
       </ul>
-      <button className={styles.reset} onClick={() => resetCanvasTabs(PLUGINS.map((p) => p.type))}>
-        Show all, in the default order
-      </button>
     </Group>
   )
 }

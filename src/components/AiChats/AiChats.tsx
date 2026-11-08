@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { formatJournalDate, toIsoDate } from '../../../shared/dates.ts'
 import { CHAT_SOURCES, type ChatAttachment, type ChatDTO, type ChatMessage, type ChatSource, type ChatSummary, type ImportReport } from '../../../shared/types.ts'
 import { api, unwrap } from '../../api.ts'
-import type { CanvasPluginProps } from '../../canvas/plugins.ts'
+import type { TypeViewProps } from '../../canvas/plugins.ts'
 import { useFetch } from '../../hooks/useFetch.ts'
 import { matches } from '../../markdown.ts'
 import { aiStore, clearChatTurn, openChat, setChatSource, SOURCE_LABEL } from '../../state/ai.ts'
@@ -14,7 +14,7 @@ import { ChatMarkdown } from './ChatMarkdown.tsx'
 import styles from './AiChats.module.css'
 
 /** Canvas "AI" tab: every imported chat, and the full transcript of the open one. */
-export function AiChats(_: CanvasPluginProps) {
+export function AiChats(_: TypeViewProps) {
   const chatId = useStore(aiStore, (s) => s.chatId)
   return chatId ? <ChatView key={chatId} id={chatId} /> : <ChatList />
 }

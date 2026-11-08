@@ -169,7 +169,7 @@ export function createServer(api: LogcadenceApi): McpServer {
       annotations: { destructiveHint: true },
     },
     async ({ from, to }) => {
-      await api.send('POST', '/youtube/tags/move', { from, to })
+      await api.send('POST', '/tags/rename', { from, to })
       return text({ ok: true, from: normalizeTag(from), to: normalizeTag(to) })
     },
   )

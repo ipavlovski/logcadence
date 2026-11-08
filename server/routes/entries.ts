@@ -68,6 +68,7 @@ function parseQuery(v: Record<string, string | string[]>): EntryQuery & { limit:
     category: one('category'),
     uncategorized: one('uncategorized') === '1' || undefined,
     tags: list(v.tag).map(normalizeTag).filter(Boolean),
+    untagged: one('untagged') === '1' || undefined,
     exact: one('exact') === '1' || undefined,
     archived: one('archived') === '1' || undefined,
     date,
@@ -94,6 +95,7 @@ function queryWhere(q: EntryQuery): SQL | undefined {
     const match = q.exact ? sql`${tags.path} = ${tag}` : sql`(${tags.path} = ${tag} or substr(${tags.path}, 1, ${tag.length + 1}) = ${tag + TAG_SEP})`
     conds.push(sql`exists (select 1 from ${entryTags} join ${tags} on ${tags.id} = ${entryTags.tagId} where ${entryTags.entryId} = ${entries.id} and ${match})`)
   }
+  if (q.untagged) conds.push(sql`not exists (select 1 from ${entryTags} where ${entryTags.entryId} = ${entries.id})`)
   if (!q.archived) conds.push(eq(entries.archived, false))
   if (q.date) conds.push(eq(entries.date, q.date))
   if (q.channel) conds.push(sql`exists (select 1 from ${ytVideos} where ${ytVideos.entryId} = ${entries.id} and ${ytVideos.channel} = ${q.channel})`)

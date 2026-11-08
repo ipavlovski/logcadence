@@ -200,16 +200,18 @@
   overflow-x: hidden;
 }
 
-/* Canvas plugin tabs: just the plugin's icon (its name on hover). */
+/* The tags pane's type view buttons: just the view's icon (its name on hover). */
 .iconTab {
   display: grid;
   place-items: center;
   flex: none;
   width: 32px;
   height: 28px;
+  padding: 0;
   border: 1px solid transparent;
   border-bottom: none;
   border-radius: 6px 6px 0 0;
+  background: none;
   color: var(--text-muted);
   cursor: pointer;
 }
@@ -227,14 +229,7 @@
   height: 29px;
 }
 
-.vTab.vIcon {
-  writing-mode: horizontal-tb;
-  display: grid;
-  place-items: center;
-  padding: 8px 0;
-}
-
-/* Canvas tab bar, right end: following the journal's day or not (ctrl+l). */
+/* Tags pane tab bar, right end: the type views following the journal's day or not (ctrl+l). */
 .follow {
   display: grid;
   place-items: center;
@@ -254,7 +249,7 @@
   color: var(--accent);
 }
 
-/* The preview day tab: replaced by the next day opened, until double-clicked. */
+/* The preview tabs (a day, a query): replaced by the next one opened, until double-clicked. */
 .preview .tabLabel {
   font-style: italic;
 }

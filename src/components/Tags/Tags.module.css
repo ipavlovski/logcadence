@@ -359,3 +359,90 @@
   font-size: 12px;
   color: var(--text-muted);
 }
+
+/* A query's facet in its view's header, with its × */
+.facet {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 15px;
+  margin-right: 8px;
+  padding: 0 2px 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.facet button {
+  border: none;
+  background: none;
+  color: var(--text-faint);
+  padding: 0 6px;
+  cursor: pointer;
+}
+
+.facet button:hover {
+  color: var(--text);
+}
+
+button.entryType,
+button.entryCategory {
+  background: none;
+  cursor: pointer;
+}
+
+button.entryType:hover,
+button.entryCategory:hover {
+  color: var(--text);
+}
+
+/* The browser's types and categories (MetaBrowser). */
+.metaList {
+  list-style: none;
+  margin: 0 0 18px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.metaList li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 10px;
+}
+
+.metaItem,
+.metaSub {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  background: none;
+  padding: 2px 4px;
+  border-radius: 4px;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.metaSub {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.metaItem:hover,
+.metaSub:hover {
+  background: var(--selection);
+}
+
+.metaIcon {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+}
+
+.metaIcon svg {
+  width: 16px;
+  height: 16px;
+}

@@ -75,7 +75,7 @@ interface Prefs {
   expanded: string[]
   /** The tags pane's focus shortcut (ctrl+2) restores it when minimized; off, the shortcut skips it while minimized. */
   openHiddenPane: boolean
-  /** Canvas tabs show (or scroll to) the journal's day, instead of browsing days of their own (state/canvasDay.ts). */
+  /** The type views show (or scroll to) the journal's day, instead of browsing days of their own (state/canvasDay.ts). */
   canvasFollowsJournal: boolean
   /** Types a day tab shows; empty: all of them. */
   journalTypes: EntryType[]

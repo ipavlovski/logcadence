@@ -4,7 +4,8 @@ import { openChat } from './state/ai.ts'
 import { bookmarksNav } from './state/captures.ts'
 import { emitChange } from './state/bus.ts'
 import { journalStore, requestReveal } from './state/journal.ts'
-import { activeJournalDate, openDate, openLoc, panesStore, parseKey, pluginKey } from './state/panes.ts'
+import { parseQuery } from '../shared/query.ts'
+import { activeJournalDate, openDate, panesStore, showTypeView, tabQuery } from './state/panes.ts'
 import { notify, openNewEntry, type NewEntryDefaults } from './state/ui.ts'
 import { openVideo } from './state/youtube.ts'
 
@@ -34,14 +35,14 @@ export async function createEntry(opts: NewEntryDefaults & { title?: string; con
 
 /**
  * Defaults for a new entry, inherited from where the user is: the journal cursor's entry
- * (same day, category and tags, placed right after it) or the tag open in the tags pane, when that has focus.
+ * (same day, category and tags, placed right after it) or the query open in the tags pane (its category and tags), when that has focus.
  */
 export function newEntryDefaults(): NewEntryDefaults {
-  const { focus, panes } = panesStore.get()
+  const s = panesStore.get()
   const date = activeJournalDate()
-  if (focus === 'tags') {
-    const loc = parseKey(panes.tags.active)
-    return { date, tags: loc.kind === 'tag' ? [loc.tag] : [] }
+  if (s.focus === 'tags') {
+    const q = parseQuery(tabQuery(s, s.panes.tags.active))
+    return { date, category: q.category ?? null, tags: q.tags ?? [] }
   }
   const cursor = journalStore.get().cursor
   if (cursor && cursor.date === date) return { date, category: cursor.category, tags: cursor.tags, afterEntryId: cursor.entryId }
@@ -57,8 +58,8 @@ export function newEntryWithDialog() {
 }
 
 /**
- * Opens an entry that has a view of its own: an AI chat in the AI tab (at the prompt of `nodeId`), a video, a bookmark
- * or a media item in theirs. False for a journal entry, which shows in its day.
+ * Opens an entry that has a view of its own, in the tags pane: an AI chat in the AI view (at the prompt of `nodeId`), a
+ * video, a bookmark or a media item in theirs. False for a journal entry, which shows in its day.
  */
 export function openItem(entry: EntryDTO, nodeId?: string): boolean {
   if (entry.chat) {
@@ -69,6 +70,6 @@ export function openItem(entry: EntryDTO, nodeId?: string): boolean {
   const d = entry.detail
   if (d?.kind === 'video') openVideo(d.id)
   else if (d?.kind === 'bookmark') bookmarksNav.open(d.id)
-  else if (d?.kind === 'media') openLoc('canvas', pluginKey('images'))
+  else if (d?.kind === 'media') showTypeView('media')
   return !!d
 }

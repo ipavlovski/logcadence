@@ -10,7 +10,9 @@ import { emitChange, useRevision } from '../../state/bus.ts'
 import { useCommand } from '../../state/commands.ts'
 import { requestReveal } from '../../state/journal.ts'
 import { openItem } from '../../actions.ts'
-import { openDate, openTag } from '../../state/panes.ts'
+import { typeRef } from '../../../shared/entryTypes.ts'
+import { queryLabel, queryToString, type Query } from '../../../shared/query.ts'
+import { openDate, openQuery, openTag, setTabQuery } from '../../state/panes.ts'
 import { useStore } from '../../state/store.ts'
 import { notify, prefsStore, setPref } from '../../state/ui.ts'
 import { ImageGallery, MediaThumb } from '../ImageGallery/ImageGallery.tsx'
@@ -19,21 +21,36 @@ import { TagChip } from '../TagChip/TagChip.tsx'
 import { startTagOp } from './tagOps.ts'
 import styles from './Tags.module.css'
 
+/** URL parameters as an object, `type` and `tag` (which repeat) as arrays: as the API client sends them. */
+function paramsOf(query: string): Record<string, string | string[]> {
+  const p = new URLSearchParams(query)
+  return Object.fromEntries([...new Set(p.keys())].map((k) => [k, k === 'type' || k === 'tag' ? p.getAll(k) : p.get(k)!]))
+}
+
 /** Selection keys: `e:<entryId>` or `n:<nodeId>`. */
 type Sel = Set<string>
 
-/** Read-only listing of everything under a tag, newest first; archive to keep it fresh. */
-export function TagView({ tag, find }: { tag: string; find: string }) {
+/** Read-only listing of the entries a query matches (of every type), newest first; archive to keep it fresh. */
+export function QueryView({ tabKey, query, find }: { tabKey: string; query: Query; find: string }) {
   const rev = useRevision()
   const showArchived = useStore(prefsStore, (s) => s.showArchived)
   const includeSub = useStore(prefsStore, (s) => s.includeSubtags)
   const [sel, setSel] = useState<Sel>(new Set())
   const q = find.trim()
+  const queryId = queryToString(query)
+  // A view of one tag: its crumbs and the tag's operations.
+  const tag = query.tags?.length === 1 && queryToString({ tags: query.tags }) === queryId ? query.tags[0]! : null
 
-  const { data, error } = useFetch(`${tag}|${showArchived}|${includeSub}|${rev}`, (signal) =>
-    unwrap(api.tags.entries.$get({ query: { tag, archived: showArchived ? '1' : '0', sub: includeSub ? '1' : '0' } }, { init: { signal } })),
+  const { data, error } = useFetch(`${queryId}|${showArchived}|${includeSub}|${rev}`, (signal) =>
+    unwrap(
+      api.entries.$get(
+        // The query string as GET /entries reads it (repeated type and tag); its client types are the parsed query's.
+        { query: { ...paramsOf(queryId), archived: showArchived ? '1' : '0', exact: includeSub ? '0' : '1' } as never },
+        { init: { signal } },
+      ),
+    ).then((d) => ({ queryId, entries: d.entries })),
   )
-  const all = data?.tag === tag ? data.entries : undefined
+  const all = data?.queryId === queryId ? data.entries : undefined
 
   const visible = useMemo(() => {
     if (!all || !q) return all ?? []
@@ -120,37 +137,47 @@ export function TagView({ tag, find }: { tag: string; find: string }) {
   return (
     <div className={styles.view} onClick={(e) => e.target === e.currentTarget && setSel(new Set())}>
       <header className={styles.viewHeader}>
-        <h2 className={styles.viewTitle}>
-          {ancestors(tag).map((a) => (
-            <span key={a}>
-              <button className={styles.crumb} onClick={(e) => openTag(a, { newTab: e.ctrlKey || e.metaKey })}>
-                {tagName(a)}
-              </button>
-              <span className={styles.sep}>:</span>
-            </span>
-          ))}
-          <span>{tagName(tag)}</span>
-        </h2>
+        {tag ? (
+          <h2 className={styles.viewTitle}>
+            {ancestors(tag).map((a) => (
+              <span key={a}>
+                <button className={styles.crumb} onClick={(e) => openTag(a, { newTab: e.ctrlKey || e.metaKey })}>
+                  {tagName(a)}
+                </button>
+                <span className={styles.sep}>/</span>
+              </span>
+            ))}
+            <span>{tagName(tag)}</span>
+          </h2>
+        ) : (
+          <Facets tabKey={tabKey} query={query} />
+        )}
         <span className={styles.muted}>{all ? `${all.length} ${all.length === 1 ? 'entry' : 'entries'}` : ''}</span>
         <div className={styles.toolbar}>
           <label className={styles.toggle} title="Show archived entries and nodes (greyed out)">
             <input type="checkbox" checked={showArchived} onChange={(e) => setPref('showArchived', e.target.checked)} /> archived
           </label>
-          <label className={styles.toggle} title="Include entries of sub-tags">
-            <input type="checkbox" checked={includeSub} onChange={(e) => setPref('includeSubtags', e.target.checked)} /> sub-tags
-          </label>
-          <button onClick={() => startTagOp({ op: 'rename', tag })}>rename</button>
-          <button onClick={() => startTagOp({ op: 'merge', tag })}>merge</button>
-          <button
-            disabled={!entryIdsSelected.length}
-            title={entryIdsSelected.length ? 'Move selected entries into a sub-tag' : 'Select entries first (click / shift+click)'}
-            onClick={() => startTagOp({ op: 'branch', tag, entryIds: entryIdsSelected })}
-          >
-            branch
-          </button>
-          <button className={styles.danger} onClick={() => startTagOp({ op: 'delete', tag })}>
-            delete
-          </button>
+          {!!query.tags?.length && (
+            <label className={styles.toggle} title="Include entries of sub-tags">
+              <input type="checkbox" checked={includeSub} onChange={(e) => setPref('includeSubtags', e.target.checked)} /> sub-tags
+            </label>
+          )}
+          {tag && (
+            <>
+              <button onClick={() => startTagOp({ op: 'rename', tag })}>rename</button>
+              <button onClick={() => startTagOp({ op: 'merge', tag })}>merge</button>
+              <button
+                disabled={!entryIdsSelected.length}
+                title={entryIdsSelected.length ? 'Move selected entries into a sub-tag' : 'Select entries first (click / shift+click)'}
+                onClick={() => startTagOp({ op: 'branch', tag, entryIds: entryIdsSelected })}
+              >
+                branch
+              </button>
+              <button className={styles.danger} onClick={() => startTagOp({ op: 'delete', tag })}>
+                delete
+              </button>
+            </>
+          )}
         </div>
       </header>
 
@@ -168,7 +195,7 @@ export function TagView({ tag, find }: { tag: string; find: string }) {
       )}
 
       {error && <p className={styles.error}>{error.message}</p>}
-      {all && !visible.length && <p className={styles.muted}>{q ? `Nothing matches “${q}”.` : 'No entries under this tag.'}</p>}
+      {all && !visible.length && <p className={styles.muted}>{q ? `Nothing matches “${q}”.` : 'No entries match.'}</p>}
 
       {byDate.map(([date, list]) => (
         <section key={date} className={styles.card}>
@@ -191,11 +218,23 @@ export function TagView({ tag, find }: { tag: string; find: string }) {
                 <div className={styles.entryHead}>
                   <div className={styles.entryMain}>
                     <div className={styles.entryTitle}>
-                      {entry.type !== 'journal' && <span className={styles.entryType}>{typeLabel(entry)}</span>}
+                      {entry.type !== 'journal' && (
+                        <button
+                          className={styles.entryType}
+                          title={`Every ${typeLabel(entry)} entry`}
+                          onClick={(e) => openQuery({ types: [typeRef(entry.type, entry.subtype)] }, { newTab: e.ctrlKey || e.metaKey })}
+                        >
+                          {typeLabel(entry)}
+                        </button>
+                      )}
                       {entry.title ? mark(entry.title, q) : <span className={styles.muted}>untitled</span>}
                     </div>
                     <div className={styles.entryTags}>
-                      {entry.category && <span className={styles.entryCategory}>{entry.category}</span>}
+                      {entry.category && (
+                        <button className={styles.entryCategory} title={`Everything filed under ${entry.category}`} onClick={(e) => openQuery({ category: entry.category! }, { newTab: e.ctrlKey || e.metaKey })}>
+                          {entry.category}
+                        </button>
+                      )}
                       {entry.tags.map((t) => (
                         <TagChip key={t} tag={t} />
                       ))}
@@ -222,5 +261,30 @@ export function TagView({ tag, find }: { tag: string; find: string }) {
         </section>
       ))}
     </div>
+  )
+}
+
+/** A query's facets, each removable (the tab shows the query without it). */
+function Facets({ tabKey, query }: { tabKey: string; query: Query }) {
+  const facets: { label: string; without: Query }[] = [
+    ...(query.types ?? []).map((t) => ({ label: queryLabel({ types: [t] }), without: { ...query, types: query.types!.filter((x) => x !== t) } })),
+    ...(query.category ? [{ label: query.category, without: { ...query, category: undefined } }] : []),
+    ...(query.uncategorized ? [{ label: 'uncategorized', without: { ...query, uncategorized: undefined } }] : []),
+    ...(query.channel ? [{ label: query.channel, without: { ...query, channel: undefined } }] : []),
+    ...(query.site ? [{ label: query.site, without: { ...query, site: undefined } }] : []),
+    ...(query.tags ?? []).map((t) => ({ label: `#${t}`, without: { ...query, tags: query.tags!.filter((x) => x !== t) } })),
+    ...(query.untagged ? [{ label: 'untagged', without: { ...query, untagged: undefined } }] : []),
+  ]
+  return (
+    <h2 className={styles.viewTitle}>
+      {facets.map((f) => (
+        <span key={f.label} className={styles.facet}>
+          {f.label}
+          <button title={`Without ${f.label}`} aria-label={`Remove ${f.label}`} onClick={() => setTabQuery(tabKey, f.without)}>
+            ×
+          </button>
+        </span>
+      ))}
+    </h2>
   )
 }

@@ -421,9 +421,9 @@ describe('tags, notes and comments', () => {
   })
 
   it('renames (merging), then deletes a tag subtree', async () => {
-    await req('POST', '/api/youtube/tags/move', { from: 'build/pump', to: 'build/well' })
+    await req('POST', '/api/tags/rename', { from: 'build/pump', to: 'build/well' })
     expect((await req<YtVideoDTO>('GET', `/api/youtube/videos/${V(2).id}`)).tags).toEqual(['build/well'])
-    await req('POST', '/api/youtube/tags/delete', { path: 'build/well' })
+    await req('POST', '/api/tags/delete', { tag: 'build/well' })
     const { tags, videos } = await req<YtLibraryDTO>('GET', '/api/youtube/library')
     expect(tags).toEqual([])
     expect(videos.every((v) => !v.tags.length)).toBe(true)

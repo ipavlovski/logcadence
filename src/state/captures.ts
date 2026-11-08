@@ -2,11 +2,11 @@ import { isIsoDate } from '../../shared/dates.ts'
 import { HANDLER_IDS } from '../../shared/handlers.ts'
 import type { HandlerId } from '../../shared/types.ts'
 import { normalizeTag } from '../../shared/tags.ts'
-import { openLoc, panesStore, pluginKey } from './panes.ts'
+import { activeTypeView, showTypeView } from './panes.ts'
 import { createStore, persistedStore, type Store } from './store.ts'
 
-// The Bookmarks canvas tab (pages captured by the Chrome extension): the open capture (null = the listing), the
-// listing's filter, handler and search, and a history that alt+left/right walk, like the YouTube tab's
+// The Bookmarks view (tags pane; pages captured by the Chrome extension): the open capture (null = the listing), the
+// listing's filter, handler and search, and a history that alt+left/right walk, like the YouTube view's
 // (state/youtube.ts): capture clicks are steps, each listing step with its scroll position.
 
 /** A tag path (captures with it or a tag under it), captures without tags, or one site's (a subreddit's) captures. */
@@ -177,7 +177,7 @@ function createNav(plugin: string): CaptureNav {
     saveAnchor,
     open(itemId) {
       navigate((s) => (s.itemId === itemId ? s : pushStep(s, { itemId })))
-      openLoc('canvas', pluginKey(plugin))
+      showTypeView('bookmark')
     },
     home: () => navigate((s) => pushStep(s, { itemId: null, anchor: null, filter: null })),
     backToListing: () => navigate(toListing),
@@ -203,7 +203,7 @@ function createNav(plugin: string): CaptureNav {
       if (open && store.get().itemId !== null) navigate((s) => pushStep(s, { itemId: null, anchor: null }))
       store.set((s) => ({ ...s, handlers: open }))
     },
-    isActive: () => panesStore.get().panes.canvas.active === pluginKey(plugin),
+    isActive: () => activeTypeView() === 'bookmark',
     revision,
     bump: () => revision.set((n) => n + 1),
   }

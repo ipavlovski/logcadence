@@ -4,15 +4,10 @@ import { validator } from 'hono/validator'
 import type { UpdateYtVideoBody, YtImageSection } from '../../shared/types.ts'
 import { addImage, addingPlaylists, addPlaylist, deleteImage, deleteVideo, getVideo, importAll, importPlaylist, library, listPlaylists, removePlaylist, reorderImages, updateVideo } from '../lib/youtube/library.ts'
 import { saveUpload } from '../lib/media.ts'
-import { db } from '../db/client.ts'
-import { deleteTag, moveTag } from '../lib/content.ts'
-import { logEvent } from '../lib/events.ts'
-import { touchDates } from '../lib/journalFiles.ts'
 import { checkKey } from '../lib/youtube/dataApi.ts'
 import { YoutubeError } from '../lib/youtube/playlist.ts'
 import { publicSettings, saveSettings } from '../lib/youtube/settings.ts'
 import { thumbStatus } from '../lib/youtube/thumbs.ts'
-import { normalizeTag } from '../../shared/tags.ts'
 import { bad, defined, notFound, obj, optBool, optStr, optStrArr, optStrOrNull, str } from '../lib/validate.ts'
 
 // Screen recordings are the big ones.
@@ -38,7 +33,6 @@ function parseUpdate(v: unknown): UpdateYtVideoBody {
 const SECTIONS: YtImageSection[] = ['notes', 'comments']
 const section = (v: string | undefined): YtImageSection => (SECTIONS.includes(v as YtImageSection) ? (v as YtImageSection) : bad('section must be notes or comments'))
 
-const tagPath = (o: Record<string, unknown>, k: string) => normalizeTag(str(o, k)) || bad(`${k} must be a tag`)
 
 
 export const youtubeRoutes = new Hono()
@@ -78,30 +72,6 @@ export const youtubeRoutes = new Hono()
   )
   .delete('/youtube/images/:id', (c) => c.json(deleteImage(c.req.param('id'))))
 
-  // ── tags: the one tag set (kept here for the tab and the MCP server) ──
-  .post(
-    '/youtube/tags/move',
-    validator('json', (v) => {
-      const o = obj(v)
-      return { from: tagPath(o, 'from'), to: tagPath(o, 'to') }
-    }),
-    (c) => {
-      const { from, to } = c.req.valid('json')
-      touchDates(...db.transaction(() => moveTag(from, to)))
-      logEvent('tag', from, 'edit', { renameTo: to })
-      return c.json({ ok: true })
-    },
-  )
-  .post(
-    '/youtube/tags/delete',
-    validator('json', (v) => ({ path: tagPath(obj(v), 'path') })),
-    (c) => {
-      const { path } = c.req.valid('json')
-      touchDates(...db.transaction(() => deleteTag(path)))
-      logEvent('tag', path, 'delete')
-      return c.json({ ok: true })
-    },
-  )
 
   // ── playlists and the importer ──
   .get('/youtube/playlists', (c) => c.json({ playlists: listPlaylists(), adding: addingPlaylists(), settings: publicSettings(), thumbs: thumbStatus() }))

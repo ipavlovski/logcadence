@@ -4,7 +4,7 @@ import { HANDLERS, handlerById, type CaptureHandler } from '../../../shared/hand
 import { isUnder } from '../../../shared/tags.ts'
 import type { CaptureDTO, CaptureLibraryDTO, CaptureSection, CaptureSummary, HandlerId, UpdateCaptureBody } from '../../../shared/types.ts'
 import { api, unwrap } from '../../api.ts'
-import type { CanvasPluginProps } from '../../canvas/plugins.ts'
+import type { TypeViewProps } from '../../canvas/plugins.ts'
 import { useFetch } from '../../hooks/useFetch.ts'
 import { bookmarksNav as nav, type CaptureAnchor, type CaptureFilter } from '../../state/captures.ts'
 import { useFollowJournal } from '../../state/canvasDay.ts'
@@ -14,21 +14,22 @@ import { useStore } from '../../state/store.ts'
 import { notify } from '../../state/ui.ts'
 import { CategoryPicker } from '../CategoryPicker/CategoryPicker.tsx'
 import { TagInput } from '../TagInput/TagInput.tsx'
+import { startTagOp } from '../Tags/tagOps.ts'
 import { ArrowIcon, dayLabel, scrollParent, SearchIcon, TextSection } from '../Youtube/Youtube.tsx'
 import yt from '../Youtube/Youtube.module.css'
 import styles from './Captures.module.css'
 
-// Canvas "Bookmarks" tab: pages captured by the Chrome extension (extension/), listed like the YouTube tab (grouped
+// The Bookmarks view (tags pane): pages captured by the Chrome extension (extension/), listed like the YouTube view (grouped
 // by the day they were captured), and a page per capture with its screenshot, tags and notes. What's special about
 // some sites comes from the capture's handler (shared/handlers.ts): a Reddit post's subreddit, score and comments, a
-// Marketplace listing's price and seller. The Handlers view lists them. The look is the YouTube tab's.
+// Marketplace listing's price and seller. The Handlers view lists them. The look is the YouTube view's.
 
 const PAGE = 48
 // How often an open tab checks for captures sent by the extension.
 const POLL_MS = 3000
 const fail = (err: Error) => notify(err.message)
 
-export const Bookmarks = (_: CanvasPluginProps) => <CapturesTab />
+export const Bookmarks = (_: TypeViewProps) => <CapturesTab />
 
 function useLibrary() {
   const rev = useStore(nav.revision, (n) => n)
@@ -83,8 +84,8 @@ function useShown(lib: CaptureLibraryDTO | undefined, filter: CaptureFilter, han
 function CapturesTab() {
   const itemId = useStore(nav.store, (s) => s.itemId)
   const handlers = useStore(nav.store, (s) => s.handlers)
-  useCommand('canvas.back', () => nav.go(-1))
-  useCommand('canvas.forward', () => nav.go(1))
+  useCommand('tags.back', () => nav.go(-1))
+  useCommand('tags.forward', () => nav.go(1))
   useCaptureUpdates()
   // Following the journal's day (ctrl+l): the listing scrolls to it, leaving an open capture alone.
   useFollowJournal((d) => nav.store.get().itemId === null && nav.jumpToDate(d), { key: nav.plugin })
@@ -355,21 +356,9 @@ function SiteBar({ site, lib, count }: { site: string; lib: CaptureLibraryDTO; c
 }
 
 function TagActions({ path, count }: { path: string; count: number }) {
-  const rename = () => {
-    const to = prompt(`Rename #${path} (and the tags under it) to:`, path)
-    if (!to || to === path) return
-    unwrap(api.captures.tags.move.$post({ json: { from: path, to } })).then(() => {
-      nav.setFilter({ kind: 'tag', path: to.trim().toLowerCase() })
-      nav.bump()
-    }, fail)
-  }
-  const remove = () => {
-    if (!confirm(`Remove #${path} and the tags under it from every bookmark? The bookmarks stay.`)) return
-    unwrap(api.captures.tags.delete.$post({ json: { path } })).then(() => {
-      nav.setFilter(null)
-      nav.bump()
-    }, fail)
-  }
+  // The tag set is every entry's: the tags pane's dialogs rename and delete it everywhere.
+  const rename = () => startTagOp({ op: 'rename', tag: path })
+  const remove = () => startTagOp({ op: 'delete', tag: path })
   return (
     <div className={yt.tagBar}>
       <span className={yt.tagName}>#{path}</span>

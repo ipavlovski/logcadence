@@ -1,14 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import { Hono } from 'hono'
 import { validator } from 'hono/validator'
-import { normalizeTag } from '../../shared/tags.ts'
 import type { CaptureFields, CaptureRequest, CaptureSection, UpdateCaptureBody } from '../../shared/types.ts'
 import { addImage, capture, captureRevision, deleteCapture, deleteImage, getCapture, library, reorderImages, updateCapture } from '../lib/captures.ts'
 import { saveUpload } from '../lib/media.ts'
-import { db } from '../db/client.ts'
-import { deleteTag, moveTag } from '../lib/content.ts'
-import { logEvent } from '../lib/events.ts'
-import { touchDates } from '../lib/journalFiles.ts'
 import { bad, defined, notFound, obj, optNum, optStr, optStrArr, optStrOrNull, str, type Obj } from '../lib/validate.ts'
 
 // The Bookmarks tab, and POST /capture, where the Chrome extension (extension/) sends a page.
@@ -21,7 +16,6 @@ const MAX_UPLOAD = 500 * 1024 * 1024
 
 const SECTIONS: CaptureSection[] = ['notes', 'comments']
 const section = (v: string | undefined): CaptureSection => (SECTIONS.includes(v as CaptureSection) ? (v as CaptureSection) : bad('section must be notes or comments'))
-const tagPath = (o: Obj, k: string) => normalizeTag(str(o, k)) || bad(`${k} must be a tag`)
 
 /** An object of strings and numbers; which keys a capture keeps is up to its handler (cleanFields). */
 function optFields(o: Obj, k: string): CaptureFields | undefined {
@@ -125,27 +119,3 @@ export const captureRoutes = new Hono()
   )
   .delete('/captures/images/:id', (c) => c.json(deleteImage(c.req.param('id'))))
 
-  // ── tags ──
-  .post(
-    '/captures/tags/move',
-    validator('json', (v) => {
-      const o = obj(v)
-      return { from: tagPath(o, 'from'), to: tagPath(o, 'to') }
-    }),
-    (c) => {
-      const { from, to } = c.req.valid('json')
-      touchDates(...db.transaction(() => moveTag(from, to)))
-      logEvent('tag', from, 'edit', { renameTo: to })
-      return c.json({ ok: true })
-    },
-  )
-  .post(
-    '/captures/tags/delete',
-    validator('json', (v) => ({ path: tagPath(obj(v), 'path') })),
-    (c) => {
-      const { path } = c.req.valid('json')
-      touchDates(...db.transaction(() => deleteTag(path)))
-      logEvent('tag', path, 'delete')
-      return c.json({ ok: true })
-    },
-  )

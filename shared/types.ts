@@ -199,6 +199,8 @@ export interface EntryQuery {
   uncategorized?: boolean
   /** Every one of them (with its subtree, unless `exact`). */
   tags?: string[]
+  /** Only entries without tags. */
+  untagged?: boolean
   exact?: boolean
   archived?: boolean
   date?: string
@@ -217,6 +219,9 @@ export interface TagInfo {
 
 export interface SearchHit {
   entryId: string
+  type: EntryType
+  subtype: string | null
+  category: string | null
   /** Null when the entry title matched. */
   nodeId: string | null
   date: string

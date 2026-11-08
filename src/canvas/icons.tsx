@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-// Line icons for the canvas tab bar, one per plugin: 24-unit grid, drawn in currentColor.
+// Line icons for the type views (the tags pane's tab bar): 24-unit grid, drawn in currentColor.
 
 const Icon = ({ children }: { children: ReactNode }) => (
   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>

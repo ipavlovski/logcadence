@@ -232,10 +232,10 @@ describe('the tab', () => {
     ])
 
     // A tag is the same tag on a post and a page.
-    await req('POST', '/api/captures/tags/move', { from: 'homelab', to: 'lab' })
+    await req('POST', '/api/tags/rename', { from: 'homelab', to: 'lab' })
     expect((await req<CaptureDTO>('GET', `/api/captures/items/${post.id}`)).tags).toEqual(['lab/storage', 'nas'])
     expect((await req<CaptureDTO>('GET', `/api/captures/items/${mark.id}`)).tags).toEqual(['lab'])
-    await req('POST', '/api/captures/tags/delete', { path: 'lab' })
+    await req('POST', '/api/tags/delete', { tag: 'lab' })
     expect((await req<CaptureDTO>('GET', `/api/captures/items/${post.id}`)).tags).toEqual(['nas'])
     expect((await library()).tags.map((t) => t.path)).toEqual(['nas'])
   })

@@ -12,6 +12,7 @@ import { openSpotlight, uiStore, type SpotlightMode } from '../../state/ui.ts'
 import { rankTags } from '../../tagSearch.ts'
 import { mark } from '../Markdown/Markdown.tsx'
 import { Modal } from '../Modal/Modal.tsx'
+import { typeLabel } from '../../entryView.ts'
 import styles from './Spotlight.module.css'
 
 export function Spotlight() {
@@ -107,7 +108,13 @@ function SpotlightDialog({ mode }: { mode: SpotlightMode }) {
                 <div className={styles.hitHead}>
                   <span className={styles.date}>{formatJournalDate(item.hit.date)}</span>
                   <span className={styles.hitTitle}>{mark(item.hit.title || 'untitled', q)}</span>
-                  {item.hit.tags[0] && <span className={styles.tag}>#{item.hit.tags[0]}</span>}
+                  {item.hit.type !== 'journal' && <span className={styles.meta}>{typeLabel(item.hit)}</span>}
+                  {item.hit.category && <span className={styles.category}>{item.hit.category}</span>}
+                  {item.hit.tags.slice(0, 2).map((t) => (
+                    <span key={t} className={styles.tag}>
+                      #{t}
+                    </span>
+                  ))}
                 </div>
                 {item.hit.snippet && <div className={styles.snippet}>{mark(item.hit.snippet, q.split(/\s+/)[0] ?? '')}</div>}
               </div>

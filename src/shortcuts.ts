@@ -54,12 +54,12 @@ export const BINDINGS: Binding[] = [
   { keys: ['mod+2', 'alt+2'], label: 'Focus tags pane', group: 'Navigation', run: focusOn('tags'), inInputs: true, about: 'tags' },
   { keys: ['mod+t', 'alt+t'], label: 'Show / hide tags pane', group: 'Navigation', run: toggle('tags'), inInputs: true, about: 'tags' },
   { keys: ['mod+l'], label: 'Canvas follows the journal’s day (on / off)', group: 'Navigation', run: () => toggleFollowJournal(), inInputs: true, about: 'canvas' },
-  { keys: ['mod+h'], label: 'Home tab (today / tag tree)', group: 'Navigation', run: (p) => openLoc(p, PRIMARY[p]), inInputs: true },
-  // A canvas tab keeps its own history (the active tab registers canvas.back/forward: the journal's are the days it
-  // showed); the tags pane steps through its tabs.
-  { keys: ['alt+arrowleft'], label: 'Back', group: 'Navigation', run: (p) => (p === 'canvas' ? runCommand('canvas.back') : goHistory(p, -1)) },
-  { keys: ['alt+arrowright'], label: 'Forward', group: 'Navigation', run: (p) => (p === 'canvas' ? runCommand('canvas.forward') : goHistory(p, 1)) },
-  { keys: ['mod+j'], label: 'YouTube: jump to date', group: 'Navigation', pane: 'canvas', run: () => openYtJump(), inInputs: true },
+  { keys: ['mod+h'], label: 'Home tab (Today / the tags pane’s preview)', group: 'Navigation', run: (p) => openLoc(p, PRIMARY[p]), inInputs: true },
+  // The canvas steps through the days opened (the day tab registers canvas.back/forward); the tags pane through a type
+  // view's own history (the view registers tags.back/forward), else through the queries it showed.
+  { keys: ['alt+arrowleft'], label: 'Back', group: 'Navigation', run: (p) => (p === 'canvas' ? runCommand('canvas.back') : runCommand('tags.back') || goHistory(p, -1)) },
+  { keys: ['alt+arrowright'], label: 'Forward', group: 'Navigation', run: (p) => (p === 'canvas' ? runCommand('canvas.forward') : runCommand('tags.forward') || goHistory(p, 1)) },
+  { keys: ['mod+j'], label: 'YouTube: jump to date', group: 'Navigation', pane: 'tags', run: () => openYtJump(), inInputs: true },
   { keys: ['mod+n', 'alt+n'], label: 'New entry at cursor', group: 'Journal', run: () => newEntryAtCursor(), inInputs: true, about: 'journal' },
   { keys: ['mod+shift+n', 'alt+shift+n'], label: 'New entry…', group: 'Journal', run: () => newEntryWithDialog(), inInputs: true, about: 'journal' },
   { keys: ['mod+['], label: 'Previous day', group: 'Journal', pane: 'canvas', when: onJournal, run: () => stepDay(-1), inInputs: true, about: 'journal' },

@@ -1,68 +1,55 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { canvasTabsStore, moveCanvasTab, resetCanvasTabs, setCanvasTabShown, syncCanvasPlugins, visibleCanvasTabs } from './state/canvasTabs.ts'
 import { today } from '../shared/dates.ts'
-import { activateTab, activeJournalDate, closeAllTabs, closeTab, cycleTab, goDayHistory, openDate, openLoc, paneTabs, panesStore, pinPreviewDay, revivePanes, stepDay } from './state/panes.ts'
+import {
+  activateTab,
+  activeJournalDate,
+  activeTypeView,
+  closeAllTabs,
+  closeTab,
+  closeTagTabs,
+  goDayHistory,
+  goHistory,
+  openDate,
+  openLoc,
+  openQuery,
+  openTag,
+  paneTabs,
+  panesStore,
+  pinPreviewDay,
+  pinPreviewQuery,
+  renameTagTabs,
+  revivePanes,
+  setTabQuery,
+  stepDay,
+} from './state/panes.ts'
 
 const canvas = () => paneTabs('canvas')
 const active = () => panesStore.get().panes.canvas.active
 
+const tags = () => paneTabs('tags')
+const tagsActive = () => panesStore.get().panes.tags.active
+const preview = () => panesStore.get().previewQuery
+
 beforeEach(() => {
-  resetCanvasTabs(['map', 'youtube', 'ai'])
   closeAllTabs('canvas')
+  closeAllTabs('tags')
   openLoc('canvas', 'journal')
-})
-
-describe('canvas tabs', () => {
-  it('keeps saved order and hidden tabs across plugin changes, adding new plugins at the end', () => {
-    moveCanvasTab('ai', -2)
-    setCanvasTabShown('map', false)
-    syncCanvasPlugins(['map', 'ai', 'youtube'])
-    expect(canvasTabsStore.get()).toEqual({ order: ['ai', 'map', 'youtube'], hidden: ['map'] })
-    expect(visibleCanvasTabs()).toEqual(['ai', 'youtube'])
-  })
-
-  it('shows the journal and every plugin shown, plus a hidden one while it is open', () => {
-    setCanvasTabShown('youtube', false)
-    expect(canvas()).toEqual(['journal', 'plugin:map', 'plugin:ai'])
-    openLoc('canvas', 'plugin:youtube')
-    expect(canvas()).toEqual(['journal', 'plugin:map', 'plugin:ai', 'plugin:youtube'])
-    // Fixed tabs don't close; the hidden one does, back to the journal.
-    closeTab('canvas', 'plugin:map')
-    expect(active()).toBe('plugin:youtube')
-    closeTab('canvas')
-    expect(active()).toBe('journal')
-    expect(canvas()).toEqual(['journal', 'plugin:map', 'plugin:ai'])
-  })
-
-  it('cycles through the tab bar order, wrapping around', () => {
-    moveCanvasTab('ai', -1)
-    cycleTab('canvas', 1)
-    expect(active()).toBe('plugin:map')
-    cycleTab('canvas', 1)
-    expect(active()).toBe('plugin:ai')
-    cycleTab('canvas', -1)
-    cycleTab('canvas', -1)
-    cycleTab('canvas', -1)
-    expect(active()).toBe('plugin:youtube')
-  })
+  openQuery('')
 })
 
 describe('day tabs', () => {
   it('opens a day in the preview tab, which the next day opened replaces; today opens in Today', () => {
-    openLoc('canvas', 'plugin:youtube')
     openDate('2026-09-20')
     expect(active()).toBe('preview-day')
     expect(activeJournalDate()).toBe('2026-09-20')
-    expect(canvas()).toEqual(['journal', 'preview-day', 'plugin:map', 'plugin:youtube', 'plugin:ai'])
+    expect(canvas()).toEqual(['journal', 'preview-day'])
     openDate('2026-09-21')
-    expect(canvas()).toEqual(['journal', 'preview-day', 'plugin:map', 'plugin:youtube', 'plugin:ai'])
+    expect(canvas()).toEqual(['journal', 'preview-day'])
     expect(activeJournalDate()).toBe('2026-09-21')
     openDate(today())
     expect(active()).toBe('journal')
     expect(activeJournalDate()).toBe(today())
-    // A plugin tab shows the journal's day of the day tab last active.
     activateTab('canvas', 'preview-day')
-    openLoc('canvas', 'plugin:ai')
     expect(activeJournalDate()).toBe('2026-09-21')
   })
 
@@ -97,7 +84,7 @@ describe('day tabs', () => {
     expect(active()).toBe('day:2026-09-20')
     closeTab('canvas', 'journal')
     closeTab('canvas', 'preview-day')
-    expect(canvas().slice(0, 3)).toEqual(['journal', 'day:2026-09-20', 'plugin:map'])
+    expect(canvas()).toEqual(['journal', 'day:2026-09-20'])
   })
 
   it('migrates the single journal tab: its day becomes the preview', () => {
@@ -122,9 +109,63 @@ describe('day tabs', () => {
     expect(s.previewDay).toBe('2026-09-20')
     expect(s.dayHistory).toEqual(['2026-09-20'])
     expect(s.panes.canvas.active).toBe('preview-day')
-    expect(s.panes.tags.active).toBe('tag:dev')
+    expect(s.panes.tags.active).toBe('q:tag=dev')
     expect(s.focus).toBe('canvas')
     expect(s.open).toEqual({ canvas: true, tags: true })
     expect(Object.keys(s.weights).sort()).toEqual(['canvas', 'tags'])
+  })
+})
+
+describe('tags pane', () => {
+  it('shows what was clicked in the preview, and a query of its own in a tab (ctrl+click or double-click)', () => {
+    openTag('dev/react')
+    expect([tags(), tagsActive(), preview()]).toEqual([['preview'], 'preview', 'tag=dev%2Freact'])
+    openQuery({ types: ['video'], channel: 'WOT' })
+    expect(preview()).toBe('type=video&channel=WOT')
+    expect(activeTypeView()).toBe('video')
+    openQuery({ category: 'build' }, { newTab: true })
+    expect([tags(), tagsActive()]).toEqual([['preview', 'q:category=build'], 'q:category=build'])
+    // The same query again goes to its tab.
+    openQuery({ category: 'build' })
+    expect(preview()).toBe('type=video&channel=WOT')
+    activateTab('tags', 'preview')
+    pinPreviewQuery()
+    expect([tags(), tagsActive(), preview()]).toEqual([['preview', 'q:type=video&channel=WOT', 'q:category=build'], 'q:type=video&channel=WOT', ''])
+    // A view's own filter (or a removed facet) retargets the tab it shows in.
+    setTabQuery('q:type=video&channel=WOT', { types: ['video'] })
+    expect(tags()).toEqual(['preview', 'q:type=video', 'q:category=build'])
+    closeTab('tags', 'q:type=video')
+    expect(tags()).toEqual(['preview', 'q:category=build'])
+  })
+
+  it('steps back through the queries shown, the preview included', () => {
+    openTag('a')
+    openTag('b')
+    goHistory('tags', -1)
+    expect([tagsActive(), preview()]).toEqual(['preview', 'tag=a'])
+    goHistory('tags', 1)
+    expect(preview()).toBe('tag=b')
+  })
+
+  it('follows tag renames and deletes in every query', () => {
+    openQuery({ tags: ['dev/react'], category: 'dev' }, { newTab: true })
+    openTag('dev/react/hooks')
+    renameTagTabs('dev', 'code')
+    expect(tags()).toEqual(['preview', 'q:category=dev&tag=code%2Freact'])
+    expect(preview()).toBe('tag=code%2Freact%2Fhooks')
+    closeTagTabs('code/react')
+    expect(tags()).toEqual(['preview', 'q:category=dev'])
+    expect(preview()).toBe('')
+  })
+
+  it('migrates the tag tree and tag tabs, and the canvas plugin tabs', () => {
+    const s = revivePanes({
+      panes: {
+        canvas: { tabs: ['journal'], active: 'plugin:youtube', history: ['plugin:youtube'], hIndex: 0 },
+        tags: { tabs: ['tree', 'tag:dev:react'], active: 'tree', history: ['tree', 'tag:dev:react'], hIndex: 1 },
+      },
+    })
+    expect(s.panes.canvas.active).toBe('journal')
+    expect(s.panes.tags).toEqual({ tabs: ['preview', 'q:tag=dev%2Freact'], active: 'preview', history: ['preview', 'q:tag=dev%2Freact'], hIndex: 1 })
   })
 })

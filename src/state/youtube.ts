@@ -1,9 +1,9 @@
 import { isIsoDate } from '../../shared/dates.ts'
 import { normalizeTag } from '../../shared/tags.ts'
-import { openLoc, panesStore, pluginKey } from './panes.ts'
+import { activeTypeView, showTypeView } from './panes.ts'
 import { createStore, persistedStore } from './store.ts'
 
-// YouTube canvas tab: the open video (null = the listing), the listing's filter and search, and its own history:
+// The YouTube view (videos in the tags pane): the open video (null = the listing), the listing's filter and search, and its own history:
 // video and logo clicks are steps that alt+left/right (and "← Videos") walk, each listing step with its scroll position.
 
 /** A tag path (videos with it or a tag under it), videos without tags, or one channel's videos; null = all. */
@@ -145,7 +145,7 @@ function navigate(fn: (s: YtState) => YtState) {
 
 export function openVideo(videoId: string) {
   navigate((s) => (s.videoId === videoId ? s : pushStep(s, { videoId })))
-  openLoc('canvas', pluginKey(YOUTUBE_PLUGIN))
+  showTypeView('video')
 }
 
 /** The YouTube logo: the whole listing (no tag or channel filter), at the top. */
@@ -162,7 +162,7 @@ export function jumpToDate(date: string) {
   navigate((s) => pushStep(s, { videoId: null, anchor: { date, offset: 0 } }))
 }
 
-export const isYoutubeActive = () => panesStore.get().panes.canvas.active === pluginKey(YOUTUBE_PLUGIN)
+export const isYoutubeActive = () => activeTypeView() === 'video'
 
 /** The back/forward buttons, and alt+left/right while the tab is shown; nothing past either end. */
 export function goYtHistory(dir: -1 | 1) {

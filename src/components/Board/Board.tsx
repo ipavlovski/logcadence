@@ -10,7 +10,7 @@ import { dayLabel } from '../Youtube/Youtube.tsx'
 import { prepare } from './thumbs.ts'
 import styles from './Board.module.css'
 
-// The Images tab: a scratchpad board, like PureRef. Pasted images, gifs and videos land under today's divider,
+// The media view (tags pane): a scratchpad board, like PureRef. Pasted images, gifs and videos land under today's divider,
 // as tiles of one height in rows; drag a tile beside another, into the gap between rows (a new row) or to another day.
 // Click selects a tile, Shift+click adds to the selection; Delete and dragging act on all of it.
 // Double-click or Space opens one large, where the arrow keys step through the board.

@@ -1,19 +1,22 @@
 # LOGCADENCE
 
 - purpose: knowledge base, similar to logseq
-- 2-pane workflow journaling app: canvas/tags
-- structure: journal with entries are first class citizens (the canvas's journal tab)
-  allow tag view on the right (tag pane) and custom render views in the canvas's other tabs
+- 2-pane workflow journaling app: canvas (days) / tags (queries)
+- structure: every item is an entry (journal entry, video, bookmark, media, AI chat), with a type/subtype,
+  one category and any number of tags; the canvas shows days, the tags pane shows entries by their metadata
 - activity tracking (maps, activity, progress, dashboard, checklists, ...) lives in a separate app: logtracker (../logtracker)
 
 
 ## UI DESCRIPTION
-- each pane can have multiple tabs
-  - canvas has the journal tab (one day at a time, with back/forward through the days shown) and custom-based types depending on a rendering plugin (e.g. youtube, bookmarks, etc.)
-  - tag pane has tabs corresponding to a tag (e.g. "system:windows")
-- each pane has a primary tab, which opens on load and cannot be closed
-  - canvas -> 'journal' tab (today on load)
-  - tags -> 'tag tree' virtual view, showing all the existing tags 
+- each pane can have multiple tabs; each has a primary tab that can't be closed
+  - canvas: Today (always today), pinned days, and a preview day tab
+    - opening a day shows it in the preview tab (replaced by the next day opened); double-click (or ctrl+click a date) pins it
+    - tabs read "2026-11-08 Sun"; a day lists every type of entry under its categories; chips filter the types shown
+  - tags: the preview tab, then queries pinned in tabs of their own
+    - any click on an entry's metadata (tag, category, type, channel, site) retargets the preview; double-click (or ctrl+click) pins it
+    - an empty preview is the browser: types, categories and the tag tree, with counts
+    - a query of one type shows in that type's view (YouTube grid, bookmarks, media board, AI chats); others as a list of entries
+    - icons at the end of the tab bar open the type views
 
 
 ## SHORTCUTS
@@ -78,10 +81,10 @@
 
 ### JOURNAL
 - the main editing view: the canvas's first tab
-- journal entries can have multiple tags, which can be viewed 
-- tags are hierarchical and separated by colon- e.g. system:windows:powertoys, design:davinci-resolve:til
-- all entries are 2-level: entry (contains title and categories) and children nodes
-- first tag is considered to be a primary tag and is used to sort the entry in the journal view
+- every entry has at most one category (design, build, fabrication, dev, notes…) and any number of tags
+- tags are hierarchical and separated by '/' - e.g. system/windows/powertoys, design/davinci-resolve/til
+- journal entries are 2-level: entry (title, category, tags) and children nodes
+- a day groups its entries by category
 - depending on the location of active cursor/button -> inherit properties (e.g. tags)
 - image handling -> nodes can have images
   pasting an image creates a large preview of an image
@@ -97,7 +100,7 @@
   archived nodes are greyed out when archived=true is on
 - should be able to 
   rename/delete/merge/branch tags
-- hierarchical tags (e.g. tidewater:blog:a, tidewater:blog:b)
+- hierarchical tags (e.g. tidewater/blog/a, tidewater/blog/b)
 - not editable, but the UI contains dated stamps (linkified, easily open date in journal)
 - ctrl+click opens up the node in the journal
 - shift+click allows multiple selection of nodes
@@ -108,12 +111,13 @@
   historical view is when 'show achived' option is toggled
 
 
-### CANVAS
-- tabs: journal (primary), youtube, bookmarks (with handlers for Reddit, Facebook Marketplace…), images, ai
+### TYPES
+- journal; video (youtube, yt = shorts, ig, tt); bookmark (page, reddit, marketplace: the handlers); media (image, video); ai (claude-chat, claude-code, gemini-chat, gemini-code)
+- videos, bookmarks, media and AI chats each have a view of their own in the tags pane
 - the rest of the old canvas (map, activity, progress, dashboard, checklists) moved to logtracker
 
 #### SHORTCUTS
-- entry type: must contain a single 'shortcuts:' category
+- entry type: tagged shortcuts/<app>
 - visualizes hotkeys from a node
 - shows keyboard, also using modifiers activates keys visually
 - actively archive old shortcuts, show warning sign by clashes
@@ -122,6 +126,6 @@
 - track all the AI prompts from today
 - eg. goole searches, gemini, claude
 - logtracker keeps its own AI history (timestamp, model, title) and links each chat back here as logcadence://ai/<id>
-  -> to do: register the logcadence:// link in the desktop app and open the chat in the AI tab
+  -> to do: register the logcadence:// link in the desktop app and open the chat in the AI view
 
 

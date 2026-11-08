@@ -1,14 +1,17 @@
 import { isIsoDate, shiftDate, today } from '../../shared/dates.ts'
+import type { EntryType } from '../../shared/entryTypes.ts'
+import { isEmptyQuery, normalizeQuery, parseQuery, queryToString, typeView, type Query } from '../../shared/query.ts'
 import { isUnder, normalizeTag } from '../../shared/tags.ts'
-import { visibleCanvasTabs } from './canvasTabs.ts'
 import { persistedStore } from './store.ts'
 
 // Two panes (canvas | tags), each with tabs. A tab is identified by its location key; the first tab of each pane
 // is its primary tab, which always exists and cannot be closed.
-// The canvas pane's tabs: Today (the primary tab, always today), the days pinned, the preview day, then one per plugin
-// shown (state/canvasTabs.ts), plus a hidden plugin's tab while it is active. Opening a day shows it in Today, in its
-// pinned tab, or else in the preview day tab, which each opened day replaces until it is pinned (double-click).
-// The days opened are a history of their own (alt+left/right while a day tab is active).
+// The canvas pane's tabs: Today (the primary tab, always today), the days pinned, and the preview day. Opening a day
+// shows it in Today, in its pinned tab, or else in the preview day tab, which each opened day replaces until it is
+// pinned (double-click). The days opened are a history of their own (alt+left/right while a day tab is active).
+// The tags pane's tabs show queries (shared/query.ts): entries by type, category, tags, channel… Its primary tab is
+// the preview, which every click on an entry's metadata retargets (empty: the browser of all of them); double-click
+// it, or ctrl+click the metadata, for a tab of the query's own.
 
 export type PaneId = 'canvas' | 'tags'
 export const PANES: PaneId[] = ['canvas', 'tags']
@@ -17,11 +20,10 @@ export type Loc =
   | { kind: 'journal' }
   | { kind: 'day'; date: string }
   | { kind: 'preview-day' }
-  | { kind: 'plugin'; type: string }
-  | { kind: 'tree' }
-  | { kind: 'tag'; tag: string }
+  | { kind: 'preview' }
+  | { kind: 'query'; query: string }
 
-export const PRIMARY: Record<PaneId, string> = { canvas: 'journal', tags: 'tree' }
+export const PRIMARY: Record<PaneId, string> = { canvas: 'journal', tags: 'preview' }
 /** The canvas's preview day tab. */
 export const PREVIEW_DAY = 'preview-day'
 
@@ -30,12 +32,10 @@ export function parseKey(key: string): Loc {
   const kind = i < 0 ? key : key.slice(0, i)
   const value = i < 0 ? '' : key.slice(i + 1)
   switch (kind) {
-    case 'plugin':
-      return { kind, type: value }
-    case 'tag':
-      return { kind, tag: value }
-    case 'tree':
+    case 'preview':
       return { kind }
+    case 'q':
+      return { kind: 'query', query: value }
     case 'day':
       return isIsoDate(value) ? { kind, date: value } : { kind: 'journal' }
     case PREVIEW_DAY:
@@ -45,8 +45,9 @@ export function parseKey(key: string): Loc {
   }
 }
 
-export const tagKey = (tag: string) => `tag:${tag}`
-export const pluginKey = (type: string) => `plugin:${type}`
+/** A tags pane tab of its own for a query. */
+export const queryKey = (q: Query | string) => `q:${typeof q === 'string' ? normalizeQuery(q) : queryToString(q)}`
+export const tagKey = (tag: string) => queryKey({ tags: [tag] })
 export const dayKey = (date: string) => `day:${date}`
 /** Today, a pinned day or the preview day. */
 export const isDayKey = (key: string) => ['journal', 'day', 'preview-day'].includes(parseKey(key).kind)
@@ -77,6 +78,8 @@ interface PanesState {
   /** Days opened, for back/forward. */
   dayHistory: string[]
   dayIndex: number
+  /** The tags pane's preview tab's query (queryToString); '' is the browser. */
+  previewQuery: string
 }
 
 const freshPane = (id: PaneId): PaneState => ({ tabs: [PRIMARY[id]], active: PRIMARY[id], history: [PRIMARY[id]], hIndex: 0 })
@@ -91,6 +94,7 @@ const initial: PanesState = {
   dayTab: PRIMARY.canvas,
   dayHistory: [],
   dayIndex: -1,
+  previewQuery: '',
 }
 
 function validKey(pane: PaneId, key: string): boolean {
@@ -98,26 +102,23 @@ function validKey(pane: PaneId, key: string): boolean {
   if (key !== PRIMARY[pane] && loc.kind === parseKey(PRIMARY[pane]).kind) return false
   switch (pane) {
     case 'canvas':
-      return loc.kind === 'journal' || loc.kind === 'plugin' || loc.kind === 'day' || loc.kind === 'preview-day'
+      return loc.kind === 'journal' || loc.kind === 'day' || loc.kind === 'preview-day'
     case 'tags':
-      return loc.kind === 'tree' || (loc.kind === 'tag' && !!loc.tag)
+      return loc.kind === 'preview' || (loc.kind === 'query' && !!loc.query)
   }
 }
 
-// Tabs saved under a former name or of a tab that's gone: the Shortcuts plugin became a window (ctrl+shift+?),
-// Spotify moved out of the app, Reddit merged into Bookmarks, and the dashboard, Map, Progress and Activity moved to logtracker.
-// Tag tabs saved while ':' separated tags (before 0015_tag_slash) take the '/' path.
-const RENAMED: Record<string, string> = {
-  'plugin:threads': 'journal',
-  'plugin:shortcuts': 'journal',
-  'plugin:spotify': 'journal',
-  'plugin:reddit': 'plugin:bookmarks',
-  'plugin:map': 'journal',
-  'plugin:progress': 'journal',
-  'plugin:activity': 'journal',
-  dashboard: 'journal',
+// Tabs saved under a former name or of a tab that's gone: the canvas's plugin tabs (YouTube, Bookmarks, Images, AI,
+// and the dashboard and its like before them) became types shown in the tags pane; the tag tree became the
+// preview's browser; a tag tab, a query for the tag ('/' paths since 0015_tag_slash).
+const renamed = (k: unknown) => {
+  if (typeof k !== 'string') return k
+  if (k.startsWith('plugin:') || k === 'dashboard') return PRIMARY.canvas
+  if (k === 'tree') return PRIMARY.tags
+  if (k.startsWith('tag:')) return tagKey(normalizeTag(k.slice(4)))
+  if (k.startsWith('q:')) return normalizeQuery(k.slice(2)) ? queryKey(k.slice(2)) : PRIMARY.tags
+  return k
 }
-const renamed = (k: unknown) => (typeof k !== 'string' ? k : k.startsWith('tag:') ? tagKey(normalizeTag(k.slice(4))) : (RENAMED[k] ?? k))
 
 /** A saved day: null (today, as saved before day tabs) stays today. */
 const toDay = (v: unknown): string | undefined => (v === null ? today() : typeof v === 'string' && isIsoDate(v) ? v : undefined)
@@ -162,6 +163,7 @@ export function revivePanes(stored: unknown): PanesState {
     dayTab: oldDay !== undefined ? (previewDay ? PREVIEW_DAY : PRIMARY.canvas) : typeof s.dayTab === 'string' ? s.dayTab : PRIMARY.canvas,
     dayHistory,
     dayIndex: dayHistory.length ? Math.min(Math.max(0, s.dayIndex ?? dayHistory.length - 1), dayHistory.length - 1) : -1,
+    previewQuery: typeof s.previewQuery === 'string' ? normalizeQuery(s.previewQuery) : '',
   }
   // A day tab that's gone (an unpinned day, no preview) gives way to Today.
   const exists = (key: string) => !isDayKey(key) || canvasTabsOf(next).includes(key)
@@ -185,17 +187,14 @@ function update(pane: PaneId, fn: (p: PaneState, s: PanesState) => PaneState) {
   })
 }
 
-/** The canvas pane's tabs: Today, the pinned days, the preview day, and the plugins shown. */
+/** The canvas pane's tabs: Today, the pinned days and the preview day. */
 function canvasTabsOf(s: Pick<PanesState, 'pinnedDays' | 'previewDay'>): string[] {
-  return [PRIMARY.canvas, ...s.pinnedDays.map(dayKey), ...(s.previewDay ? [PREVIEW_DAY] : []), ...visibleCanvasTabs().map(pluginKey)]
+  return [PRIMARY.canvas, ...s.pinnedDays.map(dayKey), ...(s.previewDay ? [PREVIEW_DAY] : [])]
 }
 
 /** Tabs of a pane, in tab-bar order. */
 export function paneTabs(pane: PaneId, s: PanesState = panesStore.get()): string[] {
-  const p = s.panes[pane]
-  if (pane !== 'canvas') return p.tabs
-  const tabs = canvasTabsOf(s)
-  return tabs.includes(p.active) || parseKey(p.active).kind !== 'plugin' ? tabs : [...tabs, p.active]
+  return pane === 'canvas' ? canvasTabsOf(s) : s.panes[pane].tabs
 }
 
 /** Shows `key`: activates its tab if open, otherwise opens it in place of the active tab (or a new one). */
@@ -208,11 +207,15 @@ function place(pane: PaneId, p: PaneState, key: string, newTab: boolean): PaneSt
   return { ...p, tabs, active: key }
 }
 
-function pushHistory(p: PaneState): PaneState {
-  if (p.history[p.hIndex] === p.active) return p
-  const history = [...p.history.slice(0, p.hIndex + 1), p.active].slice(-50)
+/** Records the location shown: the active tab's key, or for the tags pane's preview, its query's (`at`). */
+function pushHistory(p: PaneState, at = p.active): PaneState {
+  if (p.history[p.hIndex] === at) return p
+  const history = [...p.history.slice(0, p.hIndex + 1), at].slice(-50)
   return { ...p, history, hIndex: history.length - 1 }
 }
+
+/** Where the tags pane's preview is, for its history. */
+const previewAt = (query: string) => (query ? queryKey(query) : PRIMARY.tags)
 
 export function setFocus(pane: PaneId) {
   panesStore.set((s) => (s.focus === pane ? s : { ...s, focus: pane }))
@@ -241,10 +244,6 @@ function goDay(date: string, opts: { pin?: boolean; focus?: boolean; history?: (
   update('canvas', (p) => pushHistory({ ...p, active: key }))
 }
 
-export function openTag(tag: string, opts: { newTab?: boolean; focus?: boolean } = {}) {
-  const t = normalizeTag(tag)
-  if (t) openLoc('tags', tagKey(t), opts)
-}
 
 /**
  * Shows `date`: in Today, in the day's pinned tab, or else in the preview day tab. `newTab` (ctrl+click) pins it
@@ -282,15 +281,15 @@ export function pinPreviewDay() {
 }
 
 export function activateTab(pane: PaneId, key: string) {
-  update(pane, (p, s) => (paneTabs(pane, s).includes(key) ? pushHistory({ ...p, active: key }) : p))
+  update(pane, (p, s) => (paneTabs(pane, s).includes(key) ? pushHistory({ ...p, active: key }, pane === 'tags' && key === PRIMARY.tags ? previewAt(s.previewQuery) : key) : p))
 }
 
-/** The canvas: closes a pinned day, the preview or a hidden plugin's tab; the tab before it takes over. */
+/** The canvas: closes a pinned day or the preview day; the tab before it takes over. */
 function closeCanvasTab(k: string) {
   const s = panesStore.get()
   const tabs = paneTabs('canvas', s)
   const loc = parseKey(k)
-  const closable = (loc.kind === 'day' && s.pinnedDays.includes(loc.date)) || (loc.kind === 'preview-day' && !!s.previewDay) || (loc.kind === 'plugin' && !canvasTabsOf(s).includes(k) && s.panes.canvas.active === k)
+  const closable = (loc.kind === 'day' && s.pinnedDays.includes(loc.date)) || (loc.kind === 'preview-day' && !!s.previewDay)
   if (!closable) return
   const gone = (key: string) => key === k
   panesStore.set((st) => ({
@@ -302,8 +301,7 @@ function closeCanvasTab(k: string) {
   update('canvas', (p) => {
     const history = p.history.filter((h) => !gone(h))
     const rest = { ...p, history: history.length ? history : [PRIMARY.canvas], hIndex: Math.min(p.hIndex, Math.max(0, history.length - 1)) }
-    // A hidden plugin's tab goes back to the journal; a day tab to the tab before it.
-    const before = loc.kind === 'plugin' ? panesStore.get().dayTab : (tabs[tabs.indexOf(k) - 1] ?? PRIMARY.canvas)
+    const before = tabs[tabs.indexOf(k) - 1] ?? PRIMARY.canvas
     return p.active === k ? pushHistory({ ...rest, active: before }) : rest
   })
 }
@@ -329,17 +327,24 @@ export function cycleTab(pane: PaneId, dir: 1 | -1) {
   update(pane, (p, s) => {
     const tabs = paneTabs(pane, s)
     const i = tabs.indexOf(p.active)
-    return pushHistory({ ...p, active: tabs[(i + dir + tabs.length) % tabs.length]! })
+    const key = tabs[(i + dir + tabs.length) % tabs.length]!
+    return pushHistory({ ...p, active: key }, pane === 'tags' && key === PRIMARY.tags ? previewAt(s.previewQuery) : key)
   })
 }
 
 export function goHistory(pane: PaneId, dir: 1 | -1) {
-  update(pane, (p) => {
-    const hIndex = p.hIndex + dir
-    const key = p.history[hIndex]
-    if (key == null) return p
-    return { ...place(pane, p, key, false), hIndex }
-  })
+  const p = panesStore.get().panes[pane]
+  const hIndex = p.hIndex + dir
+  const key = p.history[hIndex]
+  if (key == null) return
+  // A query that has no tab (any more) shows in the preview.
+  if (pane === 'tags' && !p.tabs.includes(key)) {
+    const loc = parseKey(key)
+    panesStore.set((s) => ({ ...s, previewQuery: loc.kind === 'query' ? loc.query : '' }))
+    update(pane, (q) => ({ ...q, active: PRIMARY.tags, hIndex }))
+    return
+  }
+  update(pane, (q) => ({ ...place(pane, q, key, false), hIndex }))
 }
 
 /** Minimizes the tags pane to its tab bar or restores it, optionally with new weights in the same update. */
@@ -386,29 +391,104 @@ export function journalDateOf(s: PanesState): string {
 /** Store selector: whether a day tab is the canvas's active tab. */
 export const journalActiveOf = (s: PanesState) => isDayKey(s.panes.canvas.active)
 
-/** After a tag rename/merge: points open tabs (and history) under `from` at the new path. */
-export function renameTagTabs(from: string, to: string) {
-  const map = (key: string) => {
-    const loc = parseKey(key)
-    return loc.kind === 'tag' && isUnder(loc.tag, from) ? tagKey(to + loc.tag.slice(from.length)) : key
-  }
-  update('tags', (p) => ({ ...p, tabs: [...new Set(p.tabs.map(map))], active: map(p.active), history: p.history.map(map) }))
+/** A tags pane tab's query: the preview's, or the one in its key. */
+export function tabQuery(s: PanesState, key: string): string {
+  const loc = parseKey(key)
+  return loc.kind === 'query' ? loc.query : loc.kind === 'preview' ? s.previewQuery : ''
 }
 
-/** After a tag delete: closes tabs showing it or its subtree. */
-export function closeTagTabs(tag: string) {
-  const gone = (key: string) => {
-    const loc = parseKey(key)
-    return loc.kind === 'tag' && isUnder(loc.tag, tag)
-  }
+/**
+ * Shows a query in the tags pane: in its tab when it has one, in a tab of its own with `newTab` (ctrl+click), else in
+ * the preview. Opens the pane if hidden.
+ */
+export function openQuery(q: Query | string, opts: { newTab?: boolean; focus?: boolean } = {}) {
+  const query = typeof q === 'string' ? normalizeQuery(q) : queryToString(q)
+  const key = query ? queryKey(query) : PRIMARY.tags
+  const { tabs } = panesStore.get().panes.tags
+  const inPreview = !tabs.includes(key) && !(opts.newTab && query)
+  panesStore.set((s) => ({ ...s, open: { ...s.open, tags: true }, focus: opts.focus ? 'tags' : s.focus, ...(inPreview && { previewQuery: query }) }))
   update('tags', (p) => {
-    const tabs = p.tabs.filter((k) => !gone(k))
-    const history = p.history.filter((k) => !gone(k))
+    if (p.tabs.includes(key)) return pushHistory({ ...p, active: key })
+    if (inPreview) return pushHistory({ ...p, active: PRIMARY.tags }, previewAt(query))
+    const next = [...p.tabs]
+    next.splice(p.tabs.indexOf(p.active) + 1, 0, key)
+    return pushHistory({ ...p, tabs: next, active: key })
+  })
+}
+
+export function openTag(tag: string, opts: { newTab?: boolean; focus?: boolean } = {}) {
+  const t = normalizeTag(tag)
+  if (t) openQuery({ tags: [t] }, opts)
+}
+
+/** Narrows or widens the query of a tags pane tab (removing a facet, a view's own filter): the tab shows the new one. */
+export function setTabQuery(key: string, q: Query) {
+  const query = queryToString(q)
+  if (parseKey(key).kind === 'preview' || !query) return openQuery(query)
+  const next = queryKey(query)
+  if (next === key) return
+  update('tags', (p) => {
+    const tabs = p.tabs.includes(next) ? p.tabs.filter((t) => t !== key) : p.tabs.map((t) => (t === key ? next : t))
+    return pushHistory({ ...p, tabs, active: next })
+  })
+}
+
+/** Double-click on the preview: its query gets a tab of its own, next to it; the preview goes back to the browser. */
+export function pinPreviewQuery() {
+  const query = panesStore.get().previewQuery
+  if (!query) return
+  const key = queryKey(query)
+  panesStore.set((s) => ({ ...s, previewQuery: '' }))
+  update('tags', (p) => pushHistory({ ...p, tabs: p.tabs.includes(key) ? p.tabs : [PRIMARY.tags, key, ...p.tabs.slice(1)], active: key }))
+}
+
+/** The type whose own view the tags pane shows (the YouTube grid…), while the pane is open; null otherwise. */
+export function activeTypeView(s = panesStore.get()): EntryType | null {
+  return s.open.tags ? typeView(parseQuery(tabQuery(s, s.panes.tags.active))) : null
+}
+
+/** Brings up a type's view (to show an item in it): the tags pane's when it shows that type, else the preview's. */
+export function showTypeView(type: EntryType) {
+  if (activeTypeView() === type) return focusPane('tags', true)
+  openQuery({ types: [type] })
+}
+
+/** Rewrites the tags of every query the tags pane shows or remembers; `fn` gives a tag's new path, or null to drop it. */
+function mapQueryTags(fn: (tag: string) => string | null) {
+  const map = (query: string) => {
+    const q = parseQuery(query)
+    if (!q.tags?.length) return query
+    const tags = q.tags.map(fn).filter((t): t is string => t !== null)
+    return queryToString({ ...q, tags: [...new Set(tags)] })
+  }
+  const mapKey = (key: string) => {
+    const loc = parseKey(key)
+    if (loc.kind !== 'query') return key
+    const query = map(loc.query)
+    return query ? queryKey(query) : null
+  }
+  panesStore.set((s) => ({ ...s, previewQuery: map(s.previewQuery) }))
+  update('tags', (p) => {
+    const tabs = [...new Set(p.tabs.map(mapKey).filter((k): k is string => k !== null))]
+    const history = p.history.map(mapKey).filter((k): k is string => k !== null)
+    const active = mapKey(p.active)
     return {
       tabs,
-      active: gone(p.active) ? PRIMARY.tags : p.active,
+      active: active && tabs.includes(active) ? active : PRIMARY.tags,
       history: history.length ? history : [PRIMARY.tags],
       hIndex: Math.min(p.hIndex, Math.max(0, history.length - 1)),
     }
   })
 }
+
+/** After a tag rename/merge: points the queries under `from` at the new path. */
+export function renameTagTabs(from: string, to: string) {
+  mapQueryTags((t) => (isUnder(t, from) ? to + t.slice(from.length) : t))
+}
+
+/** After a tag delete: the queries that were narrowed by it or its subtree aren't any more (a tab of only it closes). */
+export function closeTagTabs(tag: string) {
+  mapQueryTags((t) => (isUnder(t, tag) ? null : t))
+}
+
+export { isEmptyQuery }

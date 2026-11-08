@@ -1,11 +1,13 @@
 import { useState } from 'react'
-import { isUnder, normalizeTag } from '../../../shared/tags.ts'
+import { isUnder, normalizeTag, TAG_SEP } from '../../../shared/tags.ts'
 import { api, unwrap } from '../../api.ts'
 import { emitChange } from '../../state/bus.ts'
+import { bookmarksNav } from '../../state/captures.ts'
 import { closeTagTabs, renameTagTabs } from '../../state/panes.ts'
 import { useStore } from '../../state/store.ts'
 import { notify } from '../../state/ui.ts'
 import { useAllTags } from '../../state/tags.ts'
+import { bumpYt } from '../../state/youtube.ts'
 import { Modal, ModalActions } from '../Modal/Modal.tsx'
 import { TagInput } from '../TagInput/TagInput.tsx'
 import { startTagOp, tagOpStore, type TagOp } from './tagOps.ts'
@@ -21,7 +23,7 @@ const TITLES = { rename: 'Rename tag', merge: 'Merge tag', branch: 'Branch into 
 
 function Dialog({ op }: { op: TagOp }) {
   const all = useAllTags()
-  const [text, setText] = useState(op.op === 'branch' ? `${op.tag}:` : op.op === 'rename' ? op.tag : '')
+  const [text, setText] = useState(op.op === 'branch' ? `${op.tag}${TAG_SEP}` : op.op === 'rename' ? op.tag : '')
   const [target, setTarget] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
   const close = () => startTagOp(null)
@@ -44,7 +46,10 @@ function Dialog({ op }: { op: TagOp }) {
         await unwrap((op.op === 'merge' ? api.tags.merge : api.tags.rename).$post({ json: { from: op.tag, to } }))
         renameTagTabs(op.tag, to)
       }
+      // Every type carries the tag set: the journal, and the views that keep their own change counters.
       emitChange()
+      bumpYt()
+      bookmarksNav.bump()
       close()
     } catch (err) {
       notify((err as Error).message)

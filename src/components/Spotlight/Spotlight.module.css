@@ -91,3 +91,9 @@
   font-size: 11px;
   color: var(--text-faint);
 }
+
+.category {
+  font-size: 12px;
+  color: var(--date);
+  flex: none;
+}
