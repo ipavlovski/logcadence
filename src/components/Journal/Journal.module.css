@@ -64,7 +64,7 @@ kbd {
 }
 
 /* Outline structure: entry > nodes (no bullets; nodes sit behind a faint indent rule).
-   Entries sharing a primary tag sit together in a .group; groups are separated by a gap. */
+   Entries of a category sit together in a .group under its name; groups are separated by a gap. */
 
 .group + .group {
   margin-top: 22px;
@@ -311,4 +311,173 @@ kbd {
 
 .newEntry:hover {
   color: var(--accent);
+}
+
+/* Videos, bookmarks and AI chats in a day (ItemCard). */
+.item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 4px 0 6px;
+  border-radius: var(--radius);
+}
+
+.item + .item,
+.entry + .item {
+  margin-top: 4px;
+}
+
+.item:hover > .rowActions {
+  opacity: 1;
+}
+
+.itemThumb {
+  flex: none;
+  width: 96px;
+  aspect-ratio: 16 / 9;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--code-bg);
+  cursor: pointer;
+}
+
+.itemThumb img,
+.itemThumb video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.itemMain {
+  flex: 1;
+  min-width: 0;
+}
+
+.itemHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.itemType {
+  flex: none;
+  font-size: 11px;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+
+.itemTitle {
+  min-width: 0;
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--text);
+  font-family: var(--font-serif);
+  font-size: 17px;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.itemTitle:hover {
+  text-decoration: underline;
+}
+
+.itemSource {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+.itemSource button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  background: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.itemSource button:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.avatar {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.mediaStrip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 2px;
+}
+
+.mediaThumb {
+  height: 72px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--code-bg);
+  cursor: pointer;
+}
+
+.mediaThumb img,
+.mediaThumb video {
+  height: 100%;
+  display: block;
+}
+
+/* The type filter above a day's entries. */
+.typeFilter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  margin: 6px 0 0;
+}
+
+.typeChip {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 20px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.typeChip:hover {
+  color: var(--text);
+}
+
+.typeChip.on {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.typeChip .count {
+  margin-left: 4px;
+  color: var(--text-faint);
 }

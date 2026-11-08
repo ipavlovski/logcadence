@@ -65,5 +65,5 @@ export const videoEntryId = (videoId: string) => `yt:${videoId}`
 export const captureEntryId = (captureId: string) => `cap:${captureId}`
 export const mediaEntryId = (itemId: string) => `media:${itemId}`
 
-/** Types shown in the journal day (the other types have their own canvas tabs, for now). */
-export const DAY_TYPES = ['journal', 'ai'] as const satisfies readonly EntryType[]
+/** Types whose entries have nodes and are ordered by hand within their day (the others by time). */
+export const NOTE_TYPES = ['journal', 'ai'] as const satisfies readonly EntryType[]

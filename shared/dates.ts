@@ -36,3 +36,8 @@ export function formatJournalDate(iso: string): string {
 export function weekday(iso: string): string {
   return WEEKDAYS[new Date(iso + 'T12:00:00').getDay()]!
 }
+
+/** A day tab's label: "2026-11-08 Sun". */
+export function formatTabDate(iso: string): string {
+  return `${iso} ${weekday(iso).slice(0, 3)}`
+}

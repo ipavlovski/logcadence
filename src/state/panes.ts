@@ -1,20 +1,29 @@
-import { isIsoDate, today } from '../../shared/dates.ts'
+import { isIsoDate, shiftDate, today } from '../../shared/dates.ts'
 import { isUnder, normalizeTag } from '../../shared/tags.ts'
 import { visibleCanvasTabs } from './canvasTabs.ts'
 import { persistedStore } from './store.ts'
 
 // Two panes (canvas | tags), each with tabs. A tab is identified by its location key; the first tab of each pane
 // is its primary tab, which always exists and cannot be closed.
-// The canvas pane's tabs are fixed: the journal and one per plugin shown (state/canvasTabs.ts), plus a hidden
-// plugin's tab while it is active. The journal tab shows one day (`day`) and keeps its own history of the days
-// visited (alt+left/right while it is active).
+// The canvas pane's tabs: Today (the primary tab, always today), the days pinned, the preview day, then one per plugin
+// shown (state/canvasTabs.ts), plus a hidden plugin's tab while it is active. Opening a day shows it in Today, in its
+// pinned tab, or else in the preview day tab, which each opened day replaces until it is pinned (double-click).
+// The days opened are a history of their own (alt+left/right while a day tab is active).
 
 export type PaneId = 'canvas' | 'tags'
 export const PANES: PaneId[] = ['canvas', 'tags']
 
-export type Loc = { kind: 'journal' } | { kind: 'plugin'; type: string } | { kind: 'tree' } | { kind: 'tag'; tag: string }
+export type Loc =
+  | { kind: 'journal' }
+  | { kind: 'day'; date: string }
+  | { kind: 'preview-day' }
+  | { kind: 'plugin'; type: string }
+  | { kind: 'tree' }
+  | { kind: 'tag'; tag: string }
 
 export const PRIMARY: Record<PaneId, string> = { canvas: 'journal', tags: 'tree' }
+/** The canvas's preview day tab. */
+export const PREVIEW_DAY = 'preview-day'
 
 export function parseKey(key: string): Loc {
   const i = key.indexOf(':')
@@ -27,6 +36,10 @@ export function parseKey(key: string): Loc {
       return { kind, tag: value }
     case 'tree':
       return { kind }
+    case 'day':
+      return isIsoDate(value) ? { kind, date: value } : { kind: 'journal' }
+    case PREVIEW_DAY:
+      return { kind: 'preview-day' }
     default:
       return { kind: 'journal' }
   }
@@ -34,6 +47,9 @@ export function parseKey(key: string): Loc {
 
 export const tagKey = (tag: string) => `tag:${tag}`
 export const pluginKey = (type: string) => `plugin:${type}`
+export const dayKey = (date: string) => `day:${date}`
+/** Today, a pinned day or the preview day. */
+export const isDayKey = (key: string) => ['journal', 'day', 'preview-day'].includes(parseKey(key).kind)
 
 interface PaneState {
   /** Unused by the canvas pane (see paneTabs). */
@@ -44,9 +60,6 @@ interface PaneState {
   hIndex: number
 }
 
-/** The journal tab's day: null is today (it rolls over at midnight). */
-type Day = string | null
-
 interface PanesState {
   panes: Record<PaneId, PaneState>
   /** Pane that receives pane-scoped shortcuts (ctrl+w, ctrl+f, delete…). */
@@ -55,10 +68,14 @@ interface PanesState {
   open: Record<PaneId, boolean>
   /** Flex-grow weights of the visible panes. */
   weights: Record<PaneId, number>
-  /** The day the journal tab shows. */
-  day: Day
-  /** Days the journal tab visited, for its back/forward. */
-  dayHistory: Day[]
+  /** The preview day tab's day; null when there is no preview tab. */
+  previewDay: string | null
+  /** Days with a tab of their own, in tab order. */
+  pinnedDays: string[]
+  /** The day tab last active (Today, a pinned day or the preview): the journal's day while a plugin tab is shown. */
+  dayTab: string
+  /** Days opened, for back/forward. */
+  dayHistory: string[]
   dayIndex: number
 }
 
@@ -69,9 +86,11 @@ const initial: PanesState = {
   focus: 'canvas',
   open: { canvas: true, tags: true },
   weights: { canvas: 2.1, tags: 1 },
-  day: null,
-  dayHistory: [null],
-  dayIndex: 0,
+  previewDay: null,
+  pinnedDays: [],
+  dayTab: PRIMARY.canvas,
+  dayHistory: [],
+  dayIndex: -1,
 }
 
 function validKey(pane: PaneId, key: string): boolean {
@@ -79,7 +98,7 @@ function validKey(pane: PaneId, key: string): boolean {
   if (key !== PRIMARY[pane] && loc.kind === parseKey(PRIMARY[pane]).kind) return false
   switch (pane) {
     case 'canvas':
-      return loc.kind === 'journal' || loc.kind === 'plugin'
+      return loc.kind === 'journal' || loc.kind === 'plugin' || loc.kind === 'day' || loc.kind === 'preview-day'
     case 'tags':
       return loc.kind === 'tree' || (loc.kind === 'tag' && !!loc.tag)
   }
@@ -100,14 +119,15 @@ const RENAMED: Record<string, string> = {
 }
 const renamed = (k: unknown) => (typeof k !== 'string' ? k : k.startsWith('tag:') ? tagKey(normalizeTag(k.slice(4))) : (RENAMED[k] ?? k))
 
-const toDay = (v: unknown): Day | undefined => (v === null ? null : typeof v === 'string' && isIsoDate(v) ? (v === today() ? null : v) : undefined)
+/** A saved day: null (today, as saved before day tabs) stays today. */
+const toDay = (v: unknown): string | undefined => (v === null ? today() : typeof v === 'string' && isIsoDate(v) ? v : undefined)
 
 /** The day a journal pane tab of the three-pane layout showed ('today', 'date:YYYY-MM-DD'). */
-const oldJournalDay = (key: unknown): Day => (typeof key === 'string' && key.startsWith('date:') ? (toDay(key.slice(5)) ?? null) : null)
+const oldJournalDay = (key: unknown): string | null => (typeof key === 'string' && key.startsWith('date:') && isIsoDate(key.slice(5)) ? key.slice(5) : null)
 
-/** Repairs stored pane state, including the three-pane layout's. Exported for tests. */
+/** Repairs stored pane state, including the three-pane layout's and the single journal tab's. Exported for tests. */
 export function revivePanes(stored: unknown): PanesState {
-  const s = stored as Partial<PanesState> & { panes?: { journal?: { active?: unknown } } }
+  const s = (stored ?? {}) as Partial<PanesState> & { day?: unknown; panes?: { journal?: { active?: unknown } } }
   const panes = { ...initial.panes }
   for (const id of PANES) {
     const p = s.panes?.[id]
@@ -118,46 +138,64 @@ export function revivePanes(stored: unknown): PanesState {
     const active = renamed(p.active)
     panes[id] = {
       tabs,
-      active: typeof active === 'string' && tabs.includes(active) ? active : PRIMARY[id],
+      active: typeof active === 'string' && (id === 'canvas' ? valid(active) : tabs.includes(active)) ? active : PRIMARY[id],
       history: history.length ? history : [PRIMARY[id]],
       hIndex: Math.min(Math.max(0, p.hIndex ?? 0), Math.max(0, history.length - 1)),
     }
   }
   const open = { canvas: true, tags: typeof s.open?.tags === 'boolean' ? s.open.tags : true }
-  // Saved by the three-pane layout: the journal pane's active tab becomes the journal tab's day.
   const threePane = !!s.panes?.journal
-  const day = threePane ? oldJournalDay(s.panes!.journal!.active) : (toDay(s.day) ?? null)
-  const dayHistory = !threePane && Array.isArray(s.dayHistory) ? s.dayHistory.map(toDay).filter((d) => d !== undefined).slice(-50) : []
+  // The day shown before day tabs (the three-pane layout's journal pane, or the single journal tab) becomes the preview.
+  const oldDay = threePane ? oldJournalDay(s.panes!.journal!.active) : 'day' in s ? (toDay(s.day) ?? null) : undefined
+  const pinnedDays = Array.isArray(s.pinnedDays) ? [...new Set(s.pinnedDays.filter((d): d is string => typeof d === 'string' && isIsoDate(d)))] : []
+  const previewDay = oldDay !== undefined ? (oldDay === today() ? null : oldDay) : typeof s.previewDay === 'string' && isIsoDate(s.previewDay) ? s.previewDay : null
+  const dayHistory = !threePane && Array.isArray(s.dayHistory) ? s.dayHistory.map(toDay).filter((d) => d !== undefined).slice(-50) : oldDay ? [oldDay] : []
   const weight = (id: PaneId) => (!threePane && typeof s.weights?.[id] === 'number' ? s.weights[id] : initial.weights[id])
   const weights = { canvas: weight('canvas'), tags: weight('tags') }
-  return {
+  const next: PanesState = {
     panes,
     focus: s.focus && PANES.includes(s.focus) ? s.focus : 'canvas',
     open,
     weights,
-    day,
-    dayHistory: dayHistory.length ? dayHistory : [day],
-    dayIndex: dayHistory.length ? Math.min(Math.max(0, s.dayIndex ?? 0), dayHistory.length - 1) : 0,
+    previewDay,
+    pinnedDays,
+    dayTab: oldDay !== undefined ? (previewDay ? PREVIEW_DAY : PRIMARY.canvas) : typeof s.dayTab === 'string' ? s.dayTab : PRIMARY.canvas,
+    dayHistory,
+    dayIndex: dayHistory.length ? Math.min(Math.max(0, s.dayIndex ?? dayHistory.length - 1), dayHistory.length - 1) : -1,
   }
+  // A day tab that's gone (an unpinned day, no preview) gives way to Today.
+  const exists = (key: string) => !isDayKey(key) || canvasTabsOf(next).includes(key)
+  if (oldDay !== undefined && panes.canvas.active === PRIMARY.canvas && previewDay) panes.canvas = { ...panes.canvas, active: PREVIEW_DAY }
+  if (!exists(panes.canvas.active)) panes.canvas = { ...panes.canvas, active: PRIMARY.canvas }
+  if (!exists(next.dayTab)) next.dayTab = PRIMARY.canvas
+  panes.canvas = { ...panes.canvas, history: panes.canvas.history.filter(exists) }
+  if (!panes.canvas.history.length) panes.canvas.history = [PRIMARY.canvas]
+  panes.canvas.hIndex = Math.min(panes.canvas.hIndex, panes.canvas.history.length - 1)
+  return next
 }
 
 export const panesStore = persistedStore<PanesState>('panes.v1', initial, revivePanes)
 
-function update(pane: PaneId, fn: (p: PaneState) => PaneState) {
+/** Changes a pane's state; the canvas also remembers the day tab it last showed. */
+function update(pane: PaneId, fn: (p: PaneState, s: PanesState) => PaneState) {
   panesStore.set((s) => {
-    const next = fn(s.panes[pane])
-    return next === s.panes[pane] ? s : { ...s, panes: { ...s.panes, [pane]: next } }
+    const next = fn(s.panes[pane], s)
+    if (next === s.panes[pane]) return s
+    return { ...s, panes: { ...s.panes, [pane]: next }, ...(pane === 'canvas' && isDayKey(next.active) && { dayTab: next.active }) }
   })
 }
 
-/** The canvas pane's fixed tabs: the journal and the plugins shown. */
-const canvasTabs = () => [PRIMARY.canvas, ...visibleCanvasTabs().map(pluginKey)]
+/** The canvas pane's tabs: Today, the pinned days, the preview day, and the plugins shown. */
+function canvasTabsOf(s: Pick<PanesState, 'pinnedDays' | 'previewDay'>): string[] {
+  return [PRIMARY.canvas, ...s.pinnedDays.map(dayKey), ...(s.previewDay ? [PREVIEW_DAY] : []), ...visibleCanvasTabs().map(pluginKey)]
+}
 
 /** Tabs of a pane, in tab-bar order. */
-export function paneTabs(pane: PaneId, p: PaneState): string[] {
+export function paneTabs(pane: PaneId, s: PanesState = panesStore.get()): string[] {
+  const p = s.panes[pane]
   if (pane !== 'canvas') return p.tabs
-  const tabs = canvasTabs()
-  return tabs.includes(p.active) ? tabs : [...tabs, p.active]
+  const tabs = canvasTabsOf(s)
+  return tabs.includes(p.active) || parseKey(p.active).kind !== 'plugin' ? tabs : [...tabs, p.active]
 }
 
 /** Shows `key`: activates its tab if open, otherwise opens it in place of the active tab (or a new one). */
@@ -186,41 +224,94 @@ export function openLoc(pane: PaneId, key: string, opts: { newTab?: boolean; foc
   update(pane, (p) => pushHistory(place(pane, p, key, !!opts.newTab)))
 }
 
+/** The tab that shows `date`: Today, its pinned tab, or (pinning it with `pin`) the preview. */
+function showDay(s: PanesState, date: string, pin: boolean): { s: PanesState; key: string } {
+  if (date === today()) return { s, key: PRIMARY.canvas }
+  if (s.pinnedDays.includes(date)) return { s, key: dayKey(date) }
+  if (pin) return { s: { ...s, pinnedDays: [...s.pinnedDays, date], previewDay: s.previewDay === date ? null : s.previewDay }, key: dayKey(date) }
+  return { s: { ...s, previewDay: date }, key: PREVIEW_DAY }
+}
+
+function goDay(date: string, opts: { pin?: boolean; focus?: boolean; history?: (s: PanesState) => Pick<PanesState, 'dayHistory' | 'dayIndex'> }) {
+  panesStore.set((s0) => {
+    const { s } = showDay(s0, date, !!opts.pin)
+    return { ...s, ...opts.history?.(s), focus: opts.focus ? 'canvas' : s.focus }
+  })
+  const key = showDay(panesStore.get(), date, false).key
+  update('canvas', (p) => pushHistory({ ...p, active: key }))
+}
+
 export function openTag(tag: string, opts: { newTab?: boolean; focus?: boolean } = {}) {
   const t = normalizeTag(tag)
   if (t) openLoc('tags', tagKey(t), opts)
 }
 
-/** Shows `date` in the journal tab. `newTab` is accepted for the callers' ctrl+click, but there's one journal tab. */
+/**
+ * Shows `date`: in Today, in the day's pinned tab, or else in the preview day tab. `newTab` (ctrl+click) pins it
+ * instead, in a tab of its own.
+ */
 export function openDate(date: string, opts: { newTab?: boolean; focus?: boolean } = {}) {
   if (!isIsoDate(date)) return
-  const day = date === today() ? null : date
-  panesStore.set((s) => {
-    if (s.day === day) return s
-    const dayHistory = [...s.dayHistory.slice(0, s.dayIndex + 1), day].slice(-50)
-    return { ...s, day, dayHistory, dayIndex: dayHistory.length - 1 }
+  goDay(date, {
+    pin: opts.newTab,
+    focus: opts.focus,
+    history: (s) => {
+      if (s.dayHistory[s.dayIndex] === date) return s
+      const dayHistory = [...s.dayHistory.slice(0, s.dayIndex + 1), date].slice(-50)
+      return { dayHistory, dayIndex: dayHistory.length - 1 }
+    },
   })
-  openLoc('canvas', PRIMARY.canvas, { focus: opts.focus })
 }
 
-/** The journal tab's back/forward through the days it showed. */
+/** Back/forward through the days opened. */
 export function goDayHistory(dir: 1 | -1) {
-  panesStore.set((s) => {
-    const dayIndex = s.dayIndex + dir
-    const day = s.dayHistory[dayIndex]
-    return day === undefined ? s : { ...s, day, dayIndex }
-  })
+  const s = panesStore.get()
+  const date = s.dayHistory[s.dayIndex + dir]
+  if (date !== undefined) goDay(date, { history: () => ({ dayHistory: s.dayHistory, dayIndex: s.dayIndex + dir }) })
+}
+
+/** The day before or after the one shown (ctrl+[ / ctrl+]): a pinned day stays, the step goes to the preview. */
+export const stepDay = (dir: 1 | -1) => openDate(shiftDate(activeJournalDate(), dir))
+
+/** Double-click on the preview day tab: the day keeps a tab of its own. */
+export function pinPreviewDay() {
+  const day = panesStore.get().previewDay
+  if (!day) return
+  panesStore.set((s) => ({ ...s, previewDay: null, pinnedDays: [...s.pinnedDays.filter((d) => d !== day), day] }))
+  update('canvas', (p) => (p.active === PREVIEW_DAY ? { ...p, active: dayKey(day), history: p.history.map((k) => (k === PREVIEW_DAY ? dayKey(day) : k)) } : p))
 }
 
 export function activateTab(pane: PaneId, key: string) {
-  update(pane, (p) => (paneTabs(pane, p).includes(key) ? pushHistory({ ...p, active: key }) : p))
+  update(pane, (p, s) => (paneTabs(pane, s).includes(key) ? pushHistory({ ...p, active: key }) : p))
+}
+
+/** The canvas: closes a pinned day, the preview or a hidden plugin's tab; the tab before it takes over. */
+function closeCanvasTab(k: string) {
+  const s = panesStore.get()
+  const tabs = paneTabs('canvas', s)
+  const loc = parseKey(k)
+  const closable = (loc.kind === 'day' && s.pinnedDays.includes(loc.date)) || (loc.kind === 'preview-day' && !!s.previewDay) || (loc.kind === 'plugin' && !canvasTabsOf(s).includes(k) && s.panes.canvas.active === k)
+  if (!closable) return
+  const gone = (key: string) => key === k
+  panesStore.set((st) => ({
+    ...st,
+    pinnedDays: loc.kind === 'day' ? st.pinnedDays.filter((d) => d !== loc.date) : st.pinnedDays,
+    previewDay: loc.kind === 'preview-day' ? null : st.previewDay,
+    dayTab: gone(st.dayTab) ? PRIMARY.canvas : st.dayTab,
+  }))
+  update('canvas', (p) => {
+    const history = p.history.filter((h) => !gone(h))
+    const rest = { ...p, history: history.length ? history : [PRIMARY.canvas], hIndex: Math.min(p.hIndex, Math.max(0, history.length - 1)) }
+    // A hidden plugin's tab goes back to the journal; a day tab to the tab before it.
+    const before = loc.kind === 'plugin' ? panesStore.get().dayTab : (tabs[tabs.indexOf(k) - 1] ?? PRIMARY.canvas)
+    return p.active === k ? pushHistory({ ...rest, active: before }) : rest
+  })
 }
 
 export function closeTab(pane: PaneId, key?: string) {
+  if (pane === 'canvas') return closeCanvasTab(key ?? panesStore.get().panes.canvas.active)
   update(pane, (p) => {
     const k = key ?? p.active
-    // Only a hidden plugin's tab closes, back to the journal.
-    if (pane === 'canvas') return k === p.active && !canvasTabs().includes(k) ? pushHistory({ ...p, active: PRIMARY.canvas }) : p
     if (k === PRIMARY[pane] || !p.tabs.includes(k)) return p
     const i = p.tabs.indexOf(k)
     const tabs = p.tabs.filter((t) => t !== k)
@@ -228,13 +319,15 @@ export function closeTab(pane: PaneId, key?: string) {
   })
 }
 
+/** Closes every tab that closes: the tags pane's, the canvas's day tabs (back to Today). */
 export function closeAllTabs(pane: PaneId) {
-  update(pane, (p) => pushHistory({ ...p, tabs: [PRIMARY[pane]], active: PRIMARY[pane] }))
+  if (pane === 'canvas') panesStore.set((s) => ({ ...s, pinnedDays: [], previewDay: null, dayTab: PRIMARY.canvas }))
+  update(pane, (p) => pushHistory({ ...p, tabs: [PRIMARY[pane]], active: PRIMARY[pane], ...(pane === 'canvas' && { history: [PRIMARY.canvas], hIndex: 0 }) }))
 }
 
 export function cycleTab(pane: PaneId, dir: 1 | -1) {
-  update(pane, (p) => {
-    const tabs = paneTabs(pane, p)
+  update(pane, (p, s) => {
+    const tabs = paneTabs(pane, s)
     const i = tabs.indexOf(p.active)
     return pushHistory({ ...p, active: tabs[(i + dir + tabs.length) % tabs.length]! })
   })
@@ -276,16 +369,22 @@ export function setWeights(weights: Partial<Record<PaneId, number>>) {
   panesStore.set((s) => ({ ...s, weights: { ...s.weights, ...weights } }))
 }
 
-/** Date shown by the journal tab. */
-export const activeJournalDate = (): string => journalDateOf(panesStore.get())
-
-/** Store selector: the date shown by the journal tab. */
-export function journalDateOf(s: PanesState): string {
-  return s.day ?? today()
+/** The day a day tab shows (Today: today, rolling over at midnight). */
+export function dayOfTab(s: PanesState, key: string): string {
+  const loc = parseKey(key)
+  return loc.kind === 'day' ? loc.date : loc.kind === 'preview-day' && s.previewDay ? s.previewDay : today()
 }
 
-/** Store selector: whether the journal tab is the canvas's active tab. */
-export const journalActiveOf = (s: PanesState) => s.panes.canvas.active === PRIMARY.canvas
+/** The journal's day: the active day tab's, or the last one active while a plugin tab is shown. */
+export const activeJournalDate = (): string => journalDateOf(panesStore.get())
+
+/** Store selector: the journal's day. */
+export function journalDateOf(s: PanesState): string {
+  return dayOfTab(s, isDayKey(s.panes.canvas.active) ? s.panes.canvas.active : s.dayTab)
+}
+
+/** Store selector: whether a day tab is the canvas's active tab. */
+export const journalActiveOf = (s: PanesState) => isDayKey(s.panes.canvas.active)
 
 /** After a tag rename/merge: points open tabs (and history) under `from` at the new path. */
 export function renameTagTabs(from: string, to: string) {

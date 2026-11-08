@@ -1,18 +1,16 @@
 import { useMemo, useState, type MouseEvent } from 'react'
 import { formatJournalDate } from '../../../shared/dates.ts'
-import { SUBTYPE_LABEL, TYPE_LABEL, typeRef } from '../../../shared/entryTypes.ts'
 import { ancestors, tagName } from '../../../shared/tags.ts'
-import type { EntryDTO, ImageDTO } from '../../../shared/types.ts'
+import type { EntryDTO } from '../../../shared/types.ts'
+import { thumbOf, typeLabel } from '../../entryView.ts'
 import { api, unwrap } from '../../api.ts'
 import { useFetch } from '../../hooks/useFetch.ts'
 import { matches } from '../../markdown.ts'
-import { openChat } from '../../state/ai.ts'
 import { emitChange, useRevision } from '../../state/bus.ts'
 import { useCommand } from '../../state/commands.ts'
 import { requestReveal } from '../../state/journal.ts'
-import { bookmarksNav } from '../../state/captures.ts'
-import { openDate, openLoc, openTag, pluginKey } from '../../state/panes.ts'
-import { openVideo } from '../../state/youtube.ts'
+import { openItem } from '../../actions.ts'
+import { openDate, openTag } from '../../state/panes.ts'
 import { useStore } from '../../state/store.ts'
 import { notify, prefsStore, setPref } from '../../state/ui.ts'
 import { ImageGallery, MediaThumb } from '../ImageGallery/ImageGallery.tsx'
@@ -20,15 +18,6 @@ import { Markdown, mark } from '../Markdown/Markdown.tsx'
 import { TagChip } from '../TagChip/TagChip.tsx'
 import { startTagOp } from './tagOps.ts'
 import styles from './Tags.module.css'
-
-/** The picture a row shows: a node's first image, a video's or bookmark's thumbnail, a media item itself. */
-function thumbOf(e: EntryDTO): ImageDTO | undefined {
-  const d = e.detail
-  if (d?.kind === 'video') return { id: d.id, url: d.thumbUrl ?? `https://i.ytimg.com/vi/${d.id}/hqdefault.jpg`, mime: 'image/jpeg' }
-  if (d?.kind === 'bookmark') return d.thumbUrl ? { id: d.id, url: d.thumbUrl, mime: 'image/jpeg' } : undefined
-  if (d?.kind === 'media') return d.thumbUrl ? { id: d.id, url: d.thumbUrl, mime: 'image/jpeg' } : { id: d.id, url: d.url, mime: d.mime }
-  return e.nodes.find((n) => n.images.length)?.images[0]
-}
 
 /** Selection keys: `e:<entryId>` or `n:<nodeId>`. */
 type Sel = Set<string>
@@ -119,17 +108,9 @@ export function TagView({ tag, find }: { tag: string; find: string }) {
     })
   }
 
-  // AI chats are not in the journal: they open in the canvas AI tab, at the clicked prompt. Videos, bookmarks and
-  // media open in their own tabs.
+  // AI chats, videos, bookmarks and media open in their own tabs; journal entries in their day.
   const revealIn = (entry: EntryDTO, nodeId?: string) => {
-    if (entry.chat) {
-      const turn = nodeId ? entry.chat.nodeIds.indexOf(nodeId) : -1
-      return openChat(entry.chat.id, turn >= 0 ? { turn } : {})
-    }
-    const d = entry.detail
-    if (d?.kind === 'video') return openVideo(d.id)
-    if (d?.kind === 'bookmark') return bookmarksNav.open(d.id)
-    if (d?.kind === 'media') return openLoc('canvas', pluginKey('images'))
+    if (openItem(entry, nodeId)) return
     openDate(entry.date, { focus: true })
     requestReveal({ date: entry.date, entryId: entry.id, nodeId, mode: 'flash' })
   }
@@ -210,7 +191,7 @@ export function TagView({ tag, find }: { tag: string; find: string }) {
                 <div className={styles.entryHead}>
                   <div className={styles.entryMain}>
                     <div className={styles.entryTitle}>
-                      {entry.type !== 'journal' && <span className={styles.entryType}>{SUBTYPE_LABEL[typeRef(entry.type, entry.subtype)] ?? TYPE_LABEL[entry.type]}</span>}
+                      {entry.type !== 'journal' && <span className={styles.entryType}>{typeLabel(entry)}</span>}
                       {entry.title ? mark(entry.title, q) : <span className={styles.muted}>untitled</span>}
                     </div>
                     <div className={styles.entryTags}>

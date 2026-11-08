@@ -22,7 +22,8 @@ export function flushJournalFiles() {
   for (const date of pending) {
     const file = path.join(JOURNALS_DIR, `${date.replaceAll('-', '_')}.md`)
     try {
-      const list = entriesForDate(date)
+      // Journal entries and AI chats: what has notes (videos and bookmarks keep theirs in their own tables).
+      const list = entriesForDate(date, 'notes')
       if (list.length) writeFileSync(file, renderJournal(date, list))
       else rmSync(file, { force: true })
     } catch (err) {

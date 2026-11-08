@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { and, asc, eq, inArray, sql, type SQL } from 'drizzle-orm'
-import { DAY_TYPES, type EntryType } from '../../shared/entryTypes.ts'
+import { NOTE_TYPES, type EntryType } from '../../shared/entryTypes.ts'
 import type { CategoryInfo, ChatSource, EntryDates, EntryDetail, EntryDTO, ImageDTO, NodeDTO } from '../../shared/types.ts'
 import { cleanTags, isUnder, normalizeTag, TAG_SEP } from '../../shared/tags.ts'
 import { db } from '../db/client.ts'
@@ -136,14 +136,15 @@ export function loadNode(id: string): NodeDTO | undefined {
   return row && toNode(row, imagesByNode(eq(nodes.id, id)).get(id) ?? [])
 }
 
-/** Entries of the journal day: journal entries and AI chats (videos, bookmarks and media have their own tabs, for now). */
-export const dayTypes = () => inArray(entries.type, [...DAY_TYPES])
+/** Journal entries and AI chats: the entries with nodes, ordered by hand. */
+export const noteTypes = () => inArray(entries.type, [...NOTE_TYPES])
 
-export function entriesForDate(date: string): EntryDTO[] {
+/** A day's entries (of every type, or only the note types), hand-ordered ones first, then the rest by time. */
+export function entriesForDate(date: string, only?: 'notes'): EntryDTO[] {
   const ids = db
     .select({ id: entries.id })
     .from(entries)
-    .where(and(eq(entries.date, date), dayTypes()))
+    .where(and(eq(entries.date, date), only ? noteTypes() : undefined))
     .orderBy(asc(entries.position))
     .all()
   return loadEntries(ids.map((r) => r.id))
@@ -157,7 +158,7 @@ export function entryPositionAfter(date: string, afterId: string | undefined): n
       const next = db
         .select({ p: sql<number | null>`min(${entries.position})` })
         .from(entries)
-        .where(and(eq(entries.date, date), dayTypes(), sql`${entries.position} > ${after.position}`))
+        .where(and(eq(entries.date, date), noteTypes(), sql`${entries.position} > ${after.position}`))
         .get()?.p
       return next == null ? after.position + 1 : (after.position + next) / 2
     }
@@ -165,7 +166,7 @@ export function entryPositionAfter(date: string, afterId: string | undefined): n
   const max = db
     .select({ p: sql<number | null>`max(${entries.position})` })
     .from(entries)
-    .where(and(eq(entries.date, date), dayTypes()))
+    .where(and(eq(entries.date, date), noteTypes()))
     .get()?.p
   return (max ?? 0) + 1
 }

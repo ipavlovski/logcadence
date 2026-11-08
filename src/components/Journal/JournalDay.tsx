@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { formatJournalDate, today, weekday } from '../../../shared/dates.ts'
+import { ENTRY_TYPES, TYPE_LABEL } from '../../../shared/entryTypes.ts'
 import type { EntryDTO } from '../../../shared/types.ts'
 import { createEntry } from '../../actions.ts'
 import { matches } from '../../markdown.ts'
@@ -8,8 +9,10 @@ import { dayFoldStore, foldStore, setFolded } from '../../state/fold.ts'
 import { categoryOrder, useCategories } from '../../state/categories.ts'
 import { journalStore, requestReveal, setCursor } from '../../state/journal.ts'
 import { useStore } from '../../state/store.ts'
+import { prefsStore, setPref } from '../../state/ui.ts'
 import { DayContext, type DayApi, type FocusRequest, type FocusTarget } from './dayContext.ts'
 import { EntryCard } from './EntryCard.tsx'
+import { ItemCard, MediaStrip } from './ItemCard.tsx'
 import { useDay } from './useDay.ts'
 import styles from './Journal.module.css'
 
@@ -34,16 +37,18 @@ export function JournalDay({ date, find }: Props) {
 
   const focusTo = useCallback((t: FocusRequest | null) => setFocus(t && { ...t, n: ++nonce.current }), [])
 
-  // Filtered (ctrl+f) view; the node being edited always stays visible.
+  // The types shown (the chips above the entries), then the find (ctrl+f); the node being edited always stays visible.
+  const types = useStore(prefsStore, (s) => s.journalTypes)
+  const typed = useMemo(() => (entries && types.length ? entries.filter((e) => types.includes(e.type)) : (entries ?? [])), [entries, types])
   const visible = useMemo(() => {
-    if (!entries || !q) return entries ?? []
+    if (!q) return typed
     const editingId = focus?.kind === 'node' ? focus.nodeId : null
-    return entries.flatMap((e) => {
+    return typed.flatMap((e) => {
       const head = matches(e.title, q) || e.tags.some((t) => matches(t, q))
       const nodes = head ? e.nodes : e.nodes.filter((n) => n.id === editingId || matches(n.content, q))
       return head || nodes.length ? [{ ...e, nodes }] : []
     })
-  }, [entries, q, focus])
+  }, [typed, q, focus])
 
   // Entries grouped by category, in the categories' order; within a group, in the day's order.
   const categories = useCategories()
@@ -54,8 +59,9 @@ export function JournalDay({ date, find }: Props) {
     return [...m].sort(([a], [b]) => order(a) - order(b))
   }, [visible, categories])
 
+  // Journal entries, in the order shown: the caret moves through their titles and nodes.
   const orderRef = useRef<EntryDTO[]>([])
-  orderRef.current = groups.flatMap(([, list]) => list)
+  orderRef.current = groups.flatMap(([, list]) => list.filter((e) => e.type === 'journal'))
   const entriesRef = useRef(entries)
   entriesRef.current = entries
 
@@ -188,6 +194,7 @@ export function JournalDay({ date, find }: Props) {
               {weekday(date)}
               {isToday && ' · today'}
             </div>
+            {entries && entries.length > 0 && <TypeFilter entries={entries} />}
           </div>
         </header>
 
@@ -198,14 +205,21 @@ export function JournalDay({ date, find }: Props) {
             No entries yet. Click here or press <kbd>Ctrl+N</kbd> / <kbd>Alt+N</kbd> to start writing.
           </button>
         )}
-        {entries && entries.length > 0 && !visible.length && <p className={styles.muted}>Nothing on this day matches “{q}”.</p>}
+        {entries && entries.length > 0 && !visible.length && (
+          <p className={styles.muted}>{q ? `Nothing on this day matches “${q}”.` : 'Nothing of the types chosen on this day.'}</p>
+        )}
 
         {groups.map(([category, list]) => (
           <section key={category ?? '_uncategorized'} className={styles.group}>
             {(category || groups.length > 1) && <h2 className={`${styles.categoryHead} ${category ? '' : styles.uncategorized}`}>{category ?? 'uncategorized'}</h2>}
-            {list.map((e) => (
-              <EntryCard key={e.id} entry={e} focus={focusFor(e)} find={q} flashId={flashId} folded={folded.has(e.id)} />
-            ))}
+            {list.map((e) =>
+              e.type === 'journal' ? (
+                <EntryCard key={e.id} entry={e} focus={focusFor(e)} find={q} flashId={flashId} folded={folded.has(e.id)} />
+              ) : e.type === 'media' ? null : (
+                <ItemCard key={e.id} entry={e} find={q} flash={flashId === e.id} />
+              ),
+            )}
+            {list.some((e) => e.type === 'media') && <MediaStrip entries={list.filter((e) => e.type === 'media')} />}
           </section>
         ))}
 
@@ -216,5 +230,36 @@ export function JournalDay({ date, find }: Props) {
         )}
       </div>
     </DayContext.Provider>
+  )
+}
+
+/** The types a day shows: a chip per type the day has; none chosen shows them all. Shared by every day tab. */
+function TypeFilter({ entries }: { entries: EntryDTO[] }) {
+  const chosen = useStore(prefsStore, (s) => s.journalTypes)
+  const counts = new Map<string, number>()
+  for (const e of entries) counts.set(e.type, (counts.get(e.type) ?? 0) + 1)
+  const present = ENTRY_TYPES.filter((t) => counts.has(t) || chosen.includes(t))
+  if (present.length < 2 && !chosen.length) return null
+  return (
+    <div className={styles.typeFilter} role="group" aria-label="Types shown">
+      <button className={`${styles.typeChip} ${chosen.length ? '' : styles.on}`} aria-pressed={!chosen.length} onClick={() => setPref('journalTypes', [])}>
+        all
+      </button>
+      {present.map((t) => {
+        const on = chosen.includes(t)
+        return (
+          <button
+            key={t}
+            className={`${styles.typeChip} ${on ? styles.on : ''}`}
+            aria-pressed={on}
+            title={on ? `Hide ${TYPE_LABEL[t].toLowerCase()}` : `Show ${TYPE_LABEL[t].toLowerCase()}${chosen.length ? ' too' : ' only'} (in every day)`}
+            onClick={() => setPref('journalTypes', on ? chosen.filter((x) => x !== t) : [...chosen, t])}
+          >
+            {TYPE_LABEL[t].toLowerCase()}
+            <span className={styles.count}>{counts.get(t) ?? 0}</span>
+          </button>
+        )
+      })}
+    </div>
   )
 }

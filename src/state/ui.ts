@@ -1,3 +1,4 @@
+import type { EntryType } from '../../shared/entryTypes.ts'
 import type { PaneId } from './panes.ts'
 import { createStore, persistedStore } from './store.ts'
 
@@ -76,9 +77,11 @@ interface Prefs {
   openHiddenPane: boolean
   /** Canvas tabs show (or scroll to) the journal's day, instead of browsing days of their own (state/canvasDay.ts). */
   canvasFollowsJournal: boolean
+  /** Types a day tab shows; empty: all of them. */
+  journalTypes: EntryType[]
 }
 
-const DEFAULT_PREFS: Prefs = { theme: 'dark', showArchived: false, includeSubtags: true, expanded: [], openHiddenPane: true, canvasFollowsJournal: false }
+const DEFAULT_PREFS: Prefs = { theme: 'dark', showArchived: false, includeSubtags: true, expanded: [], openHiddenPane: true, canvasFollowsJournal: false, journalTypes: [] }
 
 export const prefsStore = persistedStore<Prefs>('prefs.v1', DEFAULT_PREFS, (s) => ({ ...DEFAULT_PREFS, ...(s as Partial<Prefs>) }))
 

@@ -38,8 +38,7 @@ export function useDay(date: string) {
     const ctrl = new AbortController()
     unwrap(api.journal[':date'].$get({ param: { date } }, { init: { signal: ctrl.signal } })).then(
       (d) => {
-        // Imported AI chats are left out; they show in the canvas AI tab.
-        ref.current = d.entries.filter((e) => !e.chat)
+        ref.current = d.entries
         setEntries(ref.current)
         setError(null)
       },

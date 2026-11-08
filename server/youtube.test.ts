@@ -415,6 +415,9 @@ describe('tags, notes and comments', () => {
     expect((await req<YtVideoDTO>('PATCH', `/api/youtube/videos/${V(1).id}`, { category: 'build' })).category).toBe('build')
     expect((await req<YtLibraryDTO>('GET', '/api/youtube/library')).videos.find((x) => x.id === V(1).id)).toMatchObject({ entryId: `yt:${V(1).id}`, category: 'build' })
     expect((await req<{ entries: EntryDTO[] }>('GET', '/api/entries?category=build')).entries.map((e) => e.id)).toEqual([`yt:${V(1).id}`])
+    // The video's day lists it, with the day's other entries.
+    const day = found.entries[0]!.date
+    expect((await req<{ entries: EntryDTO[] }>('GET', `/api/journal/${day}`)).entries.map((e) => e.id)).toContain(`yt:${V(1).id}`)
   })
 
   it('renames (merging), then deletes a tag subtree', async () => {

@@ -4,7 +4,7 @@ import { isIsoDate } from '../../shared/dates.ts'
 import type { DayCount } from '../../shared/types.ts'
 import { db } from '../db/client.ts'
 import { entries } from '../db/content-schema.ts'
-import { dayTypes, entriesForDate } from '../lib/content.ts'
+import { entriesForDate } from '../lib/content.ts'
 import { bad } from '../lib/validate.ts'
 
 export const journalRoutes = new Hono()
@@ -18,7 +18,7 @@ export const journalRoutes = new Hono()
     const dates = db
       .select({ date: entries.date, count: sql<number>`count(*)` })
       .from(entries)
-      .where(and(eq(entries.archived, false), dayTypes()))
+      .where(eq(entries.archived, false))
       .groupBy(entries.date)
       .orderBy(desc(entries.date))
       .all()

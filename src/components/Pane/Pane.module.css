@@ -253,3 +253,8 @@
 .following {
   color: var(--accent);
 }
+
+/* The preview day tab: replaced by the next day opened, until double-clicked. */
+.preview .tabLabel {
+  font-style: italic;
+}

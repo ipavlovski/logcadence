@@ -1,10 +1,23 @@
 import { useEffect, useRef } from 'react'
-import { formatJournalDate, today } from '../../../shared/dates.ts'
+import { formatJournalDate, formatTabDate, today } from '../../../shared/dates.ts'
 import { LINK_ICON, pluginIcon, UNLINK_ICON } from '../../canvas/icons.tsx'
 import { pluginByType } from '../../canvas/plugins.ts'
 import { toggleFollowJournal } from '../../state/canvasDay.ts'
 import { canvasTabsStore } from '../../state/canvasTabs.ts'
-import { activateTab, closeTab, journalDateOf, paneTabs, parseKey, PRIMARY, setFocus, setPaneOpen, panesStore, type PaneId } from '../../state/panes.ts'
+import {
+  activateTab,
+  closeTab,
+  dayOfTab,
+  journalActiveOf,
+  paneTabs,
+  panesStore,
+  parseKey,
+  pinPreviewDay,
+  PRIMARY,
+  setFocus,
+  setPaneOpen,
+  type PaneId,
+} from '../../state/panes.ts'
 import { useStore } from '../../state/store.ts'
 import { prefsStore, setFind, uiStore } from '../../state/ui.ts'
 import { CanvasPluginTab } from '../Canvas/Canvas.tsx'
@@ -20,7 +33,10 @@ function tabLabel(key: string): string {
   const loc = parseKey(key)
   switch (loc.kind) {
     case 'journal':
-      return 'Journal'
+      return `Today · ${formatTabDate(today())}`
+    case 'day':
+    case 'preview-day':
+      return formatTabDate(dayOfTab(panesStore.get(), key))
     case 'plugin':
       return pluginByType(loc.type)?.title ?? loc.type
     case 'tree':
@@ -35,10 +51,12 @@ export function Pane({ id }: { id: PaneId }) {
   const focused = useStore(panesStore, (s) => s.focus === id)
   const find = useStore(uiStore, (s) => s.find[id])
   const open = useStore(panesStore, (s) => s.open[id])
-  const day = useStore(panesStore, journalDateOf)
-  useStore(canvasTabsStore, (s) => s) // the canvas pane's tabs follow Settings → Canvas
+  // The canvas pane's day tabs, and its plugin tabs (Settings → Canvas).
+  useStore(panesStore, (s) => s.pinnedDays)
+  useStore(panesStore, (s) => s.previewDay)
+  useStore(canvasTabsStore, (s) => s)
   const primary = PRIMARY[id]
-  const tabs = paneTabs(id, pane)
+  const tabs = paneTabs(id)
 
   if (!open)
     return (
@@ -82,7 +100,7 @@ export function Pane({ id }: { id: PaneId }) {
           aria-selected={primary === pane.active}
           className={`${styles.pinned} ${primary === pane.active ? styles.pinnedActive : ''}`}
           onClick={() => activateTab(id, primary)}
-          title={primary === 'journal' ? `Journal · ${day === today() ? 'today, ' : ''}${formatJournalDate(day)} (Ctrl+H)` : `${tabLabel(primary)} (Ctrl+H)`}
+          title={primary === 'journal' ? `Today: ${formatJournalDate(today())} (Ctrl+H)` : `${tabLabel(primary)} (Ctrl+H)`}
         >
           {tabLabel(primary)}
         </div>
@@ -106,15 +124,17 @@ export function Pane({ id }: { id: PaneId }) {
                     {pluginIcon(loc.type)}
                   </div>
                 )
+              const preview = loc.kind === 'preview-day'
               return (
               <div
                 key={key}
                 role="tab"
                 aria-selected={key === pane.active}
-                className={`${styles.tab} ${key === pane.active ? styles.active : ''}`}
+                className={`${styles.tab} ${key === pane.active ? styles.active : ''} ${preview ? styles.preview : ''}`}
                 onClick={() => activateTab(id, key)}
+                onDoubleClick={preview ? pinPreviewDay : undefined}
                 onAuxClick={(e) => e.button === 1 && closeTab(id, key)}
-                title={tabLabel(key)}
+                title={preview ? `${formatJournalDate(dayOfTab(panesStore.get(), key))} · the day opened last: double-click to keep its tab` : loc.kind === 'day' ? formatJournalDate(loc.date) : tabLabel(key)}
               >
                 <span className={styles.tabLabel}>{tabLabel(key)}</span>
                 <button
@@ -161,7 +181,9 @@ function PaneContent({ pane, tabKey, find }: { pane: PaneId; tabKey: string; fin
   const loc = parseKey(tabKey)
   switch (loc.kind) {
     case 'journal':
-      return <JournalTab find={find} />
+    case 'day':
+    case 'preview-day':
+      return <JournalTab tabKey={tabKey} find={find} />
     case 'plugin':
       return <CanvasPluginTab key={tabKey} type={loc.type} tabKey={tabKey} />
     case 'tree':
@@ -172,9 +194,9 @@ function PaneContent({ pane, tabKey, find }: { pane: PaneId; tabKey: string; fin
   return <p>Unknown tab in {pane}</p>
 }
 
-/** The canvas's primary tab: the journal's day, with alt+left/right through the days it showed. */
-function JournalTab({ find }: { find: string }) {
-  const date = useStore(panesStore, journalDateOf)
+/** A day tab (Today, a pinned day or the preview), with alt+left/right through the days opened. */
+function JournalTab({ tabKey, find }: { tabKey: string; find: string }) {
+  const date = useStore(panesStore, (s) => dayOfTab(s, tabKey))
   useJournalHistory()
   return <JournalDay key={date} date={date} find={find} />
 }
@@ -193,7 +215,7 @@ function FindBar({ pane, query }: { pane: PaneId; query: string }) {
       <input
         ref={ref}
         value={query}
-        placeholder={pane === 'tags' ? 'Filter…' : panesStore.get().panes.canvas.active === PRIMARY.canvas ? 'Filter this day…' : 'Find…'}
+        placeholder={pane === 'tags' ? 'Filter…' : journalActiveOf(panesStore.get()) ? 'Filter this day…' : 'Find…'}
         spellCheck={false}
         onChange={(e) => setFind(pane, e.target.value)}
         onKeyDown={(e) => {
