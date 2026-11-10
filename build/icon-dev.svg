@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- Logcadence: an outline of journal entries, bullets and lines whose lengths keep a beat. -->
+  <rect x="4" y="4" width="248" height="248" rx="44" fill="#4d9de0"/>
+  <path d="M66 76V180M66 100Q66 128 92 128" stroke="#fff" stroke-opacity=".55" stroke-width="7" stroke-linecap="round" fill="none"/>
+  <g fill="#fff">
+    <circle cx="66" cy="76" r="14"/>
+    <circle cx="104" cy="128" r="14"/>
+    <circle cx="66" cy="180" r="14"/>
+  </g>
+  <g stroke="#fff" stroke-width="22" stroke-linecap="round" fill="none">
+    <path d="M102 76H196"/>
+    <path d="M140 128H190"/>
+    <path d="M102 180H164"/>
+  </g>
+
+  <!-- LogcadenceDev: the </> badge, as on LogtrackerDev. -->
+  <rect x="88" y="148" width="160" height="92" rx="46" fill="#22252b" stroke="#4d9de0" stroke-width="6"/>
+  <g stroke="#fff" stroke-width="13" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M134 172L114 194L134 216"/>
+    <path d="M181 168L157 220"/>
+    <path d="M204 172L224 194L204 216"/>
+  </g>
+</svg>

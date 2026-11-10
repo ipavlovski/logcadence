@@ -8,3 +8,7 @@ extraMetadata:
 directories:
   output: release-dev
 publish: null
+# Its own icon, with a </> badge, so it can be told apart from the released app (build/icon-dev.svg → icon-dev.png).
+win:
+  target: nsis
+  icon: build/icon-dev.png

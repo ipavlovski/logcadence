@@ -27,6 +27,8 @@ npmRebuild: false
 
 win:
   target: nsis
+  # Drawn in build/icon.svg (rsvg-convert -w 256 build/icon.svg -o build/icon.png).
+  icon: build/icon.png
 nsis:
   oneClick: false
   perMachine: false

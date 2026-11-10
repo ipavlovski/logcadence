@@ -73,8 +73,10 @@ if (wasRunning) {
 
 step(`copying to ${targetWin}`)
 if (WSL) {
-  // Electron's own files only change with its version (and their size with it); the app's are always copied.
+  // Electron's own files only change with its version (and their size with it); the app's are always copied. So is
+  // the exe: electron-builder writes the icon and the asar's integrity into it on every build, leaving its size as is.
   run('rsync', ['-r', '--size-only', '--delete', '--exclude', '/resources/', `${built}/`, `${target}/`])
+  run('rsync', [`${built}/${EXE}`, `${target}/${EXE}`])
   run('rsync', ['-r', '--delete', `${built}/resources/`, `${target}/resources/`])
 } else {
   const r = out('robocopy', [built, target, '/MIR', '/NFL', '/NDL', '/NJH', '/NJS', '/NP'], { ok: true })
