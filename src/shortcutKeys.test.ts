@@ -15,7 +15,6 @@ const entry = (id: string, tags: string[], nodes: string[]): EntryDTO => ({
   archived: false,
   tags,
   nodes: nodes.map((content, i) => ({ id: `${id}-n${i}`, entryId: id, content, position: i, archived: false, activeImageId: null, images: [], createdAt: 0, updatedAt: 0 })),
-  chat: null,
   createdAt: 0,
   updatedAt: 0,
 })

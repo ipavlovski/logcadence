@@ -313,7 +313,7 @@ kbd {
   color: var(--accent);
 }
 
-/* Videos, bookmarks and AI chats in a day (ItemCard). */
+/* Bookmarks in a day (ItemCard). */
 .item {
   display: flex;
   gap: 10px;

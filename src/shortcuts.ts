@@ -3,7 +3,6 @@ import { toggleFollowJournal } from './state/canvasDay.ts'
 import { runCommand } from './state/commands.ts'
 import { closeAllTabs, closeTab, cycleTab, focusPane, goHistory, journalActiveOf, openLoc, panesStore, PRIMARY, stepDay, togglePane, type PaneId } from './state/panes.ts'
 import { openFind, openSettings, openSpotlight, prefsStore, toggleAppKeys, toggleHelp, uiStore } from './state/ui.ts'
-import { openYtJump } from './state/youtube.ts'
 
 // Single source for keyboard shortcuts: drives both the global handler and the help overlay.
 // Browsers reserve ctrl+w / ctrl+n / ctrl+t / ctrl+1… and friends, so the web build also binds alt+ variants;
@@ -59,7 +58,6 @@ export const BINDINGS: Binding[] = [
   // view's own history (the view registers tags.back/forward), else through the queries it showed.
   { keys: ['alt+arrowleft'], label: 'Back', group: 'Navigation', run: (p) => (p === 'canvas' ? runCommand('canvas.back') : runCommand('tags.back') || goHistory(p, -1)) },
   { keys: ['alt+arrowright'], label: 'Forward', group: 'Navigation', run: (p) => (p === 'canvas' ? runCommand('canvas.forward') : runCommand('tags.forward') || goHistory(p, 1)) },
-  { keys: ['mod+j'], label: 'YouTube: jump to date', group: 'Navigation', pane: 'tags', run: () => openYtJump(), inInputs: true },
   { keys: ['mod+n', 'alt+n'], label: 'New entry at cursor', group: 'Journal', run: () => newEntryAtCursor(), inInputs: true, about: 'journal' },
   { keys: ['mod+shift+n', 'alt+shift+n'], label: 'New entry…', group: 'Journal', run: () => newEntryWithDialog(), inInputs: true, about: 'journal' },
   { keys: ['mod+['], label: 'Previous day', group: 'Journal', pane: 'canvas', when: onJournal, run: () => stepDay(-1), inInputs: true, about: 'journal' },

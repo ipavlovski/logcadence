@@ -1,13 +1,11 @@
 import type { EntryDTO } from '../shared/types.ts'
 import { api, unwrap } from './api.ts'
-import { openChat } from './state/ai.ts'
 import { bookmarksNav } from './state/captures.ts'
 import { emitChange } from './state/bus.ts'
 import { journalStore, requestReveal } from './state/journal.ts'
 import { parseQuery } from '../shared/query.ts'
 import { activeJournalDate, openDate, panesStore, showTypeView, tabQuery } from './state/panes.ts'
 import { notify, openNewEntry, type NewEntryDefaults } from './state/ui.ts'
-import { openVideo } from './state/youtube.ts'
 
 /** Creates an entry on the server, then opens its day and puts the caret in it. */
 export async function createEntry(opts: NewEntryDefaults & { title?: string; content?: string; focus?: 'title' | 'node' }) {
@@ -58,18 +56,12 @@ export function newEntryWithDialog() {
 }
 
 /**
- * Opens an entry that has a view of its own, in the tags pane: an AI chat in the AI view (at the prompt of `nodeId`), a
- * video, a bookmark or a media item in theirs. False for a journal entry, which shows in its day.
+ * Opens an entry that has a view of its own, in the tags pane: a bookmark or a media item in theirs. False for a
+ * journal entry, which shows in its day.
  */
-export function openItem(entry: EntryDTO, nodeId?: string): boolean {
-  if (entry.chat) {
-    const turn = nodeId ? entry.chat.nodeIds.indexOf(nodeId) : -1
-    openChat(entry.chat.id, turn >= 0 ? { turn } : {})
-    return true
-  }
+export function openItem(entry: EntryDTO): boolean {
   const d = entry.detail
-  if (d?.kind === 'video') openVideo(d.id)
-  else if (d?.kind === 'bookmark') bookmarksNav.open(d.id)
+  if (d?.kind === 'bookmark') bookmarksNav.open(d.id)
   else if (d?.kind === 'media') showTypeView('media')
   return !!d
 }

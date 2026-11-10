@@ -1,10 +1,10 @@
 import path from 'node:path'
 import { and, asc, eq, inArray, sql, type SQL } from 'drizzle-orm'
 import { NOTE_TYPES, type EntryType } from '../../shared/entryTypes.ts'
-import type { CategoryInfo, ChatSource, EntryDates, EntryDetail, EntryDTO, ImageDTO, NodeDTO } from '../../shared/types.ts'
+import type { CategoryInfo, EntryDates, EntryDetail, EntryDTO, ImageDTO, NodeDTO } from '../../shared/types.ts'
 import { cleanTags, isUnder, normalizeTag, TAG_SEP } from '../../shared/tags.ts'
 import { db } from '../db/client.ts'
-import { boardItems, captures, categories, chats, entries, entryTags, images, nodes, tags, ytVideos } from '../db/content-schema.ts'
+import { boardItems, captures, categories, entries, entryTags, images, nodes, tags } from '../db/content-schema.ts'
 import { logEvent } from './events.ts'
 import { bad, notFound } from './validate.ts'
 
@@ -69,12 +69,6 @@ export function loadEntries(ids: string[]): EntryDTO[] {
   const nodeRows = db.select().from(nodes).where(inArray(nodes.entryId, ids)).orderBy(asc(nodes.position)).all()
   const imgs = imagesByNode(inArray(nodes.entryId, ids))
   const tagMap = tagsFor(ids)
-  const chatRows = db
-    .select({ id: chats.id, source: chats.source, entryId: chats.entryId, nodeIds: chats.nodeIds, startedAt: chats.startedAt, importedAt: chats.importedAt })
-    .from(chats)
-    .where(inArray(chats.entryId, ids))
-    .all()
-  const chatMap = new Map(chatRows.map((c) => [c.entryId!, c]))
   const details = detailsFor(entryRows)
 
   const nodesByEntry = new Map<string, NodeDTO[]>()
@@ -87,15 +81,13 @@ export function loadEntries(ids: string[]): EntryDTO[] {
   return ids.flatMap((id) => {
     const e = byId.get(id)
     if (!e) return []
-    const chat = chatMap.get(id)
     const d = details.get(id)
-    const dates: EntryDates = { created: e.createdAt, updated: e.updatedAt, ...d?.dates, ...(chat && { started: chat.startedAt, imported: chat.importedAt }) }
+    const dates: EntryDates = { created: e.createdAt, updated: e.updatedAt, ...d?.dates }
     return [
       {
         ...e,
         tags: tagMap.get(id) ?? [],
         nodes: nodesByEntry.get(id) ?? [],
-        chat: chat ? { id: chat.id, source: chat.source as ChatSource, nodeIds: chat.nodeIds } : null,
         detail: d?.detail ?? null,
         dates,
       },
@@ -103,17 +95,10 @@ export function loadEntries(ids: string[]): EntryDTO[] {
   })
 }
 
-/** The details of video, bookmark and media entries: what their cards show, and their own dates. */
+/** The details of bookmark and media entries: what their cards show, and their own dates. */
 function detailsFor(rows: { id: string; type: EntryType }[]): Map<string, { detail: EntryDetail; dates: Partial<EntryDates> }> {
   const out = new Map<string, { detail: EntryDetail; dates: Partial<EntryDates> }>()
   const of = (type: EntryType) => rows.filter((r) => r.type === type).map((r) => r.id)
-  const videoIds = of('video')
-  if (videoIds.length)
-    for (const v of db.select().from(ytVideos).where(inArray(ytVideos.entryId, videoIds)).all())
-      out.set(v.entryId!, {
-        detail: { kind: 'video', id: v.id, channel: v.channel, channelAvatar: v.channelAvatar, duration: v.duration, thumbUrl: v.thumbSmall ? imageUrl(v.thumbSmall) : null },
-        dates: { added: v.addedAt, imported: v.importedAt || undefined, published: v.publishedAt ?? undefined },
-      })
   const captureIds = of('bookmark')
   if (captureIds.length)
     for (const c of db.select().from(captures).where(inArray(captures.entryId, captureIds)).all())
@@ -136,7 +121,7 @@ export function loadNode(id: string): NodeDTO | undefined {
   return row && toNode(row, imagesByNode(eq(nodes.id, id)).get(id) ?? [])
 }
 
-/** Journal entries and AI chats: the entries with nodes, ordered by hand. */
+/** Journal entries: the entries with nodes, ordered by hand. */
 export const noteTypes = () => inArray(entries.type, [...NOTE_TYPES])
 
 /** A day's entries (of every type, or only the note types), hand-ordered ones first, then the rest by time. */

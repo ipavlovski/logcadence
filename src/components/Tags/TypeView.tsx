@@ -1,18 +1,16 @@
 import { Suspense, useEffect, useRef } from 'react'
-import { CHAT_SUBTYPE, parseTypeRef, type EntryType } from '../../../shared/entryTypes.ts'
+import { parseTypeRef, type EntryType } from '../../../shared/entryTypes.ts'
 import type { Query } from '../../../shared/query.ts'
-import { CHAT_SOURCES, type ChatSource, type HandlerId } from '../../../shared/types.ts'
+import type { HandlerId } from '../../../shared/types.ts'
 import { typeViewOf } from '../../canvas/plugins.ts'
-import { aiStore, setChatSource } from '../../state/ai.ts'
 import { bookmarksNav, withFilter as withCaptureFilter, withHandler, type CaptureFilter } from '../../state/captures.ts'
 import { setTabQuery } from '../../state/panes.ts'
 import type { Store } from '../../state/store.ts'
-import { withFilter as withYtFilter, youtubeStore, type YtFilter } from '../../state/youtube.ts'
 import styles from './Tags.module.css'
 
-// A type's own view in a tags pane tab. The view keeps its filter in a store of its own (a channel, a site, a
-// source…); the tab's query is the source of truth: opening the tab sets the view's filter from it, and a filter
-// chosen in the view becomes the tab's query.
+// A type's own view in a tags pane tab. The view keeps its filter in a store of its own (a site, a handler…); the
+// tab's query is the source of truth: opening the tab sets the view's filter from it, and a filter chosen in the view
+// becomes the tab's query.
 
 interface Sync<S> {
   store: Store<S>
@@ -27,17 +25,6 @@ interface Sync<S> {
 }
 
 const sub = (q: Query) => parseTypeRef(q.types?.[0] ?? '')?.subtype ?? null
-
-const ytSync: Sync<ReturnType<typeof youtubeStore.get>> = {
-  store: youtubeStore,
-  read: (s) => s.filter,
-  fromQuery: (q): YtFilter => (q.channel ? { kind: 'channel', name: q.channel } : q.tags?.[0] ? { kind: 'tag', path: q.tags[0] } : q.untagged ? { kind: 'untagged' } : null),
-  apply: (f) => youtubeStore.set((s) => withYtFilter(s, f as YtFilter)),
-  toQuery: (q, f) => {
-    const filter = f as YtFilter
-    return { types: q.types, ...(filter?.kind === 'channel' && { channel: filter.name }), ...(filter?.kind === 'tag' && { tags: [filter.path] }), ...(filter?.kind === 'untagged' && { untagged: true }) }
-  },
-}
 
 const bookmarkSync: Sync<ReturnType<typeof bookmarksNav.store.get>> = {
   store: bookmarksNav.store,
@@ -61,17 +48,7 @@ const bookmarkSync: Sync<ReturnType<typeof bookmarksNav.store.get>> = {
   },
 }
 
-const SOURCE_OF = Object.fromEntries(CHAT_SOURCES.map((s) => [CHAT_SUBTYPE[s], s])) as Record<string, ChatSource>
-
-const aiSync: Sync<ReturnType<typeof aiStore.get>> = {
-  store: aiStore,
-  read: (s) => s.source,
-  fromQuery: (q) => SOURCE_OF[sub(q) ?? ''] ?? null,
-  apply: (f) => setChatSource(f as ChatSource | null),
-  toQuery: (_, f) => ({ types: [f ? `ai/${CHAT_SUBTYPE[f as ChatSource]}` : 'ai'] }),
-}
-
-const SYNCS: Partial<Record<EntryType, Sync<never>>> = { video: ytSync as Sync<never>, bookmark: bookmarkSync as Sync<never>, ai: aiSync as Sync<never> }
+const SYNCS: Partial<Record<EntryType, Sync<never>>> = { bookmark: bookmarkSync as Sync<never> }
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
 

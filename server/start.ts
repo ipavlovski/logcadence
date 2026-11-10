@@ -1,30 +1,20 @@
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import type { Context } from 'hono'
-import { readdirSync } from 'node:fs'
 import path from 'node:path'
 import { app } from './app.ts'
-import { closeDbs, db, JOURNALS_DIR } from './db/client.ts'
+import { closeDbs, db } from './db/client.ts'
 import { entries } from './db/content-schema.ts'
-import { setClaudeWeb, type ClaudeWebClient } from './lib/ai/claudeWeb.ts'
 import { adoptPages } from './lib/captures.ts'
-import { flushJournalFiles, touchDates } from './lib/journalFiles.ts'
-import { importAll as importYoutube } from './lib/youtube/library.ts'
-import { loadSettings as youtubeSettings } from './lib/youtube/settings.ts'
-import { downloadThumbs } from './lib/youtube/thumbs.ts'
+import { flushJournalFiles, refreshMirror } from './lib/journalFiles.ts'
 
 // Starts the API (and, given staticDir, the built web app) plus the background jobs. Shared by the web
 // server (server/index.ts) and the desktop app, which runs it inside Electron's main process.
-
-// YouTube playlists: new videos count as discovered on the day an import sees them, so check a few times a day.
-const YOUTUBE_SYNC_MS = 3 * 60 * 60_000
 
 export interface StartOptions {
   port: number
   /** Built web app (vite's dist/) to serve next to the API. */
   staticDir?: string
-  /** The claude.ai session the desktop app signs in to; given, the AI scan syncs claude.ai chats. */
-  claudeWeb?: ClaudeWebClient
 }
 
 export interface RunningServer {
@@ -33,8 +23,7 @@ export interface RunningServer {
   stop(): Promise<void>
 }
 
-export function startServer({ port, staticDir, claudeWeb }: StartOptions): Promise<RunningServer> {
-  setClaudeWeb(claudeWeb)
+export function startServer({ port, staticDir }: StartOptions): Promise<RunningServer> {
   if (staticDir) {
     const root = path.relative(process.cwd(), staticDir)
     // Built files under static/ have content hashes in their names, so they never change. Everything else (the
@@ -45,32 +34,12 @@ export function startServer({ port, staticDir, claudeWeb }: StartOptions): Promi
     app.get('*', serveStatic({ path: path.join(root, 'index.html'), onFound }))
   }
 
-  // The markdown mirror is derived from the database: rebuild it when it is missing (e.g. after a data import).
-  if (!readdirSync(JOURNALS_DIR).length) {
-    const dates = db.selectDistinct({ date: entries.date }).from(entries).all()
-    if (dates.length) touchDates(...dates.map((d) => d.date))
-  }
+  // The markdown mirror is derived from the database: rebuilt when it is missing (e.g. after a data import) or older.
+  refreshMirror(() => db.selectDistinct({ date: entries.date }).from(entries).all().map((d) => d.date))
 
   // Bookmarks of a site that has a handler since (a Marketplace listing) become what the handler makes them.
   const adopted = adoptPages()
   if (adopted) console.log(`bookmarks: ${adopted} page(s) taken by their site's handler`)
-
-  const youtubeTick = () => {
-    if (!youtubeSettings().auto) return
-    importYoutube().then(
-      (rs) => {
-        const added = rs.reduce((n, r) => n + r.added, 0)
-        if (added) console.log(`youtube: ${added} new video(s)`)
-        for (const r of rs) if (r.error) console.warn(`youtube import of ${r.title}: ${r.error}`)
-      },
-      (err: Error) => console.warn(`youtube import: ${err.message}`),
-    )
-  }
-  const youtubeTimer = setInterval(youtubeTick, YOUTUBE_SYNC_MS)
-  youtubeTimer.unref()
-  youtubeTick()
-  // Thumbnails left over from an interrupted run (app closed, offline), when no import is due to start them.
-  if (!youtubeSettings().auto) downloadThumbs().catch((err: Error) => console.warn(`youtube thumbnails: ${err.message}`))
 
   return new Promise((resolve, reject) => {
     // Bound to 127.0.0.1 explicitly: Google Drive's login redirect uses that address, and WSL only
@@ -83,7 +52,6 @@ export function startServer({ port, staticDir, claudeWeb }: StartOptions): Promi
         port,
         stop: () =>
           (stopped ??= new Promise<void>((done) => {
-            clearInterval(youtubeTimer)
             flushJournalFiles()
             server.close(() => {
               closeDbs()

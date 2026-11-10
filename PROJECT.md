@@ -2,9 +2,10 @@
 
 - purpose: knowledge base, similar to logseq
 - 2-pane workflow journaling app: canvas (days) / tags (queries)
-- structure: every item is an entry (journal entry, video, bookmark, media, AI chat), with a type/subtype,
+- structure: every item is an entry (journal entry, bookmark, media), with a type/subtype,
   one category and any number of tags; the canvas shows days, the tags pane shows entries by their metadata
 - activity tracking (maps, activity, progress, dashboard, checklists, ...) lives in a separate app: logtracker (../logtracker)
+- YouTube videos live in youtube-lib (../youtube-lib, yt.localhost); AI chats in ai-lib (../ai-lib, ai.localhost)
 
 
 ## UI DESCRIPTION
@@ -13,9 +14,9 @@
     - opening a day shows it in the preview tab (replaced by the next day opened); double-click (or ctrl+click a date) pins it
     - tabs read "2026-11-08 Sun"; a day lists every type of entry under its categories; chips filter the types shown
   - tags: the preview tab, then queries pinned in tabs of their own
-    - any click on an entry's metadata (tag, category, type, channel, site) retargets the preview; double-click (or ctrl+click) pins it
+    - any click on an entry's metadata (tag, category, type, site) retargets the preview; double-click (or ctrl+click) pins it
     - an empty preview is the browser: types, categories and the tag tree, with counts
-    - a query of one type shows in that type's view (YouTube grid, bookmarks, media board, AI chats); others as a list of entries
+    - a query of one type shows in that type's view (bookmarks, media board); others as a list of entries
     - icons at the end of the tab bar open the type views
 
 
@@ -112,8 +113,9 @@
 
 
 ### TYPES
-- journal; video (youtube, yt = shorts, ig, tt); bookmark (page, reddit, marketplace: the handlers); media (image, video); ai (claude-chat, claude-code, gemini-chat, gemini-code)
-- videos, bookmarks, media and AI chats each have a view of their own in the tags pane
+- journal; bookmark (page, reddit, marketplace: the handlers); media (image, video)
+- bookmarks and media each have a view of their own in the tags pane
+- videos and AI chats moved out to youtube-lib and ai-lib (migration 0017_split_ai_youtube)
 - the rest of the old canvas (map, activity, progress, dashboard, checklists) moved to logtracker
 
 #### SHORTCUTS
@@ -123,9 +125,6 @@
 - actively archive old shortcuts, show warning sign by clashes
 
 #### AI-PROMPTS
-- track all the AI prompts from today
-- eg. goole searches, gemini, claude
-- logtracker keeps its own AI history (timestamp, model, title) and links each chat back here as logcadence://ai/<id>
-  -> to do: register the logcadence:// link in the desktop app and open the chat in the AI view
+- moved to ai-lib (../ai-lib): every chat of claude-chat, claude-code, gemini-chat and gemini-code, with an MCP server
 
 

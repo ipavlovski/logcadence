@@ -7,7 +7,6 @@ import { closeTagTabs, renameTagTabs } from '../../state/panes.ts'
 import { useStore } from '../../state/store.ts'
 import { notify } from '../../state/ui.ts'
 import { useAllTags } from '../../state/tags.ts'
-import { bumpYt } from '../../state/youtube.ts'
 import { Modal, ModalActions } from '../Modal/Modal.tsx'
 import { TagInput } from '../TagInput/TagInput.tsx'
 import { startTagOp, tagOpStore, type TagOp } from './tagOps.ts'
@@ -48,7 +47,6 @@ function Dialog({ op }: { op: TagOp }) {
       }
       // Every type carries the tag set: the journal, and the views that keep their own change counters.
       emitChange()
-      bumpYt()
       bookmarksNav.bump()
       close()
     } catch (err) {

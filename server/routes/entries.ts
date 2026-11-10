@@ -7,7 +7,7 @@ import { parseTypeRef } from '../../shared/entryTypes.ts'
 import { normalizeTag, TAG_SEP } from '../../shared/tags.ts'
 import type { CreateEntryBody, EntryQuery, SelectionBody, UpdateEntryBody } from '../../shared/types.ts'
 import { db } from '../db/client.ts'
-import { captures, entries, entryTags, nodes, tags, ytVideos } from '../db/content-schema.ts'
+import { captures, entries, entryTags, nodes, tags } from '../db/content-schema.ts'
 import { datesOf, entryPositionAfter, loadEntries, pruneTags, setEntryCategory, setEntryTags } from '../lib/content.ts'
 import { logEvent } from '../lib/events.ts'
 import { touchDates } from '../lib/journalFiles.ts'
@@ -72,7 +72,6 @@ function parseQuery(v: Record<string, string | string[]>): EntryQuery & { limit:
     exact: one('exact') === '1' || undefined,
     archived: one('archived') === '1' || undefined,
     date,
-    channel: one('channel'),
     site: one('site'),
     limit: Math.min(limit, 5000),
   })
@@ -98,13 +97,12 @@ function queryWhere(q: EntryQuery): SQL | undefined {
   if (q.untagged) conds.push(sql`not exists (select 1 from ${entryTags} where ${entryTags.entryId} = ${entries.id})`)
   if (!q.archived) conds.push(eq(entries.archived, false))
   if (q.date) conds.push(eq(entries.date, q.date))
-  if (q.channel) conds.push(sql`exists (select 1 from ${ytVideos} where ${ytVideos.entryId} = ${entries.id} and ${ytVideos.channel} = ${q.channel})`)
   if (q.site) conds.push(sql`exists (select 1 from ${captures} where ${captures.entryId} = ${entries.id} and ${captures.site} = ${q.site})`)
   return and(...conds)
 }
 
 export const entryRoutes = new Hono()
-  // Entries of every type matching a query (types, category, tags, a channel…), newest day first.
+  // Entries of every type matching a query (types, category, tags, a site…), newest day first.
   .get(
     '/entries',
     validator('query', (v) => parseQuery(v)),
@@ -153,8 +151,8 @@ export const entryRoutes = new Hono()
     const payload: Record<string, unknown> = { ...b }
     db.transaction(() => {
       const { tags: tagList, category, ...cols } = b
-      // A video's, capture's or board item's day and title are its item's.
-      if (before.type !== 'journal' && before.type !== 'ai' && (cols.date !== undefined || cols.title !== undefined)) bad(`a ${before.type} entry's day and title come from the item`)
+      // A capture's or board item's day and title are its item's.
+      if (before.type !== 'journal' && (cols.date !== undefined || cols.title !== undefined)) bad(`a ${before.type} entry's day and title come from the item`)
       db.update(entries)
         .set({ ...cols, updatedAt: Date.now() })
         .where(eq(entries.id, id))

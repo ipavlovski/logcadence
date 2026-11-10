@@ -19,7 +19,8 @@ export const LEGACY_FORMATS = ['logseq-rewrite-export']
 // 2: Reddit merged into Bookmarks (captures' kind became handler, Reddit's columns became fields; one capture tag set).
 // 3: tag paths are separated by '/' instead of ':'.
 // 4: every item is an entry with a type, a subtype and a category; one tag set (0016_unified_entries).
-export const FORMAT_VERSION = 4
+// 5: videos and AI chats moved out to youtube-lib and ai-lib (0017_split_ai_youtube).
+export const FORMAT_VERSION = 5
 
 // Insert order: parents before the rows that reference them.
 export const CONTENT_TABLES = {
@@ -29,10 +30,6 @@ export const CONTENT_TABLES = {
   nodes: content.nodes,
   entry_tags: content.entryTags,
   images: content.images,
-  chats: content.chats,
-  yt_playlists: content.ytPlaylists,
-  yt_videos: content.ytVideos,
-  yt_images: content.ytImages,
   captures: content.captures,
   capture_images: content.captureImages,
   board_items: content.boardItems,
@@ -56,6 +53,8 @@ export const V3_CONTENT_TABLES = [
   'capture_images',
   'board_items',
 ]
+/** Format 4's tables that are gone in 5 (videos and AI chats). */
+export const V4_MOVED_TABLES = ['chats', 'yt_playlists', 'yt_videos', 'yt_images']
 export const EVENTS_TABLES = { events: events.events }
 
 export interface FileSet {

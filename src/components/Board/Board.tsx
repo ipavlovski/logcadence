@@ -6,7 +6,7 @@ import { api, unwrap } from '../../api.ts'
 import { mediaFiles, pasteMedia } from '../../media.ts'
 import { persistedStore, useStore } from '../../state/store.ts'
 import { notify } from '../../state/ui.ts'
-import { dayLabel } from '../Youtube/Youtube.tsx'
+import { dayLabel } from '../Library/Library.tsx'
 import { prepare } from './thumbs.ts'
 import styles from './Board.module.css'
 

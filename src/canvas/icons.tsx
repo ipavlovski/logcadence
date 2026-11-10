@@ -9,12 +9,6 @@ const Icon = ({ children }: { children: ReactNode }) => (
 )
 
 export const ICONS: Record<string, ReactNode> = {
-  youtube: (
-    <Icon>
-      <rect x="2.5" y="5" width="19" height="14" rx="3.5" />
-      <path d="m10 9 5 3-5 3z" />
-    </Icon>
-  ),
   bookmarks: (
     <Icon>
       <path d="M6.5 3.5h11v17L12 16.5l-5.5 4z" />
@@ -25,12 +19,6 @@ export const ICONS: Record<string, ReactNode> = {
       <rect x="3" y="4.5" width="18" height="15" rx="2" />
       <circle cx="9" cy="10" r="1.8" />
       <path d="m21 16-4.5-4.5L8 19.5" />
-    </Icon>
-  ),
-  'ai-prompts': (
-    <Icon>
-      <path d="M12 3.5c.6 4.3 2.5 6.2 6.8 6.8-4.3.6-6.2 2.5-6.8 6.8-.6-4.3-2.5-6.2-6.8-6.8 4.3-.6 6.2-2.5 6.8-6.8z" />
-      <path d="M18.5 16.5c.2 1.6.9 2.3 2.5 2.5-1.6.2-2.3.9-2.5 2.5-.2-1.6-.9-2.3-2.5-2.5 1.6-.2 2.3-.9 2.5-2.5z" />
     </Icon>
   ),
 }

@@ -4,9 +4,7 @@ import { HTTPException } from 'hono/http-exception'
 import { logger } from 'hono/logger'
 import path from 'node:path'
 import { ASSETS_DIR } from './db/client.ts'
-import { stripReplyPreviews } from './lib/ai/importer.ts'
 import { boardRoutes } from './routes/board.ts'
-import { aiRoutes } from './routes/ai.ts'
 import { captureRoutes } from './routes/captures.ts'
 import { entryRoutes } from './routes/entries.ts'
 import { journalRoutes } from './routes/journal.ts'
@@ -14,9 +12,6 @@ import { nodeRoutes } from './routes/nodes.ts'
 import { searchRoutes } from './routes/search.ts'
 import { tagRoutes } from './routes/tags.ts'
 import { transferRoutes } from './routes/transfer.ts'
-import { youtubeRoutes } from './routes/youtube.ts'
-
-stripReplyPreviews()
 
 export const app = new Hono()
 if (process.env.NODE_ENV !== 'test') app.use('/api/*', logger())
@@ -27,7 +22,7 @@ app.onError((err, c) => {
   return c.json({ error: 'internal error' }, 500)
 })
 
-const routes = app.route('/api', journalRoutes).route('/api', entryRoutes).route('/api', nodeRoutes).route('/api', tagRoutes).route('/api', searchRoutes).route('/api', aiRoutes).route('/api', transferRoutes).route('/api', youtubeRoutes).route('/api', captureRoutes).route('/api', boardRoutes)
+const routes = app.route('/api', journalRoutes).route('/api', entryRoutes).route('/api', nodeRoutes).route('/api', tagRoutes).route('/api', searchRoutes).route('/api', transferRoutes).route('/api', captureRoutes).route('/api', boardRoutes)
 export type AppType = typeof routes
 
 // Asset file names are server-generated uuids and never change, so cache them forever.

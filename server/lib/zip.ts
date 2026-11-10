@@ -2,8 +2,8 @@ import { closeSync, createReadStream, openSync, readSync, fstatSync, writeSync }
 import type { Writable } from 'node:stream'
 import { crc32, deflateRawSync, inflateRawSync } from 'node:zlib'
 
-// Minimal zip reader for chat exports (Claude data export, Google Takeout) and GPS archives. Reads the central
-// directory and only the members asked for, so multi-GB Takeout archives stay cheap to probe.
+// Minimal zip reader for data exports. Reads the central directory and only the members asked for, so multi-GB
+// archives stay cheap to probe.
 // ZipWriter (below) streams the data exports, which run to many GB.
 
 export interface ZipMember {

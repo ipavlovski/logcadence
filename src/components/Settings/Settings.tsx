@@ -90,7 +90,7 @@ function General() {
         </Row>
       </Group>
       <Group title="Data">
-        <Row label="Export the library" hint="Entries, chats, YouTube, captures, media. An export can be imported into an empty library, e.g. the desktop app.">
+        <Row label="Export the library" hint="Entries, bookmarks, media. An export can be imported into an empty library, e.g. the desktop app.">
           <DataExport />
         </Row>
       </Group>
@@ -198,7 +198,7 @@ function FollowJournal() {
         checked={follows}
         onChange={setFollowJournal}
         label={`Follow the journal’s day (${formatCombo('mod+l')})`}
-        hint="On, the YouTube, Bookmarks, Media and AI views scroll to the day open in the canvas. Off, they keep their own place."
+        hint="On, the Bookmarks and Media views scroll to the day open in the canvas. Off, they keep their own place."
       />
     </Group>
   )

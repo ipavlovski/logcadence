@@ -1,6 +1,6 @@
 import type { ClipboardEvent } from 'react'
 
-// Pasting and dropping images, gifs and videos into a gallery (journal nodes, YouTube notes).
+// Pasting and dropping images, gifs and videos into a gallery (journal nodes, bookmark notes).
 
 export const mediaFiles = (list: FileList | null | undefined) => [...(list ?? [])].filter((f) => /^(image|video)\//.test(f.type))
 

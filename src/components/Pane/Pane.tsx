@@ -168,7 +168,7 @@ export function Pane({ id }: { id: PaneId }) {
   )
 }
 
-/** The tags pane's tab bar, right end: a type's view (YouTube, Bookmarks…) in the preview; ctrl+click, in a tab of its own. */
+/** The tags pane's tab bar, right end: a type's view (Bookmarks, Media) in the preview; ctrl+click, in a tab of its own. */
 function TypeViewButtons() {
   const active = useStore(panesStore, (s) => activeTypeView(s))
   return (

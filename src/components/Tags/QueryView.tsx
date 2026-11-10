@@ -125,9 +125,9 @@ export function QueryView({ tabKey, query, find }: { tabKey: string; query: Quer
     })
   }
 
-  // AI chats, videos, bookmarks and media open in their own tabs; journal entries in their day.
+  // Bookmarks and media open in their own tabs; journal entries in their day.
   const revealIn = (entry: EntryDTO, nodeId?: string) => {
-    if (openItem(entry, nodeId)) return
+    if (openItem(entry)) return
     openDate(entry.date, { focus: true })
     requestReveal({ date: entry.date, entryId: entry.id, nodeId, mode: 'flash' })
   }
@@ -270,7 +270,6 @@ function Facets({ tabKey, query }: { tabKey: string; query: Query }) {
     ...(query.types ?? []).map((t) => ({ label: queryLabel({ types: [t] }), without: { ...query, types: query.types!.filter((x) => x !== t) } })),
     ...(query.category ? [{ label: query.category, without: { ...query, category: undefined } }] : []),
     ...(query.uncategorized ? [{ label: 'uncategorized', without: { ...query, uncategorized: undefined } }] : []),
-    ...(query.channel ? [{ label: query.channel, without: { ...query, channel: undefined } }] : []),
     ...(query.site ? [{ label: query.site, without: { ...query, site: undefined } }] : []),
     ...(query.tags ?? []).map((t) => ({ label: `#${t}`, without: { ...query, tags: query.tags!.filter((x) => x !== t) } })),
     ...(query.untagged ? [{ label: 'untagged', without: { ...query, untagged: undefined } }] : []),

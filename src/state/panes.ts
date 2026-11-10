@@ -442,7 +442,7 @@ export function pinPreviewQuery() {
   update('tags', (p) => pushHistory({ ...p, tabs: p.tabs.includes(key) ? p.tabs : [PRIMARY.tags, key, ...p.tabs.slice(1)], active: key }))
 }
 
-/** The type whose own view the tags pane shows (the YouTube grid…), while the pane is open; null otherwise. */
+/** The type whose own view the tags pane shows (the bookmarks grid…), while the pane is open; null otherwise. */
 export function activeTypeView(s = panesStore.get()): EntryType | null {
   return s.open.tags ? typeView(parseQuery(tabQuery(s, s.panes.tags.active))) : null
 }

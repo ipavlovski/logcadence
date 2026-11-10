@@ -62,21 +62,14 @@ export interface NodeDTO {
 export interface EntryDates {
   created: number
   updated: number
-  /** Posted by its author: a video's publish date, what a captured page says. */
+  /** Posted by its author: what a captured page says. */
   published?: number
-  /** Added to a YouTube playlist. */
-  added?: number
-  /** First imported into the app (videos, AI chats). */
-  imported?: number
   /** A bookmark's first capture. */
   captured?: number
-  /** An AI chat's start. */
-  started?: number
 }
 
-/** What a video, bookmark or media entry's card shows; the full item comes from its own tab's API. */
+/** What a bookmark or media entry's card shows; the full item comes from its own tab's API. */
 export type EntryDetail =
-  | { kind: 'video'; id: string; channel: string; channelAvatar: string | null; duration: string | null; thumbUrl: string | null }
   | { kind: 'bookmark'; id: string; handler: HandlerId; url: string; site: string; iconUrl: string | null; thumbUrl: string | null }
   | { kind: 'media'; id: string; url: string; thumbUrl: string | null; mime: string; width: number; height: number }
 
@@ -95,84 +88,12 @@ export interface EntryDTO {
   archived: boolean
   /** Tag paths, in display order. */
   tags: string[]
-  /** A journal (or AI chat) entry's children; none for the other types. */
+  /** A journal entry's children; none for the other types. */
   nodes: NodeDTO[]
   detail: EntryDetail | null
   dates: EntryDates
-  /**
-   * Set when the entry was imported from an AI chat. Such entries are read-only in the journal; the full
-   * transcript lives in the AI canvas tab. `nodeIds[i]` is the node for the chat's i-th prompt.
-   */
-  chat: { id: string; source: ChatSource; nodeIds: string[] } | null
   createdAt: number
   updatedAt: number
-}
-
-export const CHAT_SOURCES = ['claude', 'claude-code', 'gemini', 'antigravity'] as const
-export type ChatSource = (typeof CHAT_SOURCES)[number]
-
-export interface ChatTool {
-  name: string
-  /** Short description of the call (command, file, query…). */
-  summary: string
-}
-
-export interface ChatMessage {
-  role: 'user' | 'assistant'
-  /** Markdown. */
-  text: string
-  /** Epoch ms, when the source records it. */
-  ts: number | null
-  tools?: ChatTool[]
-  /** Files sent with a prompt. */
-  attachments?: ChatAttachment[]
-}
-
-export interface ChatAttachment {
-  name: string
-  /** Kind, type, size or pages, e.g. "document · 3 pages". */
-  meta?: string
-  /** Text the AI app extracted from the file (.md, .docx, .txt…). */
-  text?: string
-}
-
-export interface ChatSummary {
-  id: string
-  source: ChatSource
-  title: string
-  startedAt: number
-  updatedAt: number
-  /** Number of user prompts. */
-  turns: number
-  /** Journal entry created for the chat; null once the entry is deleted. */
-  entryId: string | null
-  /** Journal day of the entry (the day the chat started). */
-  date: string
-}
-
-export interface ChatDTO extends ChatSummary {
-  messages: ChatMessage[]
-  meta: Record<string, string>
-}
-
-export interface ImportCounts {
-  found: number
-  created: number
-  updated: number
-  unchanged: number
-  errors: string[]
-}
-
-export type ImportReport = Partial<Record<ChatSource, ImportCounts>>
-
-export interface ChatSourceInfo {
-  source: ChatSource
-  /** Locations scanned automatically (existing ones only). */
-  paths: string[]
-  /** How to get chats from this source into the app. */
-  hint: string
-  /** Signed in for live sync (claude.ai, desktop app only); absent when the source has no live sync. */
-  connected?: boolean
 }
 
 export interface CategoryInfo {
@@ -192,7 +113,7 @@ export interface MetaDTO {
 
 /** GET /entries: a query over every entry. Each field narrows it; repeated ones (types, tags) match any / all. */
 export interface EntryQuery {
-  /** "video" or "video/youtube"; any of them. */
+  /** "bookmark" or "bookmark/reddit"; any of them. */
   types?: string[]
   category?: string
   /** Only entries without a category. */
@@ -204,8 +125,6 @@ export interface EntryQuery {
   exact?: boolean
   archived?: boolean
   date?: string
-  /** A video's channel. */
-  channel?: string
   /** A bookmark's site ("example.com", "r/selfhosted"). */
   site?: string
 }
@@ -278,115 +197,6 @@ export interface SelectionBody {
 export interface DayCount {
   date: string
   count: number
-}
-
-// ── YouTube canvas tab ──────────────────────────────────────────────────────
-
-export interface YtPlaylistDTO {
-  id: string
-  title: string
-  channel: string | null
-  /** Videos in the playlist at the last import. */
-  count: number | null
-  lastImportAt: number | null
-  lastError: string | null
-  /** While an import runs: listing the playlist, then (Data API) fetching new videos' details. */
-  progress: { phase: 'listing' | 'details'; done: number; total: number } | null
-}
-
-/** A video in the listing. */
-export interface YtVideoSummary {
-  id: string
-  title: string
-  channel: string
-  channelUrl: string | null
-  channelAvatar: string | null
-  /** "15:25", as YouTube shows it. */
-  duration: string | null
-  /** "3.7M views", as of the last import. */
-  views: string | null
-  /** "4 years ago" as of an import without an API key; publishedAt (epoch ms) comes from the Data API. */
-  published: string | null
-  publishedAt: number | null
-  /**
-   * The thumbnail downloaded into the library (largest YouTube has), and a 480×360 one for the grid; null until
-   * downloaded (show YouTube's own meanwhile). thumbSize: maxres = 1280×720, sd = 640×480, hq = 480×360, none =
-   * YouTube has none.
-   */
-  thumbUrl: string | null
-  thumbSmallUrl: string | null
-  thumbSize: 'maxres' | 'sd' | 'hq' | 'none' | null
-  /**
-   * When it was added to a playlist (epoch ms) and that local day: from the Data API, or without an API key,
-   * when an import first saw it.
-   */
-  addedAt: number
-  addedDate: string
-  /** First imported (epoch ms). */
-  importedAt: number
-  /** The video's entry (`yt:<id>`), which holds its tags and category. */
-  entryId: string
-  category: string | null
-  /** Tag paths, in order. */
-  tags: string[]
-  /** Notes or images were added. */
-  hasNotes: boolean
-}
-
-export type YtImageSection = 'notes' | 'comments'
-
-export interface YtVideoDTO extends YtVideoSummary {
-  /** Markdown. */
-  notes: string
-  /** Notes image shown large. */
-  activeImageId: string | null
-  images: ImageDTO[]
-  /** Comments worth keeping (markdown), with their screenshots. */
-  comments: string
-  commentsActiveImageId: string | null
-  commentImages: ImageDTO[]
-}
-
-export interface YtLibraryDTO {
-  videos: YtVideoSummary[]
-  /** Videos tagged with exactly each path (as TagInfo, with `archived` always 0). */
-  tags: TagInfo[]
-}
-
-export interface YtSettingsDTO {
-  auto: boolean
-  /** The key's last characters ("…x7Qa"), or null without one. */
-  apiKey: string | null
-  /** The key comes from YOUTUBE_API_KEY, not the settings window. */
-  apiKeyFromEnv: boolean
-}
-
-export interface YtImportResult {
-  playlistId: string
-  title: string
-  /** Videos in the playlist now. */
-  found: number
-  /** New to the catalog. */
-  added: number
-  /** Known videos whose added date moved earlier (a real date from the Data API). */
-  redated: number
-  /** Private or deleted videos in the playlist, left out. */
-  unavailable: number
-  /** Added dates came from the Data API (an API key is set). */
-  dated: boolean
-  error: string | null
-}
-
-/** Thumbnail downloads (they run in the background after an import). */
-export interface YtThumbStatus {
-  running: boolean
-  done: number
-  total: number
-  /** Failed this run; tried again at the next import or start. */
-  failed: number
-  /** Videos still without a downloaded thumbnail. */
-  pending: number
-  error: string | null
 }
 
 // ── Bookmarks canvas tab (pages captured by the Chrome extension) ──
@@ -489,11 +299,3 @@ export interface CaptureResult {
   comment: boolean
 }
 
-export interface UpdateYtVideoBody {
-  notes?: string
-  comments?: string
-  tags?: string[]
-  category?: string | null
-  activeImageId?: string | null
-  commentsActiveImageId?: string | null
-}

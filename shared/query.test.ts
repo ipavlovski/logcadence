@@ -3,28 +3,31 @@ import { normalizeQuery, parseQuery, queryLabel, queryToString, typeView } from 
 
 describe('queries', () => {
   it('round-trips in one fixed order, dropping what is not valid', () => {
-    expect(queryToString({ tags: ['dev/react'], types: ['video'], channel: 'WOT' })).toBe('type=video&tag=dev%2Freact&channel=WOT')
-    expect(parseQuery('tag=Dev:React&type=video/youtube&type=nope&category=build&untagged=1')).toEqual({ types: ['video/youtube'], category: 'build', tags: ['dev/react'] })
-    expect(normalizeQuery('channel=WOT&type=video')).toBe('type=video&channel=WOT')
+    expect(queryToString({ tags: ['dev/react'], types: ['bookmark'], site: 'reddit.com' })).toBe('type=bookmark&tag=dev%2Freact&site=reddit.com')
+    expect(parseQuery('tag=Dev:React&type=bookmark/reddit&type=nope&category=build&untagged=1')).toEqual({ types: ['bookmark/reddit'], category: 'build', tags: ['dev/react'] })
+    expect(normalizeQuery('site=reddit.com&type=bookmark')).toBe('type=bookmark&site=reddit.com')
     expect(parseQuery('junk')).toEqual({})
+    // Videos and AI chats moved out (youtube-lib, ai-lib): their types and the channel facet read as nothing.
+    expect(normalizeQuery('type=video&channel=WOT')).toBe('')
+    expect(normalizeQuery('type=ai/claude-code&tag=dev')).toBe('tag=dev')
   })
 
   it('names a tab by its facets', () => {
     expect(queryLabel({ tags: ['dev/react'] })).toBe('#dev/react')
-    expect(queryLabel({ types: ['video'], channel: 'WOT' })).toBe('Videos · WOT')
+    expect(queryLabel({ types: ['bookmark'], site: 'reddit.com' })).toBe('Bookmarks · reddit.com')
     expect(queryLabel({ types: ['bookmark/reddit'], category: 'build' })).toBe('Reddit · build')
     expect(queryLabel({})).toBe('Browse')
   })
 
   it('shows a type in its own view while the view can filter by the rest', () => {
-    expect(typeView({ types: ['video'], channel: 'WOT' })).toBe('video')
-    expect(typeView({ types: ['video'], tags: ['build'] })).toBe('video')
-    expect(typeView({ types: ['video'], tags: ['build'], channel: 'WOT' })).toBeNull()
-    expect(typeView({ types: ['video'], category: 'build' })).toBeNull()
+    expect(typeView({ types: ['bookmark'], site: 'reddit.com' })).toBe('bookmark')
+    expect(typeView({ types: ['bookmark'], tags: ['build'] })).toBe('bookmark')
+    expect(typeView({ types: ['bookmark'], tags: ['build'], site: 'reddit.com' })).toBeNull()
+    expect(typeView({ types: ['bookmark'], category: 'build' })).toBeNull()
     expect(typeView({ types: ['bookmark/reddit'], site: 'r/selfhosted' })).toBe('bookmark')
-    expect(typeView({ types: ['ai/claude-code'] })).toBe('ai')
     expect(typeView({ types: ['media'] })).toBe('media')
-    expect(typeView({ types: ['video', 'ai'] })).toBeNull()
+    expect(typeView({ types: ['media'], tags: ['build'] })).toBeNull()
+    expect(typeView({ types: ['bookmark', 'media'] })).toBeNull()
     expect(typeView({ tags: ['dev'] })).toBeNull()
   })
 })

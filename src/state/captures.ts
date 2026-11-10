@@ -6,8 +6,8 @@ import { activeTypeView, showTypeView } from './panes.ts'
 import { createStore, persistedStore, type Store } from './store.ts'
 
 // The Bookmarks view (tags pane; pages captured by the Chrome extension): the open capture (null = the listing), the
-// listing's filter, handler and search, and a history that alt+left/right walk, like the YouTube view's
-// (state/youtube.ts): capture clicks are steps, each listing step with its scroll position.
+// listing's filter, handler and search, and a history that alt+left/right walk: capture clicks are steps, each
+// listing step with its scroll position.
 
 /** A tag path (captures with it or a tag under it), captures without tags, or one site's (a subreddit's) captures. */
 export type CaptureFilter = { kind: 'tag'; path: string } | { kind: 'untagged' } | { kind: 'site'; site: string } | null

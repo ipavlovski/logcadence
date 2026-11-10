@@ -241,4 +241,45 @@ describe('data export / import', () => {
     expect(t.board_items![0]).toMatchObject({ id: 'b', entryId: 'media:b' })
     expect(t.categories!.map((c) => c.name)).toEqual(['design', 'build', 'fabrication', 'dev', 'notes'])
   })
+
+  it('upgrades format 4 rows as migration 0017 does: videos and AI chats left out', () => {
+    const t = transfer.toV5({
+      tags: [
+        { id: 1, path: 'build/well', createdAt: 1 },
+        { id: 2, path: 'dev', createdAt: 1 },
+        { id: 3, path: 'youtube/misc', createdAt: 1 },
+      ],
+      entries: [
+        { id: 'j', type: 'journal' },
+        { id: 'c', type: 'ai' },
+        { id: 'yt:v', type: 'video' },
+        { id: 'media:b', type: 'media' },
+      ],
+      nodes: [
+        { id: 'jn', entryId: 'j' },
+        { id: 'cn', entryId: 'c' },
+      ],
+      images: [
+        { id: 'ji', nodeId: 'jn' },
+        { id: 'ci', nodeId: 'cn' },
+      ],
+      entry_tags: [
+        { entryId: 'j', tagId: 1, position: 0 },
+        { entryId: 'c', tagId: 2, position: 0 },
+        { entryId: 'yt:v', tagId: 1, position: 0 },
+        { entryId: 'yt:v', tagId: 3, position: 1 },
+      ],
+      chats: [{ id: 'claude:x' }],
+      yt_videos: [{ id: 'v' }],
+      board_items: [{ id: 'b', entryId: 'media:b' }],
+    })
+    expect(t.entries!.map((e) => e.id)).toEqual(['j', 'media:b'])
+    expect(t.nodes!.map((n) => n.id)).toEqual(['jn'])
+    expect(t.images!.map((i) => i.id)).toEqual(['ji'])
+    expect(t.tags!.map((r) => r.path)).toEqual(['build/well'])
+    expect(t.entry_tags).toEqual([{ entryId: 'j', tagId: 1, position: 0 }])
+    expect(t.board_items).toEqual([{ id: 'b', entryId: 'media:b' }])
+    expect(Object.keys(t)).not.toContain('yt_videos')
+    expect(Object.keys(t)).not.toContain('chats')
+  })
 })

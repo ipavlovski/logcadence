@@ -1,6 +1,6 @@
 # logcadence
 
-Logcadence (a cadence of daily logs) is a journaling knowledge base with two panes: **canvas | tags**. The journal is the canvas's first tab; YouTube, Bookmarks, Images and AI chats are its other tabs. See [PROJECT.md](PROJECT.md) for the product spec.
+Logcadence (a cadence of daily logs) is a journaling knowledge base with two panes: **canvas | tags**. The journal is the canvas's first tab; Bookmarks and Images are its other tabs. YouTube videos and AI chats are apps of their own: [youtube-lib](../youtube-lib) and [ai-lib](../ai-lib) (see *The AI and YouTube split*). See [PROJECT.md](PROJECT.md) for the product spec.
 
 Activity tracking (Map, Activity, Progress, the dashboard and checklists) moved to [logtracker](../logtracker), a separate desktop app.
 
@@ -34,8 +34,8 @@ After changing a schema: `pnpm db:generate` (writes migrations for both database
 Logcadence used to be a journal plus an activity tracker. The tracker half moved to its own desktop app,
 [logtracker](../logtracker): the Map (GPS), Activity, Progress and dashboard tabs and the daily checklists, with the
 GPS / Google Drive sync and the activity recorder. Logcadence keeps the knowledge base: the journal (now the canvas's
-first tab), tags, YouTube, Bookmarks, Images and AI chats. The two apps don't talk to each other; logtracker has
-its own copy of the AI import, for its AI history.
+first tab), tags, Bookmarks and Images. The two apps don't talk to each other; logtracker has its own copy of the AI
+import, for its AI history.
 
 - **The moved data**: migration `0013_drop_tracker_tables` drops `gps_*`, `activity_spans` and `checklist*` from
   content.db. Before a build with it opens a library, copy that data into logtracker with
@@ -44,7 +44,23 @@ its own copy of the AI import, for its AI history.
 - **Old exports** still import: their GPS, activity and checklist tables and `gps/` folder are skipped with a warning.
 - **Saved layouts** of the three-pane version come up as two panes, the journal pane's day becoming the Journal tab's.
 - `tasks:progress` tags are kept as they are, but nothing reads them any more.
-- Logtracker's AI history links each chat as `logcadence://ai/<chat id>`; logcadence doesn't register that link yet.
+- Logtracker's AI history links each chat as `logcadence://ai/<chat id>`; nothing registers that link (AI chats are
+  ai-lib's now).
+
+## The AI and YouTube split
+
+AI chats and YouTube videos moved out to two apps of their own (Astro + SQLite, run as local services):
+[ai-lib](../ai-lib) at http://ai.localhost and [youtube-lib](../youtube-lib) at http://yt.localhost, each with
+an MCP server for Claude Desktop.
+
+- **The moved data**: migration `0017_split_ai_youtube` deletes the video and AI entries (with an AI chat's prompt
+  nodes and their tags) and drops `chats` and `yt_*`. Before a build with it opens a library, copy the data out with
+  `pnpm import:logcadence` in each app, which reads the library without changing it. The thumbnails in `assets/`
+  are left on disk.
+- **Old exports** still import: their videos and chats are skipped with a warning (format 5).
+- **Saved tabs** of the YouTube and AI views come up as the tags pane's preview.
+- Logcadence's MCP extension keeps the tag set and the categories (`list_tags`, `list_categories`, `move_tag`); the
+  video tools are youtube-lib's.
 
 ## Model
 
@@ -76,20 +92,7 @@ An export is one zip holding the whole library: `manifest.json` (format version,
 
 This is how data moves from the web app into the desktop app. The format (see `server/lib/transfer/format.ts`) is plain JSON and media files, so later builds (mobile included) can read it; `formatVersion` only changes when existing rows change meaning.
 
-## AI chats
-
-The canvas **AI** tab imports chats as journal entries: titled like the chat, tagged `ai:<source>`, dated the day the chat started, one node per prompt. These entries are read-only apart from their tags, and their `ai:<source>` tag stays locked as the primary tag; clicking a prompt shows it with its reply in the AI tab, and “transcript ↗” on the entry opens the whole chat. Opening the tab scans automatically; **Scan** forces it; export files can also be dropped on the tab.
-
 The **App shortcuts** window (`Ctrl+Shift+?`) draws an app's hotkeys on a keyboard. They come from entries whose primary tag is `shortcuts:<app>` (e.g. `#shortcuts:illustrator`), one per line: `- ctrl+shift+s -> save as`. A line ending in `:` starts a section; `b -> brush + blob brush` puts the second action on Shift; `- [ ] …` marks a planned binding and `-> ?` a key whose action is still undecided; `[]` binds both brackets. Toggle Shift/Ctrl/Alt/Win, or hold the real keys, to see that layer; combos bound to two different actions are flagged as clashes.
-
-| source | where it comes from |
-| --- | --- |
-| Claude Code | `~/.claude/projects/*/*.jsonl` in the WSL home and every Windows profile under `/mnt/c/Users`: the VS Code extension, the CLI and the desktop app's Code tab (titles from the app's session metadata) |
-| Antigravity | `~/.gemini/antigravity` (titles from `conversation_summaries.db`, turns decoded from each conversation's protobuf steps) |
-| Claude (claude.ai) | the data export (Settings → Privacy → Export data), picked up from Downloads (`data-*.zip`, `conversations*.zip`) |
-| Gemini | Google Takeout → My Activity → Gemini Apps, **JSON** format (`takeout-*.zip` in Downloads). Takeout has no conversations or titles, so prompts are grouped by 30-minute gaps and titled after the first prompt |
-
-Re-imports append new turns and refresh nodes and titles that still read as imported; anything edited by hand is left alone, and a deleted entry is not recreated. `LOGCADENCE_AI_HOMES` (path-delimited) overrides the home directories that are scanned.
 
 ## Chrome extension: Bookmarks
 
@@ -134,12 +137,11 @@ shared/          domain types, tag paths, dates, ids, desktop bridge types (shar
 server/
   db/            schemas + migrations for content.db and events.db
   lib/           queries, tag operations, event log, markdown mirror
-  lib/ai/        AI chat import: one parser per source, zip and protobuf readers
   routes/        Hono routes; `AppType` feeds the typed `hc` client
 src/
   state/         panes/tabs store, change bus, journal cursor, UI state
   components/    Journal, Tags, Canvas (frame only), Pane, Spotlight, dialogs
-  canvas/        canvas plugin registry (YouTube, Bookmarks, Images and AI chats); the journal tab itself is in components/Pane
+  canvas/        type view registry (Bookmarks, Images); the journal tab itself is in components/Pane
   shortcuts.ts   every keyboard shortcut, used by the handler and the help overlay (press ?)
 ```
 

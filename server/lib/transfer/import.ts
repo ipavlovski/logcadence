@@ -5,9 +5,8 @@ import path from 'node:path'
 import type { SQLiteTable } from 'drizzle-orm/sqlite-core'
 import { openContentDb, openEventsDb } from '../../db/open.ts'
 import { withZip, type ZipMember } from '../zip.ts'
-import { CHAT_SUBTYPE, captureEntryId, mediaEntryId, mediaSubtype, videoEntryId } from '../../../shared/entryTypes.ts'
-import { CHAT_SOURCES, type ChatSource } from '../../../shared/types.ts'
-import { CONTENT_TABLES, EVENTS_TABLES, FORMAT, FORMAT_VERSION, LEGACY_FORMATS, V3_CONTENT_TABLES, type FileSet, type Manifest, type Progress } from './format.ts'
+import { captureEntryId, mediaEntryId, mediaSubtype } from '../../../shared/entryTypes.ts'
+import { CONTENT_TABLES, EVENTS_TABLES, FORMAT, FORMAT_VERSION, LEGACY_FORMATS, V3_CONTENT_TABLES, V4_MOVED_TABLES, type FileSet, type Manifest, type Progress } from './format.ts'
 
 export interface ImportOptions {
   /** The library folder to import into; it must be empty (no entries, events or assets). */
@@ -17,7 +16,8 @@ export interface ImportOptions {
 
 export interface ImportResult {
   manifest: Manifest
-  /** Things skipped: tables a newer build exported, or an older one's that moved to logtracker (GPS, activity, checklists). */
+  /** Things skipped: tables a newer build exported, or an older one's that moved out (GPS, activity and checklists to
+   * logtracker; videos to youtube-lib, AI chats to ai-lib). */
   warnings: string[]
 }
 
@@ -41,7 +41,7 @@ export function importFrom(zipFile: string, { dataDir, onProgress }: ImportOptio
     mkdirSync(path.join(staging, 'assets'))
     try {
       const all = { ...CONTENT_TABLES, ...EVENTS_TABLES }
-      const known = new Set([...Object.keys(all), ...(manifest.formatVersion < 4 ? V3_CONTENT_TABLES : [])])
+      const known = new Set([...Object.keys(all), ...(manifest.formatVersion < 4 ? V3_CONTENT_TABLES : []), ...(manifest.formatVersion < 5 ? V4_MOVED_TABLES : [])])
       for (const name of Object.keys(manifest.tables)) if (!known.has(name)) warnings.push(`skipped unknown table "${name}"`)
       const total = Object.keys(all).length
       let done = 0
@@ -81,6 +81,10 @@ export function importFrom(zipFile: string, { dataDir, onProgress }: ImportOptio
     }
 
     if (manifest.gps?.files) warnings.push(`skipped ${manifest.gps.files} GPS file(s): GPS moved to logtracker`)
+    const videos = manifest.tables.yt_videos?.rows ?? 0
+    const chats = manifest.tables.chats?.rows ?? 0
+    if (videos) warnings.push(`skipped ${videos} YouTube video(s): they moved to youtube-lib (import them there from a library)`)
+    if (chats) warnings.push(`skipped ${chats} AI chat(s): they moved to ai-lib (import them there from a library)`)
 
     return { manifest, warnings }
   })
@@ -135,10 +139,11 @@ type Row = Record<string, unknown>
 
 /** Every content table's rows, brought from the export's format up to FORMAT_VERSION. */
 function upgradeTables(fromVersion: number, read: (name: string) => Row[]): Record<string, Row[]> {
-  if (fromVersion >= 4) return Object.fromEntries(Object.keys(CONTENT_TABLES).map((name) => [name, read(name)]))
+  if (fromVersion >= 5) return Object.fromEntries(Object.keys(CONTENT_TABLES).map((name) => [name, read(name)]))
+  if (fromVersion === 4) return toV5(Object.fromEntries(Object.keys(CONTENT_TABLES).map((name) => [name, read(name)])))
   // Formats 1–3 upgrade table by table, in their insert order (a step can depend on an earlier table's).
   const upgrade = upgrader(fromVersion)
-  return toV4(Object.fromEntries(V3_CONTENT_TABLES.map((name) => [name, upgrade(name, read(name))])))
+  return toV5(toV4(Object.fromEntries(V3_CONTENT_TABLES.map((name) => [name, upgrade(name, read(name))]))))
 }
 
 /** Brings a table's rows from format `fromVersion` (1–3) up to 3. */
@@ -206,7 +211,10 @@ function toV3(): (table: string, rows: Row[]) => Row[] {
 
 // v3 → 4: every item an entry, one tag set, categories (as migration 0016_unified_entries, which see).
 const V4_CATEGORIES = ['design', 'build', 'fabrication', 'dev', 'notes']
-const CHAT_SOURCE_TAGS = new Set(CHAT_SOURCES.map((s) => `ai/${s}`))
+// What format 4 had for AI chats and videos (they are gone in 5, see toV5).
+const CHAT_SUBTYPE: Record<string, string> = { claude: 'claude-chat', 'claude-code': 'claude-code', gemini: 'gemini-chat', antigravity: 'gemini-code' }
+const CHAT_SOURCE_TAGS = new Set(Object.keys(CHAT_SUBTYPE).map((s) => `ai/${s}`))
+const videoEntryId = (videoId: string) => `yt:${videoId}`
 
 export function toV4(t: Record<string, Row[]>): Record<string, Row[]> {
   const get = (name: string) => t[name] ?? []
@@ -237,12 +245,12 @@ export function toV4(t: Record<string, Row[]>): Record<string, Row[]> {
     return r.id
   }
 
-  const chatSource = new Map(get('chats').filter((c) => c.entryId).map((c) => [c.entryId, c.source as ChatSource]))
+  const chatSource = new Map(get('chats').filter((c) => c.entryId).map((c) => [c.entryId, String(c.source)]))
   const entryTags = get('entry_tags').filter((l) => !(chatSource.has(l.entryId) && CHAT_SOURCE_TAGS.has(pathOf.get(l.tagId) ?? '')))
   const first = firstPaths(entryTags, 'entryId', pathOf)
   const entries: Row[] = get('entries').map((e) => {
     const source = chatSource.get(e.id)
-    return { ...e, type: source ? 'ai' : 'journal', subtype: source ? CHAT_SUBTYPE[source] : null, category: categoryOf(first.get(e.id)) }
+    return { ...e, type: source ? 'ai' : 'journal', subtype: source ? (CHAT_SUBTYPE[source] ?? null) : null, category: categoryOf(first.get(e.id)) }
   })
 
   /** Items of a type with tags of their own: each gets an entry, its tags go under `prefix`. */
@@ -297,6 +305,26 @@ export function toV4(t: Record<string, Row[]>): Record<string, Row[]> {
     captures,
     board_items: boardItems,
   }
+}
+
+// v4 → 5: videos and AI chats moved out to youtube-lib and ai-lib (as migration 0017_split_ai_youtube): their
+// entries go, with an AI chat's nodes and their images, their tag links, and the tags nothing carries any more.
+export function toV5(t: Record<string, Row[]>): Record<string, Row[]> {
+  const get = (name: string) => t[name] ?? []
+  const gone = new Set(get('entries').filter((e) => e.type === 'video' || e.type === 'ai').map((e) => e.id))
+  const nodes = get('nodes').filter((n) => !gone.has(n.entryId))
+  const kept = new Set(nodes.map((n) => n.id))
+  const entryTags = get('entry_tags').filter((l) => !gone.has(l.entryId))
+  const used = new Set(entryTags.map((l) => l.tagId))
+  const out: Record<string, Row[]> = {
+    ...t,
+    entries: get('entries').filter((e) => !gone.has(e.id)),
+    nodes,
+    images: get('images').filter((i) => kept.has(i.nodeId)),
+    entry_tags: entryTags,
+    tags: get('tags').filter((r) => used.has(r.id)),
+  }
+  return Object.fromEntries(Object.keys(CONTENT_TABLES).map((name) => [name, out[name] ?? []]))
 }
 
 // Keeps each statement well under SQLite's bound-parameter limit.

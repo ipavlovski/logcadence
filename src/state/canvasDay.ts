@@ -3,8 +3,8 @@ import { journalDateOf, panesStore } from './panes.ts'
 import { useStore } from './store.ts'
 import { prefsStore, setPref } from './ui.ts'
 
-// The type views (tags pane) and the journal's day (Settings → Tags, ctrl+l). Following, the scrolling views (YouTube,
-// Bookmarks, AI chats) scroll to the journal tab's day whenever it changes. Not following, they keep
+// The type views (tags pane) and the journal's day (Settings → Tags, ctrl+l). Following, the scrolling views
+// (Bookmarks, Media) scroll to the journal tab's day whenever it changes. Not following, they keep
 // their own place.
 
 /** Tabs that keep their scroll position in a store: the journal day each one last scrolled to. */

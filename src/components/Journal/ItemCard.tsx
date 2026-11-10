@@ -11,7 +11,7 @@ import { TagInput } from '../TagInput/TagInput.tsx'
 import { useDayApi } from './dayContext.ts'
 import styles from './Journal.module.css'
 
-/** A video, bookmark or AI chat in its day: what it is and where it's from; its category and tags edit here, the rest in its view (tags pane). */
+/** A bookmark in its day: what it is and where it's from; its category and tags edit here, the rest in its view (tags pane). */
 export const ItemCard = memo(function ItemCard({ entry, find, flash }: { entry: EntryDTO; find: string; flash: boolean }) {
   const day = useDayApi()
   const d = entry.detail
@@ -38,26 +38,11 @@ export const ItemCard = memo(function ItemCard({ entry, find, flash }: { entry: 
           </button>
         </div>
         <div className={styles.itemSource}>
-          {d?.kind === 'video' && (
-            <button
-              title={`${d.channel}'s videos (ctrl+click: a tab of its own)`}
-              onClick={(e) => openQuery({ types: ['video'], channel: d.channel }, { newTab: e.ctrlKey || e.metaKey })}
-            >
-              {d.channelAvatar && <img className={styles.avatar} src={d.channelAvatar} alt="" referrerPolicy="no-referrer" />}
-              {d.channel}
-            </button>
-          )}
-          {d?.kind === 'video' && d.duration && <span>{d.duration}</span>}
           {d?.kind === 'bookmark' && (
             <button title={`Bookmarks from ${d.site} (ctrl+click: a tab of its own)`} onClick={(e) => openQuery({ types: ['bookmark'], site: d.site }, { newTab: e.ctrlKey || e.metaKey })}>
               {d.iconUrl && <img className={styles.avatar} src={d.iconUrl} alt="" />}
               {d.site}
             </button>
-          )}
-          {entry.type === 'ai' && (
-            <span>
-              {entry.nodes.length} {entry.nodes.length === 1 ? 'prompt' : 'prompts'}
-            </span>
           )}
         </div>
         <div className={styles.entryMeta}>

@@ -1,10 +1,11 @@
 import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 import { ENTRY_TYPES } from '../../shared/entryTypes.ts'
-import type { CaptureFields, ChatMessage } from '../../shared/types.ts'
+import type { CaptureFields } from '../../shared/types.ts'
 
-// content.db: the notes. Every item is an entry (shared/entryTypes.ts): a journal entry, a video, a bookmark, a
-// media item or an AI chat, on a day, with one category and any number of tags. A type's own data is in its
-// table (yt_videos, captures, board_items, chats), which points at the entry; a journal entry's nodes are its children.
+// content.db: the notes. Every item is an entry (shared/entryTypes.ts): a journal entry, a bookmark or a media item,
+// on a day, with one category and any number of tags. A type's own data is in its table (captures, board_items),
+// which points at the entry; a journal entry's nodes are its children. (Videos and AI chats moved out to their own
+// apps, youtube-lib and ai-lib: see 0017_split_ai_youtube.)
 
 // The categories an entry can be filed under (one at most), in display order.
 export const categories = sqliteTable('categories', {
@@ -71,31 +72,6 @@ export const entryTags = sqliteTable(
   (t) => [primaryKey({ columns: [t.entryId, t.tagId] }), index('entry_tags_tag_idx').on(t.tagId)],
 )
 
-// Imported AI chats. Each one owns an entry (ai/<subtype>, one node per prompt); the full transcript stays here
-// for the AI canvas tab.
-export const chats = sqliteTable(
-  'chats',
-  {
-    id: text('id').primaryKey(), // `${source}:${externalId}`
-    source: text('source').notNull(),
-    externalId: text('external_id').notNull(),
-    // Null once the user deletes the entry; re-imports then leave the chat out of the journal.
-    entryId: text('entry_id').references(() => entries.id, { onDelete: 'set null' }),
-    title: text('title').notNull(),
-    startedAt: integer('started_at').notNull(),
-    updatedAt: integer('updated_at').notNull(),
-    turns: integer('turns').notNull(),
-    messages: text('messages', { mode: 'json' }).$type<ChatMessage[]>().notNull(),
-    meta: text('meta', { mode: 'json' }).$type<Record<string, string>>().notNull(),
-    // Node created for each turn, so re-imports append new turns and refresh unedited ones.
-    nodeIds: text('node_ids', { mode: 'json' }).$type<string[]>().notNull(),
-    // Source file fingerprint (mtime:size); an unchanged file is not parsed again.
-    sourceStamp: text('source_stamp'),
-    importedAt: integer('imported_at').notNull(),
-  },
-  (t) => [index('chats_started_idx').on(t.startedAt), index('chats_entry_idx').on(t.entryId)],
-)
-
 export const images = sqliteTable(
   'images',
   {
@@ -109,72 +85,6 @@ export const images = sqliteTable(
     createdAt: integer('created_at').notNull(),
   },
   (t) => [index('images_node_idx').on(t.nodeId, t.position)],
-)
-
-// YouTube videos for the canvas YouTube tab, imported from playlists (see server/lib/youtube/). Each is an entry
-// (video/youtube, id `yt:<video id>`), which holds its tags and category. Which playlist a video came from is not kept.
-
-export const ytPlaylists = sqliteTable('yt_playlists', {
-  id: text('id').primaryKey(), // YouTube's list id (PL…)
-  title: text('title').notNull(),
-  channel: text('channel'),
-  createdAt: integer('created_at').notNull(),
-  lastImportAt: integer('last_import_at'),
-  lastImportCount: integer('last_import_count'), // videos in the playlist at the last import
-  lastError: text('last_error'),
-})
-
-export const ytVideos = sqliteTable(
-  'yt_videos',
-  {
-    id: text('id').primaryKey(), // YouTube's video id
-    // Always set (null only in the column's definition: it was added by ALTER, see 0016_unified_entries).
-    entryId: text('entry_id').references(() => entries.id, { onDelete: 'cascade' }),
-    title: text('title').notNull(),
-    channel: text('channel').notNull().default(''),
-    channelUrl: text('channel_url'),
-    channelAvatar: text('channel_avatar'),
-    channelId: text('channel_id'), // UC…, when the import source gives it
-    duration: text('duration'), // "15:25", as YouTube shows it
-    views: text('views'), // "3.7M views", as of the last import
-    published: text('published'), // "4 years ago", as of the last import (without an API key)
-    publishedAt: integer('published_at'), // when YouTube published it (epoch ms; from the Data API)
-    // When it was added to a playlist: from the Data API, or without a key, when an import first saw it. The
-    // earliest playlist wins when it is in several.
-    addedAt: integer('added_at').notNull(), // epoch ms
-    addedDate: text('added_date').notNull(), // local YYYY-MM-DD of addedAt
-    importedAt: integer('imported_at').notNull().default(0), // first imported (epoch ms)
-    notes: text('notes').notNull().default(''), // markdown
-    activeImageId: text('active_image_id'),
-    // Comments worth keeping (markdown, plus screenshots in yt_images under 'comments').
-    comments: text('comments').notNull().default(''),
-    commentsActiveImageId: text('comments_active_image_id'),
-    // Thumbnail files under data/assets, downloaded once: the largest YouTube has (thumbSize: maxres = 1280×720,
-    // sd = 640×480, hq = 480×360) for the video page, and a 480×360 one for the grid. thumbSize null = not
-    // downloaded yet (retried by the next import); 'none' = YouTube has none (a removed video).
-    thumb: text('thumb'),
-    thumbSmall: text('thumb_small'),
-    thumbSize: text('thumb_size', { enum: ['maxres', 'sd', 'hq', 'none'] }),
-    updatedAt: integer('updated_at').notNull(),
-  },
-  (t) => [index('yt_videos_added_idx').on(t.addedDate, t.addedAt), uniqueIndex('yt_videos_entry_idx').on(t.entryId)],
-)
-
-// Images and gifs pasted into a video's notes or comments; files live under data/assets like the journal's.
-export const ytImages = sqliteTable(
-  'yt_images',
-  {
-    id: text('id').primaryKey(),
-    videoId: text('video_id')
-      .notNull()
-      .references(() => ytVideos.id, { onDelete: 'cascade' }),
-    section: text('section', { enum: ['notes', 'comments'] }).notNull().default('notes'),
-    file: text('file').notNull(),
-    mime: text('mime').notNull(),
-    position: real('position').notNull(),
-    createdAt: integer('created_at').notNull(),
-  },
-  (t) => [index('yt_images_video_idx').on(t.videoId, t.position)],
 )
 
 // Web pages captured by the Chrome extension (extension/) for the canvas Bookmarks tab (see server/lib/captures.ts):

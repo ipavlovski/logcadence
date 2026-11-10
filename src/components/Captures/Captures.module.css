@@ -1,4 +1,4 @@
-/* The Bookmarks tab takes the YouTube tab's look (Youtube.module.css); these are its own bits. */
+/* The Bookmarks tab takes the catalog look (Library.module.css, once the YouTube tab's); these are its own bits. */
 
 /* Screenshots are shown from their top: a post's title, a page's header. */
 .shotThumb img {

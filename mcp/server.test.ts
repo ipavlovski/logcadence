@@ -12,20 +12,13 @@ import { createServer } from './server.ts'
 const dataDir = mkdtempSync(path.join(os.tmpdir(), 'logcadence-mcp-'))
 process.env.LOGCADENCE_DATA_DIR = dataDir
 let client: Client
+let app: typeof import('../server/app.ts').app
 
 beforeAll(async () => {
-  const { app } = await import('../server/app.ts')
-  const { db } = await import('../server/db/client.ts')
-  const { upsertItemEntry } = await import('../server/lib/content.ts')
-  const { ytVideos } = await import('../server/db/content-schema.ts')
-  const video = (id: string, title: string, channel: string, day: number) => {
-    const addedDate = `2026-10-${String(day).padStart(2, '0')}`
-    upsertItemEntry(`yt:${id}`, { type: 'video', subtype: 'youtube', date: addedDate, title, position: day, createdAt: 0, updatedAt: 0 })
-    return { id, entryId: `yt:${id}`, title, channel, addedAt: day, addedDate, updatedAt: 0 }
-  }
-  db.insert(ytVideos)
-    .values([video('v1', 'Drilling a water well by hand', 'WellCo', 1), video('v2', 'PowerToys tips', 'WinTips', 2), video('v3', 'Casing a well', 'WellCo', 3)])
-    .run()
+  app = (await import('../server/app.ts')).app
+  const post = (body: object) => app.request('/api/entries', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+  await post({ date: '2026-10-01', title: 'Drilling', tags: ['build/well/drilling'], category: 'build' })
+  await post({ date: '2026-10-02', title: 'Casing', tags: ['build/well/casing', 'build/well/drilling'] })
 
   const api = new LogcadenceApi('http://logcadence/api', async (url, init) => app.request(url.replace('http://logcadence', ''), init))
   const [a, b] = InMemoryTransport.createLinkedPair()
@@ -46,58 +39,33 @@ async function call<T>(name: string, args: Record<string, unknown> = {}): Promis
   return JSON.parse(res.content[0]!.text) as T
 }
 
-type Page = { total: number; offset: number; videos: { id: string; tags: string[] }[] }
-const ids = (p: Page) => p.videos.map((v) => v.id)
-
 describe('mcp server', () => {
   it('lists its tools', async () => {
-    expect((await client.listTools()).tools.map((t) => t.name).sort()).toEqual(['list_categories', 'yt_get_video', 'yt_list_tags', 'yt_list_videos', 'yt_move_tag', 'yt_set_category', 'yt_set_tags'])
+    expect((await client.listTools()).tools.map((t) => t.name).sort()).toEqual(['list_categories', 'list_tags', 'move_tag'])
   })
 
-  it('lists videos newest first, paged and filtered', async () => {
-    expect(ids(await call<Page>('yt_list_videos'))).toEqual(['v3', 'v2', 'v1'])
-    expect(await call<Page>('yt_list_videos', { limit: 1, offset: 1 })).toMatchObject({ total: 3, offset: 1, videos: [{ id: 'v2', title: 'PowerToys tips', channel: 'WinTips', added: '2026-10-02', tags: [] }] })
-    expect(ids(await call<Page>('yt_list_videos', { query: 'wellco' }))).toEqual(['v3', 'v1'])
-    expect((await call<Page>('yt_list_videos', { limit: 1, fields: ['id', 'title'] })).videos).toEqual([{ id: 'v3', title: 'Casing a well' }])
-  })
-
-  it('adds tags to the current ones, or replaces them', async () => {
-    const tagsOf = async (id: string) => (await call<{ tags: string[] }>('yt_get_video', { id })).tags
-    expect(await call('yt_set_tags', { items: [{ id: 'v1', tags: ['Build:Well'] }, { id: 'nope', tags: ['x'] }] })).toEqual({ updated: 1, errors: [{ id: 'nope', error: 'video not found' }] })
-    expect(await tagsOf('v1')).toEqual(['build/well'])
-    expect(await call('yt_set_tags', { items: [{ id: 'v1', tags: ['build/well/drilling', 'build/well'] }] })).toEqual({ updated: 1 })
-    expect(await tagsOf('v1')).toEqual(['build/well', 'build/well/drilling'])
-    expect(await call('yt_set_tags', { items: [{ id: 'v1', tags: ['build/well/drilling'] }, { id: 'v3', tags: ['build/well/casing'] }], mode: 'replace' })).toEqual({ updated: 2 })
-    expect(await tagsOf('v1')).toEqual(['build/well/drilling'])
-    expect(await call('yt_list_tags')).toEqual([
-      { path: 'build/well/casing', videos: 1 },
-      { path: 'build/well/drilling', videos: 1 },
+  it('lists the tags and the categories with their counts', async () => {
+    expect(await call('list_tags')).toEqual([
+      { path: 'build/well/casing', entries: 1 },
+      { path: 'build/well/drilling', entries: 2 },
     ])
-    expect(ids(await call<Page>('yt_list_videos', { tag: 'build' }))).toEqual(['v3', 'v1'])
-    expect(ids(await call<Page>('yt_list_videos', { untagged: true }))).toEqual(['v2'])
-  })
-
-  it('files videos under a category', async () => {
     expect((await call<{ name: string }[]>('list_categories')).map((c) => c.name)).toEqual(['design', 'build', 'fabrication', 'dev', 'notes'])
-    expect(await call('yt_set_category', { items: [{ id: 'v1', category: 'build' }, { id: 'v2', category: 'nope' }] })).toMatchObject({ updated: 1, errors: [{ id: 'v2' }] })
-    expect(await call('yt_get_video', { id: 'v1' })).toMatchObject({ category: 'build' })
     expect(await call('list_categories')).toContainEqual({ name: 'build', entries: 1 })
-    expect(await call('yt_set_category', { items: [{ id: 'v1', category: null }] })).toEqual({ updated: 1 })
   })
 
-  it('renames a tag and reads one video', async () => {
-    await call('yt_move_tag', { from: 'build/well', to: 'water/well' })
-    expect(await call('yt_get_video', { id: 'v1' })).toMatchObject({ id: 'v1', tags: ['water/well/drilling'], url: 'https://www.youtube.com/watch?v=v1', notes: '' })
+  it('renames a tag on every entry, merging', async () => {
+    expect(await call('move_tag', { from: 'build/well/casing', to: 'Build:Well:Drilling' })).toEqual({ ok: true, from: 'build/well/casing', to: 'build/well/drilling' })
+    expect(await call('list_tags')).toEqual([{ path: 'build/well/drilling', entries: 2 }])
   })
 
   it('reports app errors as tool errors', async () => {
-    await expect(call('yt_get_video', { id: 'nope' })).rejects.toThrow(/not found/)
+    await expect(call('move_tag', { from: 'nope', to: 'x' })).rejects.toThrow(/not found/)
   })
 
   it('says when the app is not running', async () => {
     const down = new LogcadenceApi('http://127.0.0.1:9/api', async () => {
       throw new TypeError('fetch failed')
     })
-    await expect(down.get('/youtube/library')).rejects.toThrow(/isn't running/)
+    await expect(down.get('/tags')).rejects.toThrow(/isn't running/)
   })
 })

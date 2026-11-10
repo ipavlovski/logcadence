@@ -8,7 +8,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { ROOT } from './db/open.ts'
 
 // 0016_unified_entries on a library from before it: journal entries, an AI chat, a video, a capture and board
-// items, each with the tags of their own set.
+// items, each with the tags of their own set. Then 0017_split_ai_youtube, which takes the videos and AI chats out.
 
 const tmp = mkdtempSync(path.join(os.tmpdir(), 'logcadence-entries-migration-'))
 afterAll(() => rmSync(tmp, { recursive: true, force: true }))
@@ -73,7 +73,7 @@ describe('migration 0016_unified_entries', () => {
     board('b-gif', 'video/mp4', null) // a gif, stored as mp4
     board('b-png', 'image/png', null)
 
-    migrate(db, { migrationsFolder: MIGRATIONS })
+    migrate(db, { migrationsFolder: migrationsBefore('0017_split_ai_youtube') })
 
     expect(sqlite.prepare('SELECT id, type, subtype, category, date, title, position FROM entries ORDER BY id').all()).toEqual([
       { id: 'cap:c1', type: 'bookmark', subtype: 'reddit', category: null, date: '2026-10-03', title: 'Post', position: 7000 },
@@ -124,6 +124,63 @@ describe('migration 0016_unified_entries', () => {
     expect(sqlite.prepare(`SELECT category FROM entries WHERE id = 'j1'`).get()).toEqual({ category: 'make' })
     run(`DELETE FROM categories WHERE name = 'dev'`)
     expect(sqlite.prepare(`SELECT category FROM entries WHERE id = 'chat-e'`).get()).toEqual({ category: null })
+    sqlite.close()
+  })
+})
+
+describe('migration 0017_split_ai_youtube', () => {
+  it('takes videos and AI chats out (they moved to youtube-lib and ai-lib), leaving everything else', () => {
+    const sqlite = new Database(path.join(tmp, 'split.db'))
+    sqlite.pragma('foreign_keys = ON')
+    const db = drizzle(sqlite)
+    migrate(db, { migrationsFolder: migrationsBefore('0017_split_ai_youtube') })
+
+    const run = (sql: string, ...args: unknown[]) => sqlite.prepare(sql).run(...args)
+    const entry = (id: string, type: string, subtype: string | null) =>
+      run(`INSERT INTO entries (id, type, subtype, title, date, position, created_at, updated_at) VALUES (?, ?, ?, 'T', '2026-10-01', 1, 1, 1)`, id, type, subtype)
+    const node = (id: string, entryId: string) => run(`INSERT INTO nodes (id, entry_id, content, position, created_at, updated_at) VALUES (?, ?, 'x', 1, 1, 1)`, id, entryId)
+    const image = (id: string, nodeId: string) => run(`INSERT INTO images (id, node_id, file, mime, position, created_at) VALUES (?, ?, 'f.png', 'image/png', 1, 1)`, id, nodeId)
+    const tag = (id: number, p: string) => run(`INSERT INTO tags (id, path, created_at) VALUES (?, ?, 1)`, id, p)
+    const link = (e: string, t: number) => run(`INSERT INTO entry_tags (entry_id, tag_id, position) VALUES (?, ?, 0)`, e, t)
+
+    entry('j1', 'journal', null)
+    node('jn', 'j1')
+    image('ji', 'jn')
+    entry('chat-e', 'ai', 'claude-code')
+    node('cn', 'chat-e')
+    image('ci', 'cn')
+    run(`INSERT INTO chats (id, source, external_id, entry_id, title, started_at, updated_at, turns, messages, meta, node_ids, imported_at) VALUES ('claude-code:x', 'claude-code', 'x', 'chat-e', 'C', 1, 1, 1, '[]', '{}', '["cn"]', 1)`)
+    entry('yt:v1', 'video', 'youtube')
+    run(`INSERT INTO yt_videos (id, entry_id, title, added_at, added_date, imported_at, updated_at) VALUES ('v1', 'yt:v1', 'V', 1, '2026-10-01', 1, 1)`)
+    run(`INSERT INTO yt_images (id, video_id, section, file, mime, position, created_at) VALUES ('yi', 'v1', 'notes', 'f.png', 'image/png', 1, 1)`)
+    run(`INSERT INTO yt_playlists (id, title, created_at) VALUES ('PL1', 'P', 1)`)
+    run(
+      `INSERT INTO captures (id, entry_id, handler, key, url, title, screenshot, captured_at, captured_date, updated_at) VALUES ('c1', NULL, 'page', 'k', 'https://x.com', 'Page', 's.jpg', 7000, '2026-10-03', 7000)`,
+    )
+    entry('cap:c1', 'bookmark', 'page')
+    run(`UPDATE captures SET entry_id = 'cap:c1'`)
+    tag(1, 'build/well') // the journal's and the video's: stays
+    tag(2, 'youtube/misc') // the video's only: goes
+    tag(3, 'dev') // the chat's only: goes
+    tag(4, 'bookmark/homelab') // the bookmark's: stays
+    link('j1', 1)
+    link('yt:v1', 1)
+    link('yt:v1', 2)
+    link('chat-e', 3)
+    link('cap:c1', 4)
+
+    migrate(db, { migrationsFolder: MIGRATIONS })
+
+    const col = (sql: string) => sqlite.prepare(sql).all().map((r) => Object.values(r as object)[0])
+    expect(col('SELECT id FROM entries ORDER BY id')).toEqual(['cap:c1', 'j1'])
+    expect(col('SELECT id FROM nodes')).toEqual(['jn'])
+    expect(col('SELECT id FROM images')).toEqual(['ji'])
+    expect(col('SELECT path FROM tags ORDER BY path')).toEqual(['bookmark/homelab', 'build/well'])
+    expect(col('SELECT entry_id FROM entry_tags ORDER BY entry_id')).toEqual(['cap:c1', 'j1'])
+    const tables = col(`SELECT name FROM sqlite_master WHERE type = 'table'`)
+    for (const gone of ['chats', 'yt_videos', 'yt_images', 'yt_playlists']) expect(tables).not.toContain(gone)
+    expect(tables).toContain('captures')
+    expect(sqlite.prepare('PRAGMA foreign_key_check').all()).toEqual([])
     sqlite.close()
   })
 })

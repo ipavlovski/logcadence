@@ -15,14 +15,14 @@ import { notify } from '../../state/ui.ts'
 import { CategoryPicker } from '../CategoryPicker/CategoryPicker.tsx'
 import { TagInput } from '../TagInput/TagInput.tsx'
 import { startTagOp } from '../Tags/tagOps.ts'
-import { ArrowIcon, dayLabel, scrollParent, SearchIcon, TextSection } from '../Youtube/Youtube.tsx'
-import yt from '../Youtube/Youtube.module.css'
+import { ArrowIcon, dayLabel, scrollParent, SearchIcon, TextSection } from '../Library/Library.tsx'
+import yt from '../Library/Library.module.css'
 import styles from './Captures.module.css'
 
-// The Bookmarks view (tags pane): pages captured by the Chrome extension (extension/), listed like the YouTube view (grouped
-// by the day they were captured), and a page per capture with its screenshot, tags and notes. What's special about
-// some sites comes from the capture's handler (shared/handlers.ts): a Reddit post's subreddit, score and comments, a
-// Marketplace listing's price and seller. The Handlers view lists them. The look is the YouTube view's.
+// The Bookmarks view (tags pane): pages captured by the Chrome extension (extension/), listed as a grid grouped by the
+// day they were captured, and a page per capture with its screenshot, tags and notes. What's special about some sites
+// comes from the capture's handler (shared/handlers.ts): a Reddit post's subreddit, score and comments, a Marketplace
+// listing's price and seller. The Handlers view lists them. The look is the catalog's (Library.module.css).
 
 const PAGE = 48
 // How often an open tab checks for captures sent by the extension.
