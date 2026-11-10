@@ -87,12 +87,32 @@ function General() {
           </button>
         </Row>
       </Group>
+      {window.desktop && <LibraryGroup />}
       <Group title="Data">
         <Row label="Export the library" hint="Entries, bookmarks, media. An export can be imported into an empty library, e.g. the desktop app.">
           <DataExport />
         </Row>
       </Group>
     </>
+  )
+}
+
+/** Desktop app only: the open library, and switching to another one (the app restarts into it). */
+function LibraryGroup() {
+  const desktop = window.desktop!
+  const library = useStore(updatesStore, (s) => s.app?.library)
+  return (
+    <Group title="Library">
+      <Row label="Library folder" hint={library}>
+        <button onClick={() => void desktop.showLibraryFolder()}>Show folder</button>
+      </Row>
+      <Row label="Switch library" hint="Opens an existing library, or makes a new one in an empty folder. The app restarts into it.">
+        <button onClick={() => void desktop.openLibrary()}>Open or create…</button>
+      </Row>
+      <Row label="Import an export" hint="Into a new library in an empty folder. The app restarts into it.">
+        <button onClick={() => void desktop.importLibrary()}>Import…</button>
+      </Row>
+    </Group>
   )
 }
 

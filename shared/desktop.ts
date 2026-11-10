@@ -25,6 +25,8 @@ export interface AppInfo {
   version: string
   /** "dev" is LogcadenceDev, which is updated by pnpm preview rather than from GitHub. */
   channel: 'release' | 'dev'
+  /** The open library's folder. */
+  library: string
 }
 
 export interface ClipboardFile {
@@ -50,12 +52,12 @@ export interface DesktopApi {
    * page sees no file; null when the clipboard holds no such file.
    */
   clipboardFile(): Promise<ClipboardFile | null>
-  /** Pops up the window menu (File, View, Help) at a point in the page; the title bar has no menu bar. */
-  showMenu(x: number, y: number): Promise<void>
+  /** Opens the library's folder in the file manager. */
+  showLibraryFolder(): Promise<void>
   /** Paints the OS window buttons drawn over the top bar's right end. */
   setTitleBarColors(colors: { color: string; symbolColor: string }): Promise<void>
 
-  // First-run setup window.
+  // First-run setup window, and Settings (where the app restarts into the new library).
   /** Picks a folder: an existing library is opened, an empty one becomes a new library. */
   openLibrary(): Promise<ActionResult>
   /** Picks an export zip and an empty folder, and imports into it. */

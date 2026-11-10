@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, session, shell, type WebContents } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, session, shell, type WebContents } from 'electron'
 import { createWriteStream, rmSync } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
@@ -102,7 +102,8 @@ function createWindow() {
     backgroundColor: '#282c34',
     autoHideMenuBar: true,
     // The page's top bar is the title bar (it marks itself draggable); the OS draws only the window buttons over
-    // its right end, in the page theme's colors (set-title-bar-colors). The menu opens from the bar's ⋯ button.
+    // its right end, in the page theme's colors (set-title-bar-colors). The menu has no bar: its keys still work, and
+    // its other actions are in Settings.
     titleBarStyle: 'hidden',
     ...(process.platform === 'darwin' ? {} : { titleBarOverlay: { ...TITLE_BAR_DARK, height: TITLE_BAR_HEIGHT } }),
     webPreferences: { preload: path.join(import.meta.dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false },
@@ -234,7 +235,7 @@ function progress(w: BrowserWindow | undefined, p: TransferProgress | null) {
 
 function registerIpc() {
   ipcMain.handle('export-data', (_e, opts?: { assets?: boolean }) => exportData(opts))
-  ipcMain.handle('app-info', (): AppInfo => ({ version: app.getVersion(), channel: IS_DEV_CHANNEL ? 'dev' : 'release' }))
+  ipcMain.handle('app-info', (): AppInfo => ({ version: app.getVersion(), channel: IS_DEV_CHANNEL ? 'dev' : 'release', library: process.env.LOGCADENCE_DATA_DIR ?? '' }))
   ipcMain.handle('check-for-updates', () => checkForUpdates())
   ipcMain.handle('install-release', (_e, tag: string) => installRelease(tag))
   ipcMain.handle('install-update', async () => {
@@ -250,10 +251,7 @@ function registerIpc() {
   })
   ipcMain.handle('import-library', () => importLibrary())
   ipcMain.handle('clipboard-file', () => clipboardFile())
-  ipcMain.handle('show-menu', (e, x: number, y: number) => {
-    const w = BrowserWindow.fromWebContents(e.sender)
-    if (w) Menu.getApplicationMenu()?.popup({ window: w, x: Math.round(x), y: Math.round(y) })
-  })
+  ipcMain.handle('show-library-folder', () => void shell.openPath(process.env.LOGCADENCE_DATA_DIR ?? ''))
   ipcMain.handle('set-title-bar-colors', (e, colors: { color: string; symbolColor: string }) => {
     const w = BrowserWindow.fromWebContents(e.sender)
     if (w && process.platform !== 'darwin') w.setTitleBarOverlay({ ...colors, height: TITLE_BAR_HEIGHT })

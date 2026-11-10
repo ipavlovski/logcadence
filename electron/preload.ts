@@ -21,7 +21,7 @@ const api: DesktopApi = {
   clipboardFile: () => ipcRenderer.invoke('clipboard-file'),
   openLibrary: () => ipcRenderer.invoke('open-library'),
   importLibrary: () => ipcRenderer.invoke('import-library'),
-  showMenu: (x, y) => ipcRenderer.invoke('show-menu', x, y),
+  showLibraryFolder: () => ipcRenderer.invoke('show-library-folder'),
   setTitleBarColors: (colors) => ipcRenderer.invoke('set-title-bar-colors', colors),
 }
 
