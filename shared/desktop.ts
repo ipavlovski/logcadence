@@ -54,6 +54,10 @@ export interface DesktopApi {
   connectClaude(): Promise<boolean>
   /** Signs the app out of claude.ai. */
   disconnectClaude(): Promise<void>
+  /** Pops up the window menu (File, View, Help) at a point in the page; the title bar has no menu bar. */
+  showMenu(x: number, y: number): Promise<void>
+  /** Paints the OS window buttons drawn over the top bar's right end. */
+  setTitleBarColors(colors: { color: string; symbolColor: string }): Promise<void>
 
   // First-run setup window.
   /** Picks a folder: an existing library is opened, an empty one becomes a new library. */

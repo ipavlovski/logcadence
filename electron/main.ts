@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, session, shell, type WebContents } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, session, shell, type WebContents } from 'electron'
 import { createWriteStream, rmSync } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
@@ -91,6 +91,11 @@ async function clearCacheAfterUpdate() {
   writeConfig({ lastVersion: app.getVersion() })
 }
 
+/** Matches --topbar-h in src/styles/global.css. */
+const TITLE_BAR_HEIGHT = 40
+/** The dark theme's --bg-2 and --text-muted, until the page sends its own. */
+const TITLE_BAR_DARK = { color: '#191c21', symbolColor: '#7f848e' }
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1440,
@@ -98,6 +103,10 @@ function createWindow() {
     show: false,
     backgroundColor: '#282c34',
     autoHideMenuBar: true,
+    // The page's top bar is the title bar (it marks itself draggable); the OS draws only the window buttons over
+    // its right end, in the page theme's colors (set-title-bar-colors). The menu opens from the bar's ⋯ button.
+    titleBarStyle: 'hidden',
+    ...(process.platform === 'darwin' ? {} : { titleBarOverlay: { ...TITLE_BAR_DARK, height: TITLE_BAR_HEIGHT } }),
     webPreferences: { preload: path.join(import.meta.dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false },
   })
   if (IS_DEV_CHANNEL) {
@@ -245,6 +254,14 @@ function registerIpc() {
   ipcMain.handle('clipboard-file', () => clipboardFile())
   ipcMain.handle('claude-connect', () => connectClaude(win))
   ipcMain.handle('claude-disconnect', () => disconnectClaude())
+  ipcMain.handle('show-menu', (e, x: number, y: number) => {
+    const w = BrowserWindow.fromWebContents(e.sender)
+    if (w) Menu.getApplicationMenu()?.popup({ window: w, x: Math.round(x), y: Math.round(y) })
+  })
+  ipcMain.handle('set-title-bar-colors', (e, colors: { color: string; symbolColor: string }) => {
+    const w = BrowserWindow.fromWebContents(e.sender)
+    if (w && process.platform !== 'darwin') w.setTitleBarOverlay({ ...colors, height: TITLE_BAR_HEIGHT })
+  })
 }
 
 const MEDIA_TYPES: Record<string, string> = {

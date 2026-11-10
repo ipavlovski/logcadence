@@ -27,6 +27,9 @@ export function App() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
+    // The desktop app's window buttons sit on the top bar, so they take its colors.
+    const css = getComputedStyle(document.documentElement)
+    void window.desktop?.setTitleBarColors({ color: css.getPropertyValue('--bg-2').trim(), symbolColor: css.getPropertyValue('--text-muted').trim() })
   }, [theme])
 
   useEffect(() => {
@@ -36,7 +39,9 @@ export function App() {
 
   return (
     <div className={styles.app}>
+      {/* In the desktop app this is also the window's title bar: drag it to move the window, double-click to maximize. */}
       <header className={styles.topBar}>
+        {window.desktop && <MenuButton />}
         <span className={styles.brand}>logcadence</span>
         <div className={styles.actions}>
           <DayNav />
@@ -156,6 +161,27 @@ function SettingsButton() {
         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
       </svg>
       {pending && <i className={styles.badge} />}
+    </button>
+  )
+}
+
+/** Desktop app only: the window menu (File, View, Help), which has no menu bar of its own. */
+function MenuButton() {
+  return (
+    <button
+      className={styles.iconButton}
+      title="Menu"
+      aria-label="Menu"
+      onClick={(e) => {
+        const r = e.currentTarget.getBoundingClientRect()
+        void window.desktop!.showMenu(r.left, r.bottom + 2)
+      }}
+    >
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden>
+        <circle cx="5" cy="12" r="1.8" />
+        <circle cx="12" cy="12" r="1.8" />
+        <circle cx="19" cy="12" r="1.8" />
+      </svg>
     </button>
   )
 }

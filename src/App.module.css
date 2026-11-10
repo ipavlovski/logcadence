@@ -10,10 +10,24 @@
   gap: 16px;
   height: var(--topbar-h);
   flex: none;
-  padding: 0 12px;
+  /* The desktop app draws its window buttons over the bar's right end (titlebar-area-* covers the rest); the web
+     app has no such area, so the fallbacks leave the plain 12px. */
+  padding: 0 calc(12px + 100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw)) 0 12px;
   background: var(--bg-2);
   border-bottom: 1px solid var(--border);
   font-size: 12px;
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+/* Clicks reach the bar's controls instead of moving the window. */
+.topBar button,
+.topBar input {
+  -webkit-app-region: no-drag;
+}
+
+.topBar .iconButton + .brand {
+  margin-left: -8px;
 }
 
 .brand {
