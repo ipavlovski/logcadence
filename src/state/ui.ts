@@ -1,4 +1,3 @@
-import type { EntryType } from '../../shared/entryTypes.ts'
 import type { PaneId } from './panes.ts'
 import { createStore, persistedStore } from './store.ts'
 
@@ -75,16 +74,16 @@ interface Prefs {
   expanded: string[]
   /** The tags pane's focus shortcut (ctrl+2) restores it when minimized; off, the shortcut skips it while minimized. */
   openHiddenPane: boolean
-  /** The type views show (or scroll to) the journal's day, instead of browsing days of their own (state/canvasDay.ts). */
-  canvasFollowsJournal: boolean
-  /** Types a day tab shows; empty: all of them. */
-  journalTypes: EntryType[]
+  /** Image mode (ctrl+i): the panes show only the entries' images, under their categories (journal) and days (tags). */
+  imageMode: boolean
 }
 
-const DEFAULT_PREFS: Prefs = { theme: 'dark', showArchived: false, includeSubtags: true, expanded: [], openHiddenPane: true, canvasFollowsJournal: false, journalTypes: [] }
+const DEFAULT_PREFS: Prefs = { theme: 'dark', showArchived: false, includeSubtags: true, expanded: [], openHiddenPane: true, imageMode: false }
 
 export const prefsStore = persistedStore<Prefs>('prefs.v1', DEFAULT_PREFS, (s) => ({ ...DEFAULT_PREFS, ...(s as Partial<Prefs>) }))
 
 export function setPref<K extends keyof Prefs>(key: K, value: Prefs[K]) {
   prefsStore.set((s) => ({ ...s, [key]: value }))
 }
+
+export const toggleImageMode = (on = !prefsStore.get().imageMode) => setPref('imageMode', on)

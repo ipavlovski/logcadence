@@ -13,7 +13,10 @@ let timer: ReturnType<typeof setTimeout> | undefined
 
 // Bumped when what the mirror holds changes, so a library's files are all rewritten on the next start:
 // 2: AI chats left the journal (0017_split_ai_youtube); entries carry category:: lines (0016_unified_entries).
-const MIRROR_VERSION = '2'
+// 3: bookmarks and the image board's days are entries of their days, captured pages with a url:: line (0018_entries_only).
+// 4: the fabrication category is called fab (0019_fab_category).
+// 5: entries' tags lose their category's (0020_category_tags).
+const MIRROR_VERSION = '5'
 const VERSION_FILE = () => path.join(JOURNALS_DIR, '.mirror-version')
 
 /**
@@ -39,8 +42,7 @@ export function flushJournalFiles() {
   for (const date of pending) {
     const file = path.join(JOURNALS_DIR, `${date.replaceAll('-', '_')}.md`)
     try {
-      // Journal entries: what has notes (bookmarks keep theirs in their own table).
-      const list = entriesForDate(date, 'notes')
+      const list = entriesForDate(date)
       if (list.length) writeFileSync(file, renderJournal(date, list))
       else rmSync(file, { force: true })
     } catch (err) {
@@ -56,7 +58,7 @@ export function renderJournal(date: string, list: EntryDTO[]): string {
   const out = [`# ${formatJournalDate(date)}`, '']
   for (const e of list) {
     out.push(`## ${e.title || '(untitled)'}`)
-    if (e.type !== 'journal') out.push(`type:: ${e.subtype ? `${e.type}/${e.subtype}` : e.type}`)
+    if (e.source) out.push(`url:: ${e.source.url}`)
     if (e.category) out.push(`category:: ${e.category}`)
     if (e.tags.length) out.push(`tags:: ${e.tags.join(', ')}`)
     if (e.archived) out.push('archived:: true')

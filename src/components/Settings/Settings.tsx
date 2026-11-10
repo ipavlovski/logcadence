@@ -1,9 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { versionLabel } from '../../../shared/versions.ts'
-import { pluginIcon } from '../../canvas/icons.tsx'
-import { TYPE_VIEWS } from '../../canvas/plugins.ts'
+import { HANDLERS } from '../../../shared/handlers.ts'
 import { formatCombo, paneBindings } from '../../shortcuts.ts'
-import { setFollowJournal } from '../../state/canvasDay.ts'
 import { panesStore, setPaneOpen, type PaneId } from '../../state/panes.ts'
 import { useStore } from '../../state/store.ts'
 import { openSettings, prefsStore, setPref, toggleHelp, uiStore, type SettingsSection } from '../../state/ui.ts'
@@ -166,6 +164,7 @@ function Journal() {
   return (
     <>
       <p className={styles.note}>Today is the canvas’s first tab, which is always there.</p>
+      <Extension />
       <Shortcuts pane="journal" />
     </>
   )
@@ -179,8 +178,6 @@ function Tags() {
       <Group title="Pane">
         <PaneToggle pane="tags" label="Show the tags pane" />
       </Group>
-      <FollowJournal />
-      <TypeViews />
       <Group title="Tag views">
         <Check checked={showArchived} onChange={(v) => setPref('showArchived', v)} label="Show archived entries and nodes" hint="Greyed out, in the tag tree and tag views." />
         <Check checked={includeSub} onChange={(v) => setPref('includeSubtags', v)} label="Include sub-tags" hint="A tag view also lists the entries of its sub-tags." />
@@ -190,33 +187,22 @@ function Tags() {
   )
 }
 
-function FollowJournal() {
-  const follows = useStore(prefsStore, (s) => s.canvasFollowsJournal)
+/** What the Chrome extension's captures become: an entry of today, by the handler of the page's site. */
+function Extension() {
   return (
-    <Group title="Days">
-      <Check
-        checked={follows}
-        onChange={setFollowJournal}
-        label={`Follow the journal’s day (${formatCombo('mod+l')})`}
-        hint="On, the Bookmarks and Media views scroll to the day open in the canvas. Off, they keep their own place."
-      />
-    </Group>
-  )
-}
-
-/** The types with a view of their own, shown in the tags pane. */
-function TypeViews() {
-  return (
-    <Group title="Type views">
-      <p className={styles.note}>A query of one of these types shows in its own view. The icons at the end of the tags pane’s tab bar open them.</p>
+    <Group title="Browser extension">
+      <p className={styles.note}>
+        A page bookmarked with the Logcadence extension becomes an entry of today: its title links to the page, its first node holds the screenshot. Capturing
+        it again adds the new screenshot to the same entry.
+      </p>
       <ul className={styles.tabList}>
-        {TYPE_VIEWS.map((v) => (
-          <li key={v.type}>
+        {HANDLERS.map((h) => (
+          <li key={h.id}>
             <label>
-              <span className={styles.icon}>{pluginIcon(v.icon)}</span>
               <span>
-                <b>{v.title}</b>
-                <span className={styles.hint}>{v.description}</span>
+                <b>{h.name}</b> <span className={styles.hint}>{h.domains.join(', ')}</span>
+                <span className={styles.hint}>{h.about}</span>
+                <span className={styles.hint}>{h.capture}</span>
               </span>
             </label>
           </li>

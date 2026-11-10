@@ -1,11 +1,13 @@
 import { randomUUID } from 'node:crypto'
+import { writeFileSync } from 'node:fs'
+import path from 'node:path'
 import { asc, eq, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { validator } from 'hono/validator'
 import type { CreateNodeBody, UpdateNodeBody } from '../../shared/types.ts'
-import { db } from '../db/client.ts'
+import { ASSETS_DIR, db } from '../db/client.ts'
 import { entries, images, nodes } from '../db/content-schema.ts'
-import { imageUrl, loadNode } from '../lib/content.ts'
+import { extension, loadNode, toImage } from '../lib/content.ts'
 import { logEvent } from '../lib/events.ts'
 import { saveUpload } from '../lib/media.ts'
 import { touchDates } from '../lib/journalFiles.ts'
@@ -29,6 +31,23 @@ function parseUpdate(v: unknown): UpdateNodeBody {
     activeImageId: active as string | null | undefined,
     position: optNum(o, 'position'),
   })
+}
+
+/** A form field that's a positive integer, or absent. */
+function formSize(v: unknown, k: string): number | null {
+  if (v === undefined || v === '') return null
+  const n = typeof v === 'string' ? Number(v) : NaN
+  if (!Number.isInteger(n) || n < 1) bad(`${k} must be a positive integer`)
+  return n
+}
+
+function parseUpload(v: Record<string, string | File | (string | File)[]>) {
+  const { file, thumb } = v
+  if (!(file instanceof File)) bad('file is required')
+  if (!/^(image|video)\//.test(file.type)) bad('only images and videos are supported')
+  if (file.size > MAX_UPLOAD) bad('file too large')
+  if (thumb !== undefined && !(thumb instanceof File && /^image\//.test(thumb.type))) bad('thumb must be an image')
+  return { file, thumb: thumb as File | undefined, width: formSize(v.width, 'width'), height: formSize(v.height, 'height') }
 }
 
 function entryDate(entryId: string): string {
@@ -70,42 +89,35 @@ export const nodeRoutes = new Hono()
     touchDates(entryDate(before.entryId))
     return c.json({ ok: true })
   })
-  // Pasted/dropped image or video: stored under assets/, appended to the node's gallery.
-  .post(
-    '/nodes/:id/images',
-    validator('form', (v) => {
-      const file = v.file
-      if (!(file instanceof File)) bad('file is required')
-      if (!/^(image|video)\//.test(file.type)) bad('only images and videos are supported')
-      if (file.size > MAX_UPLOAD) bad('file too large')
-      return { file }
-    }),
-    async (c) => {
-      const nodeId = c.req.param('id')
-      const find = () => db.select().from(nodes).where(eq(nodes.id, nodeId)).get() ?? notFound('node')
-      find()
-      const { file } = c.req.valid('form')
-      const id = randomUUID()
-      // A gif can take a while to become an mp4, so the node is read again after.
-      const { file: name, mime } = await saveUpload(id, file)
-      const node = find()
-      const max = db
-        .select({ p: sql<number | null>`max(${images.position})` })
-        .from(images)
-        .where(eq(images.nodeId, nodeId))
-        .get()?.p
-      db.transaction(() => {
-        db.insert(images)
-          .values({ id, nodeId, file: name, mime, position: (max ?? 0) + 1, createdAt: Date.now() })
-          .run()
-        // The first image becomes active; later pastes keep the current large preview.
-        if (!node.activeImageId) db.update(nodes).set({ activeImageId: id }).where(eq(nodes.id, nodeId)).run()
-      })
-      logEvent('image', id, 'create', { nodeId, file: name, mime })
-      touchDates(entryDate(node.entryId))
-      return c.json({ image: { id, url: imageUrl(name), mime }, activeImageId: node.activeImageId ?? id }, 201)
-    },
-  )
+  // Pasted/dropped image or video: stored under assets/, appended to the node's gallery. The app sends its size and,
+  // for a large image or a video, a smaller still (src/thumbs.ts).
+  .post('/nodes/:id/images', validator('form', parseUpload), async (c) => {
+    const nodeId = c.req.param('id')
+    const find = () => db.select().from(nodes).where(eq(nodes.id, nodeId)).get() ?? notFound('node')
+    find()
+    const b = c.req.valid('form')
+    const id = randomUUID()
+    // A gif can take a while to become an mp4, so the node is read again after. An animated one keeps no
+    // thumbnail, so it plays wherever it's shown.
+    const { file: name, mime } = await saveUpload(id, b.file)
+    const thumb = b.thumb && !(b.file.type === 'image/gif' && mime.startsWith('video/')) ? `${id}-thumb.${extension(b.thumb)}` : null
+    if (b.thumb && thumb) writeFileSync(path.join(ASSETS_DIR, thumb), Buffer.from(await b.thumb.arrayBuffer()))
+    const node = find()
+    const max = db
+      .select({ p: sql<number | null>`max(${images.position})` })
+      .from(images)
+      .where(eq(images.nodeId, nodeId))
+      .get()?.p
+    const row = { id, nodeId, file: name, mime, width: b.width, height: b.height, thumb, position: (max ?? 0) + 1, createdAt: Date.now() }
+    db.transaction(() => {
+      db.insert(images).values(row).run()
+      // The first image becomes active; later pastes keep the current large preview.
+      if (!node.activeImageId) db.update(nodes).set({ activeImageId: id }).where(eq(nodes.id, nodeId)).run()
+    })
+    logEvent('image', id, 'create', { nodeId, file: name, mime, width: b.width, height: b.height, thumb })
+    touchDates(entryDate(node.entryId))
+    return c.json({ image: toImage(row), activeImageId: node.activeImageId ?? id }, 201)
+  })
   // New gallery order (the first image is the node's thumbnail); `ids` must be all of the node's images.
   .post(
     '/nodes/:id/images/order',

@@ -1,8 +1,8 @@
 // Logcadence capture: screenshots the page and POSTs it, with its url, title and icon, to the Logcadence app's API
-// on 127.0.0.1 (server/routes/captures.ts), for its Bookmarks tab. Pages of a site with a handler (common.js) get
+// on 127.0.0.1 (server/routes/captures.ts), which makes it an entry of today's journal. Pages of a site with a handler (common.js) get
 // more: a Reddit post is one screenshot of the whole post (scrolled through and stitched) with its subreddit, score
 // and so on; a Marketplace listing comes with its price, condition, location and seller. Any other page is what is
-// on screen. "comment" adds what is on screen to the comments of a Reddit post already captured. Bookmarks of
+// on screen. "comment" adds what is on screen to the entry of a Reddit post already captured. Bookmarks of
 // YouTube, TikTok and Instagram pages go to SEO Dashboard (../seo-dashboard) instead, which takes the same request.
 
 import { appFor, getPort, handlerOf, isVideoSite } from './common.js'
@@ -287,8 +287,14 @@ function restorePage(y) {
 // ── wiring ─────────────────────────────────────────────────────────────────
 
 // SEO Dashboard answers with kind 'video'; Logcadence with the capture's handler.
-const PLACE = { reddit: 'Bookmarks (Reddit)', marketplace: 'Bookmarks (Marketplace)' }
-const describe = (r) => `${r.comment ? 'Comment added to' : r.created ? 'Saved to' : 'Updated in'} ${r.kind === 'video' ? 'SEO Dashboard' : (PLACE[r.handler] ?? 'Bookmarks')}`
+const describe = (r) =>
+  r.kind === 'video'
+    ? `${r.created ? 'Saved to' : 'Updated in'} SEO Dashboard`
+    : r.comment
+      ? `Comment added to “${r.title}”`
+      : r.created
+        ? `Added to the journal (${r.date})`
+        : `New screenshot added to “${r.title}”`
 
 // The popup asks for a capture; it runs here, so it finishes even if the popup closes.
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
@@ -305,7 +311,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   }
 })
 
-// Alt+Shift+D: a video to SEO Dashboard, anything else to Bookmarks (as its handler captures it); the result shows on the toolbar icon.
+// Alt+Shift+D: a video to SEO Dashboard, anything else to the journal (as its handler captures it); the result shows on the toolbar icon.
 chrome.commands.onCommand.addListener(async (command, tab) => {
   if (command !== 'capture-now' || !tab) return
   const badge = (text, color, title) => {

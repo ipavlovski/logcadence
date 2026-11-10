@@ -2,14 +2,14 @@
 
 Sends a screenshot of the page, with its url, title and favicon, to the running Logcadence app:
 
-- **Any page** → the canvas **Bookmarks** tab, as its site's handler (`HANDLERS` in `common.js`) captures it:
+- **Any page** → an entry of today's journal, as its site's handler (`HANDLERS` in `common.js`) captures it. The entry's title links to the page and its first node holds the screenshot; the app tags Reddit posts `reddit/<subreddit>` and listings `marketplace`:
   - **Reddit post**: one screenshot of the whole post (title, text, images), scrolled through and stitched, with the subreddit, its icon, the author, points, comment count and post date.
   - **Facebook Marketplace listing**: what's on screen, with the price, condition, location, seller and when it was listed (`readListing`, from the listing's text).
   - **Anything else**: what's on screen, with the favicon.
-- **Add as comment** (on a Reddit post you have captured) → what's on screen goes to that post's **Comments**.
+- **Add as comment** (on a Reddit post you have captured) → what's on screen goes into a new node of that post's entry.
 - **A YouTube, TikTok or Instagram page** → **SEO Dashboard** (`../seo-dashboard`) instead of Logcadence, as a bookmark. SEO Dashboard only keeps short videos (Shorts, TikToks, reels) and answers anything else on those sites with an error.
 
-Capturing a page again replaces its screenshot and keeps its notes, comments and tags.
+Capturing a page again adds the new screenshot to its entry, in a node of its own, and keeps its title, notes and tags.
 
 ## Install
 
@@ -20,13 +20,13 @@ Capturing a page again replaces its screenshot and keeps its notes, comments and
 ## Use
 
 - Toolbar button or **Alt+Shift+S** opens the popup: pick what to capture.
-- **Alt+Shift+D** captures right away (a video to SEO Dashboard, anything else to Bookmarks); the toolbar icon shows ✓ or ! (hover it for the message).
+- **Alt+Shift+D** captures right away (a video to SEO Dashboard, anything else to the journal); the toolbar icon shows ✓ or ! (hover it for the message).
 - Shortcuts can be changed at `chrome://extensions/shortcuts`.
 - The popup's **Send to** picks the build of the app the page goes to: Logcadence (port 3002) or LogcadenceDev (3003); on a video page, SEO Dashboard (3010) or SeoDashboardDev (3011). Each is remembered separately.
 
 ## Adding a handler
 
-The app decides what a capture is (`shared/handlers.ts`: the url match, the key, the fields it keeps); add the site there, then here: an entry in `HANDLERS` (`common.js`) and, if the page has something to read, a function in `background.js` run in the page with `chrome.scripting` (self-contained, returning `{ title, site, fields, publishedAt }`), called from `capture`.
+The app decides what a capture is (`shared/handlers.ts`: the url match, the key, the fields it keeps, the tags it gets); add the site there, then here: an entry in `HANDLERS` (`common.js`) and, if the page has something to read, a function in `background.js` run in the page with `chrome.scripting` (self-contained, returning `{ title, site, fields, publishedAt }`), called from `capture`.
 
 ## How it talks to the app
 

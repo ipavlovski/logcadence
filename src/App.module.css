@@ -5,6 +5,7 @@
 }
 
 .topBar {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 16px;
@@ -13,8 +14,8 @@
   /* The desktop app draws its window buttons over the bar's right end (titlebar-area-* covers the rest); the web
      app has no such area, so the fallbacks leave the plain 12px. */
   padding: 0 calc(12px + 100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw)) 0 12px;
+  /* No line under it: the bar and the panes' tab bars read as one band. */
   background: var(--bg-2);
-  border-bottom: 1px solid var(--border);
   font-size: 12px;
   -webkit-app-region: drag;
   user-select: none;
@@ -26,14 +27,34 @@
   -webkit-app-region: no-drag;
 }
 
-.topBar .iconButton + .brand {
-  margin-left: -8px;
+/* Centered on the window (not on the bar's padded inside), narrowing to leave room for both ends. */
+.topBar .search {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: clamp(160px, calc(100vw - 440px), 560px);
+  height: 28px;
+  padding: 0 6px 0 10px;
+  background: var(--bg);
+  color: var(--text-faint);
+  cursor: text;
 }
 
-.brand {
-  font-weight: 700;
-  color: var(--accent);
-  letter-spacing: 0.02em;
+.searchText {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search kbd {
+  flex: none;
+  font-size: 10.5px;
 }
 
 .actions {
@@ -41,31 +62,6 @@
   gap: 4px;
   margin-left: auto;
 }
-
-.dayNav {
-  display: flex;
-  gap: 4px;
-  margin-right: 12px;
-}
-
-.dayNav input {
-  border: 1px solid var(--border);
-  background: none;
-  color: var(--text-muted);
-  border-radius: var(--radius);
-  padding: 2px 8px;
-  height: 26px;
-  font: inherit;
-  color-scheme: inherit;
-}
-
-.dayNav input:hover,
-.dayNav input:focus {
-  color: var(--text);
-  border-color: var(--accent);
-  outline: none;
-}
-
 
 .topBar button {
   border: 1px solid var(--border);
@@ -76,38 +72,24 @@
   height: 26px;
 }
 
-.topBar .foldButton {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.topBar .foldButton:disabled {
-  opacity: 0.4;
-  cursor: default;
-  border-color: var(--border);
-  color: var(--text-muted);
-}
-
-/* Right-pointing when the day's entries are folded, down when they're open. */
-.chevron {
-  width: 5px;
-  height: 5px;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
-  transform: rotate(-45deg);
-}
-
-.chevronOpen {
-  transform: translateY(-2px) rotate(45deg);
-}
-
 .topBar .iconButton {
   position: relative;
   display: grid;
   place-items: center;
-  padding: 0 7px;
+  border-color: transparent;
+  background: var(--surface-2);
+  color: var(--text);
+  width: 28px;
+  padding: 0;
 }
+
+.topBar .toggleOn {
+  /* After .iconButton: on, the image button takes the accent. */
+  border-color: var(--accent);
+  background: var(--selection);
+  color: var(--text);
+}
+
 
 .badge {
   position: absolute;
@@ -185,12 +167,6 @@
   padding: 8px 14px;
   box-shadow: var(--shadow);
   font-size: 12.5px;
-}
-
-@media (max-width: 760px) {
-  .paneToggles {
-    display: none;
-  }
 }
 
 .update {

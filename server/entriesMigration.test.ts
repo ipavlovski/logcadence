@@ -169,7 +169,7 @@ describe('migration 0017_split_ai_youtube', () => {
     link('chat-e', 3)
     link('cap:c1', 4)
 
-    migrate(db, { migrationsFolder: MIGRATIONS })
+    migrate(db, { migrationsFolder: migrationsBefore('0018_entries_only') })
 
     const col = (sql: string) => sqlite.prepare(sql).all().map((r) => Object.values(r as object)[0])
     expect(col('SELECT id FROM entries ORDER BY id')).toEqual(['cap:c1', 'j1'])

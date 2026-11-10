@@ -1,18 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { formatJournalDate, today, weekday } from '../../../shared/dates.ts'
-import { ENTRY_TYPES, TYPE_LABEL } from '../../../shared/entryTypes.ts'
 import type { EntryDTO } from '../../../shared/types.ts'
-import { createEntry } from '../../actions.ts'
+import { createEntry, pasteAsEntry } from '../../actions.ts'
+import { pasteMedia } from '../../media.ts'
+import { activeJournalDate, panesStore } from '../../state/panes.ts'
 import { matches } from '../../markdown.ts'
 import { useCommand } from '../../state/commands.ts'
 import { dayFoldStore, foldStore, setFolded } from '../../state/fold.ts'
-import { categoryOrder, useCategories } from '../../state/categories.ts'
+import { categoryOrder, categoryStyle, useCategories } from '../../state/categories.ts'
 import { journalStore, requestReveal, setCursor } from '../../state/journal.ts'
 import { useStore } from '../../state/store.ts'
-import { prefsStore, setPref } from '../../state/ui.ts'
+import { prefsStore } from '../../state/ui.ts'
+import { gridItems, ImageGrid } from '../ImageGrid/ImageGrid.tsx'
 import { DayContext, type DayApi, type FocusRequest, type FocusTarget } from './dayContext.ts'
 import { EntryCard } from './EntryCard.tsx'
-import { ItemCard, MediaStrip } from './ItemCard.tsx'
 import { useDay } from './useDay.ts'
 import styles from './Journal.module.css'
 
@@ -37,18 +38,16 @@ export function JournalDay({ date, find }: Props) {
 
   const focusTo = useCallback((t: FocusRequest | null) => setFocus(t && { ...t, n: ++nonce.current }), [])
 
-  // The types shown (the chips above the entries), then the find (ctrl+f); the node being edited always stays visible.
-  const types = useStore(prefsStore, (s) => s.journalTypes)
-  const typed = useMemo(() => (entries && types.length ? entries.filter((e) => types.includes(e.type)) : (entries ?? [])), [entries, types])
+  // The find (ctrl+f); the node being edited always stays visible.
   const visible = useMemo(() => {
-    if (!q) return typed
+    if (!q) return entries ?? []
     const editingId = focus?.kind === 'node' ? focus.nodeId : null
-    return typed.flatMap((e) => {
+    return (entries ?? []).flatMap((e) => {
       const head = matches(e.title, q) || e.tags.some((t) => matches(t, q))
       const nodes = head ? e.nodes : e.nodes.filter((n) => n.id === editingId || matches(n.content, q))
       return head || nodes.length ? [{ ...e, nodes }] : []
     })
-  }, [typed, q, focus])
+  }, [entries, q, focus])
 
   // Entries grouped by category, in the categories' order; within a group, in the day's order.
   const categories = useCategories()
@@ -59,9 +58,9 @@ export function JournalDay({ date, find }: Props) {
     return [...m].sort(([a], [b]) => order(a) - order(b))
   }, [visible, categories])
 
-  // Journal entries, in the order shown: the caret moves through their titles and nodes.
+  // The entries, in the order shown: the caret moves through their titles and nodes.
   const orderRef = useRef<EntryDTO[]>([])
-  orderRef.current = groups.flatMap(([, list]) => list.filter((e) => e.type === 'journal'))
+  orderRef.current = groups.flatMap(([, list]) => list)
   const entriesRef = useRef(entries)
   entriesRef.current = entries
 
@@ -126,6 +125,17 @@ export function JournalDay({ date, find }: Props) {
     }
   }, [])
 
+  // Images pasted while nothing is being edited (the canvas focused on this day): a new entry, at the cursor.
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const el = document.activeElement as HTMLElement | null
+      if (el?.closest('input, textarea, [contenteditable]') || prefsStore.get().imageMode || panesStore.get().focus !== 'canvas' || activeJournalDate() !== date) return
+      pasteMedia(e, (files) => void pasteAsEntry(files))
+    }
+    document.addEventListener('paste', onPaste)
+    return () => document.removeEventListener('paste', onPaste)
+  }, [date])
+
   useEffect(() => {
     if (!flashId) return
     document.querySelector(`[data-reveal="${CSS.escape(flashId)}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
@@ -183,6 +193,7 @@ export function JournalDay({ date, find }: Props) {
     focus && ((focus.kind === 'title' && focus.entryId === e.id) || (focus.kind === 'node' && e.nodes.some((n) => n.id === focus.nodeId))) ? focus : null
 
   const isToday = date === today()
+  const imageMode = useStore(prefsStore, (s) => s.imageMode)
 
   return (
     <DayContext.Provider value={dayApi}>
@@ -194,72 +205,57 @@ export function JournalDay({ date, find }: Props) {
               {weekday(date)}
               {isToday && ' · today'}
             </div>
-            {entries && entries.length > 0 && <TypeFilter entries={entries} />}
           </div>
         </header>
 
         {error && <p className={styles.error}>Could not load this day: {error}</p>}
 
-        {entries && !entries.length && (
-          <button className={styles.empty} onClick={() => createEntry({ date, tags: [] })}>
-            No entries yet. Click here or press <kbd>Ctrl+N</kbd> / <kbd>Alt+N</kbd> to start writing.
-          </button>
-        )}
-        {entries && entries.length > 0 && !visible.length && (
-          <p className={styles.muted}>{q ? `Nothing on this day matches “${q}”.` : 'Nothing of the types chosen on this day.'}</p>
-        )}
-
-        {groups.map(([category, list]) => (
-          <section key={category ?? '_uncategorized'} className={styles.group}>
-            {(category || groups.length > 1) && <h2 className={`${styles.categoryHead} ${category ? '' : styles.uncategorized}`}>{category ?? 'uncategorized'}</h2>}
-            {list.map((e) =>
-              e.type === 'journal' ? (
-                <EntryCard key={e.id} entry={e} focus={focusFor(e)} find={q} flashId={flashId} folded={folded.has(e.id)} />
-              ) : e.type === 'media' ? null : (
-                <ItemCard key={e.id} entry={e} find={q} flash={flashId === e.id} />
-              ),
+        {imageMode ? (
+          <ImageSections groups={groups} empty={!!entries && !q} find={q} />
+        ) : (
+          <>
+            {entries && !entries.length && (
+              <button className={styles.empty} onClick={() => createEntry({ date, tags: [] })}>
+                No entries yet. Click here or press <kbd>Ctrl+N</kbd> / <kbd>Alt+N</kbd> to start writing.
+              </button>
             )}
-            {list.some((e) => e.type === 'media') && <MediaStrip entries={list.filter((e) => e.type === 'media')} />}
-          </section>
-        ))}
+            {entries && entries.length > 0 && !visible.length && (
+              <p className={styles.muted}>Nothing on this day matches “{q}”.</p>
+            )}
 
-        {entries && entries.length > 0 && (
-          <button className={styles.newEntry} onClick={() => createEntry({ date, tags: [] })}>
-            + new entry
-          </button>
+            {/* Each category's entries, uncategorized first; a new entry at the end of a section is filed under it. */}
+            {groups.map(([category, list]) => (
+              <section key={category ?? '_uncategorized'} className={styles.group} style={categoryStyle(category)}>
+                {(category || groups.length > 1) && <h2 className={`${styles.categoryHead} ${category ? '' : styles.uncategorized}`}>{category ?? 'uncategorized'}</h2>}
+                {list.map((e) => (
+                  <EntryCard key={e.id} entry={e} focus={focusFor(e)} find={q} flashId={flashId} folded={folded.has(e.id)} />
+                ))}
+                {!q && (
+                  <button
+                    className={styles.newEntry}
+                    onClick={() => createEntry({ date, tags: [], afterEntryId: list[list.length - 1]?.id, ...(category && { category }) })}
+                    title={category ? `New entry filed under ${category}` : 'New entry'}
+                  >
+                    + new entry
+                  </button>
+                )}
+              </section>
+            ))}
+          </>
         )}
       </div>
     </DayContext.Provider>
   )
 }
 
-/** The types a day shows: a chip per type the day has; none chosen shows them all. Shared by every day tab. */
-function TypeFilter({ entries }: { entries: EntryDTO[] }) {
-  const chosen = useStore(prefsStore, (s) => s.journalTypes)
-  const counts = new Map<string, number>()
-  for (const e of entries) counts.set(e.type, (counts.get(e.type) ?? 0) + 1)
-  const present = ENTRY_TYPES.filter((t) => counts.has(t) || chosen.includes(t))
-  if (present.length < 2 && !chosen.length) return null
-  return (
-    <div className={styles.typeFilter} role="group" aria-label="Types shown">
-      <button className={`${styles.typeChip} ${chosen.length ? '' : styles.on}`} aria-pressed={!chosen.length} onClick={() => setPref('journalTypes', [])}>
-        all
-      </button>
-      {present.map((t) => {
-        const on = chosen.includes(t)
-        return (
-          <button
-            key={t}
-            className={`${styles.typeChip} ${on ? styles.on : ''}`}
-            aria-pressed={on}
-            title={on ? `Hide ${TYPE_LABEL[t].toLowerCase()}` : `Show ${TYPE_LABEL[t].toLowerCase()}${chosen.length ? ' too' : ' only'} (in every day)`}
-            onClick={() => setPref('journalTypes', on ? chosen.filter((x) => x !== t) : [...chosen, t])}
-          >
-            {TYPE_LABEL[t].toLowerCase()}
-            <span className={styles.count}>{counts.get(t) ?? 0}</span>
-          </button>
-        )
-      })}
-    </div>
-  )
+/** Image mode: under each category, the images of its entries; nothing else. */
+function ImageSections({ groups, empty, find }: { groups: [string | null, EntryDTO[]][]; empty: boolean; find: string }) {
+  const sections = groups.map(([category, list]) => [category, gridItems(list)] as const).filter(([, items]) => items.length)
+  if (!sections.length) return empty ? <p className={styles.muted}>No images on this day.</p> : find ? <p className={styles.muted}>No images of entries matching “{find}”.</p> : null
+  return sections.map(([category, items]) => (
+    <section key={category ?? '_uncategorized'} className={styles.group} style={categoryStyle(category)}>
+      <h2 className={`${styles.categoryHead} ${category ? '' : styles.uncategorized}`}>{category ?? 'uncategorized'}</h2>
+      <ImageGrid items={items} />
+    </section>
+  ))
 }

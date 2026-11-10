@@ -31,7 +31,7 @@ export const searchRoutes = new Hono()
       if (!terms.length) return c.json({ hits: [] as SearchHit[] })
 
       const entryRows = db
-        .select({ id: entries.id, type: entries.type, subtype: entries.subtype, category: entries.category, date: entries.date, title: entries.title, archived: entries.archived })
+        .select({ id: entries.id, category: entries.category, date: entries.date, title: entries.title, archived: entries.archived })
         .from(entries)
         .where(allTerms(entries.title, terms))
         .orderBy(desc(entries.date))
@@ -43,8 +43,6 @@ export const searchRoutes = new Hono()
           content: nodes.content,
           archived: nodes.archived,
           entryId: entries.id,
-          type: entries.type,
-          subtype: entries.subtype,
           category: entries.category,
           date: entries.date,
           title: entries.title,
@@ -61,8 +59,6 @@ export const searchRoutes = new Hono()
       const hits: SearchHit[] = [
         ...entryRows.map((r) => ({
           entryId: r.id,
-          type: r.type,
-          subtype: r.subtype,
           category: r.category,
           nodeId: null,
           date: r.date,
@@ -73,8 +69,6 @@ export const searchRoutes = new Hono()
         })),
         ...nodeRows.map((r) => ({
           entryId: r.entryId,
-          type: r.type,
-          subtype: r.subtype,
           category: r.category,
           nodeId: r.id,
           date: r.date,

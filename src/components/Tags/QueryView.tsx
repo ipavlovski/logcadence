@@ -1,22 +1,23 @@
-import { useMemo, useState, type MouseEvent } from 'react'
+import { useEffect, useMemo, useState, type MouseEvent } from 'react'
 import { formatJournalDate } from '../../../shared/dates.ts'
 import { ancestors, tagName } from '../../../shared/tags.ts'
 import type { EntryDTO } from '../../../shared/types.ts'
-import { thumbOf, typeLabel } from '../../entryView.ts'
+import { thumbOf } from '../../entryView.ts'
 import { api, unwrap } from '../../api.ts'
 import { useFetch } from '../../hooks/useFetch.ts'
 import { matches } from '../../markdown.ts'
+import { categoryLabel, categoryOrder, categoryStyle, useCategories } from '../../state/categories.ts'
 import { emitChange, useRevision } from '../../state/bus.ts'
 import { useCommand } from '../../state/commands.ts'
 import { requestReveal } from '../../state/journal.ts'
-import { openItem } from '../../actions.ts'
-import { typeRef } from '../../../shared/entryTypes.ts'
-import { queryLabel, queryToString, type Query } from '../../../shared/query.ts'
+import { queryToString, type Query } from '../../../shared/query.ts'
 import { openDate, openQuery, openTag, setTabQuery } from '../../state/panes.ts'
 import { useStore } from '../../state/store.ts'
 import { notify, prefsStore, setPref } from '../../state/ui.ts'
 import { ImageGallery, MediaThumb } from '../ImageGallery/ImageGallery.tsx'
+import { gridItems, ImageGrid } from '../ImageGrid/ImageGrid.tsx'
 import { Markdown, mark } from '../Markdown/Markdown.tsx'
+import { SourceLine, SourceTitle } from '../Source/Source.tsx'
 import { TagChip } from '../TagChip/TagChip.tsx'
 import { startTagOp } from './tagOps.ts'
 import styles from './Tags.module.css'
@@ -34,23 +35,35 @@ type Sel = Set<string>
 export function QueryView({ tabKey, query, find }: { tabKey: string; query: Query; find: string }) {
   const rev = useRevision()
   const showArchived = useStore(prefsStore, (s) => s.showArchived)
+  const imageMode = useStore(prefsStore, (s) => s.imageMode)
   const includeSub = useStore(prefsStore, (s) => s.includeSubtags)
   const [sel, setSel] = useState<Sel>(new Set())
   const q = find.trim()
   const queryId = queryToString(query)
-  // A view of one tag: its crumbs and the tag's operations.
-  const tag = query.tags?.length === 1 && queryToString({ tags: query.tags }) === queryId ? query.tags[0]! : null
+  // A query of tags is fetched without its category, which filters here: the category bar counts every category's.
+  const byCategory = !!query.tags?.length
+  const base: Query = byCategory ? { ...query, category: undefined, uncategorized: undefined } : query
+  const baseId = queryToString(base)
+  // A view of one tag (in any category): its crumbs and the tag's operations.
+  const tag = base.tags?.length === 1 && queryToString({ tags: base.tags }) === baseId ? base.tags[0]! : null
+  useEffect(() => setSel(new Set()), [queryId])
 
-  const { data, error } = useFetch(`${queryId}|${showArchived}|${includeSub}|${rev}`, (signal) =>
+  const { data, error } = useFetch(`${baseId}|${showArchived}|${includeSub}|${rev}`, (signal) =>
     unwrap(
       api.entries.$get(
         // The query string as GET /entries reads it (repeated type and tag); its client types are the parsed query's.
-        { query: { ...paramsOf(queryId), archived: showArchived ? '1' : '0', exact: includeSub ? '0' : '1' } as never },
+        { query: { ...paramsOf(baseId), archived: showArchived ? '1' : '0', exact: includeSub ? '0' : '1' } as never },
         { init: { signal } },
       ),
-    ).then((d) => ({ queryId, entries: d.entries })),
+    ).then((d) => ({ baseId, entries: d.entries })),
   )
-  const all = data?.queryId === queryId ? data.entries : undefined
+  const fetched = data?.baseId === baseId ? data.entries : undefined
+  const all = useMemo(() => {
+    if (!fetched || !byCategory) return fetched
+    if (query.category) return fetched.filter((e) => e.category === query.category)
+    if (query.uncategorized) return fetched.filter((e) => !e.category)
+    return fetched
+  }, [fetched, byCategory, query.category, query.uncategorized])
 
   const visible = useMemo(() => {
     if (!all || !q) return all ?? []
@@ -125,9 +138,7 @@ export function QueryView({ tabKey, query, find }: { tabKey: string; query: Quer
     })
   }
 
-  // Bookmarks and media open in their own tabs; journal entries in their day.
   const revealIn = (entry: EntryDTO, nodeId?: string) => {
-    if (openItem(entry)) return
     openDate(entry.date, { focus: true })
     requestReveal({ date: entry.date, entryId: entry.id, nodeId, mode: 'flash' })
   }
@@ -150,7 +161,7 @@ export function QueryView({ tabKey, query, find }: { tabKey: string; query: Quer
             <span>{tagName(tag)}</span>
           </h2>
         ) : (
-          <Facets tabKey={tabKey} query={query} />
+          <Facets tabKey={tabKey} query={query} withoutCategory={byCategory} />
         )}
         <span className={styles.muted}>{all ? `${all.length} ${all.length === 1 ? 'entry' : 'entries'}` : ''}</span>
         <div className={styles.toolbar}>
@@ -181,6 +192,8 @@ export function QueryView({ tabKey, query, find }: { tabKey: string; query: Quer
         </div>
       </header>
 
+      {byCategory && fetched && <CategoryBar tabKey={tabKey} query={query} entries={fetched} />}
+
       {sel.size > 0 && (
         <div className={styles.selectionBar}>
           <span>{sel.size} selected</span>
@@ -197,80 +210,117 @@ export function QueryView({ tabKey, query, find }: { tabKey: string; query: Quer
       {error && <p className={styles.error}>{error.message}</p>}
       {all && !visible.length && <p className={styles.muted}>{q ? `Nothing matches “${q}”.` : 'No entries match.'}</p>}
 
-      {byDate.map(([date, list]) => (
-        <section key={date} className={styles.card}>
-          <button
-            className={styles.stamp}
-            title="Open in journal (ctrl+click: new tab)"
-            onClick={(e) => openDate(date, { newTab: e.ctrlKey || e.metaKey, focus: true })}
-          >
-            {formatJournalDate(date)}
-          </button>
-          {list.map((entry) => {
-            const thumb = thumbOf(entry)
-            return (
-              <article
-                key={entry.id}
-                className={`${styles.entry} ${sel.has(`e:${entry.id}`) ? styles.selected : ''} ${entry.archived ? styles.archived : ''}`}
-                onClick={(e) => click(e, `e:${entry.id}`, () => revealIn(entry))}
-                onDoubleClick={() => revealIn(entry)}
-              >
-                <div className={styles.entryHead}>
-                  <div className={styles.entryMain}>
-                    <div className={styles.entryTitle}>
-                      {entry.type !== 'journal' && (
-                        <button
-                          className={styles.entryType}
-                          title={`Every ${typeLabel(entry)} entry`}
-                          onClick={(e) => openQuery({ types: [typeRef(entry.type, entry.subtype)] }, { newTab: e.ctrlKey || e.metaKey })}
-                        >
-                          {typeLabel(entry)}
-                        </button>
-                      )}
-                      {entry.title ? mark(entry.title, q) : <span className={styles.muted}>untitled</span>}
+      {imageMode && visible.length > 0 && <ImageDays byDate={byDate} />}
+      {!imageMode &&
+        byDate.map(([date, list]) => (
+          <section key={date} className={styles.card}>
+            <button
+              className={styles.stamp}
+              title="Open in journal (ctrl+click: new tab)"
+              onClick={(e) => openDate(date, { newTab: e.ctrlKey || e.metaKey, focus: true })}
+            >
+              {formatJournalDate(date)}
+            </button>
+            {list.map((entry) => {
+              const thumb = thumbOf(entry)
+              return (
+                <article
+                  key={entry.id}
+                  className={`${styles.entry} ${sel.has(`e:${entry.id}`) ? styles.selected : ''} ${entry.archived ? styles.archived : ''}`}
+                  onClick={(e) => click(e, `e:${entry.id}`, () => revealIn(entry))}
+                  onDoubleClick={() => revealIn(entry)}
+                >
+                  <div className={styles.entryHead}>
+                    <div className={styles.entryMain}>
+                      <div className={styles.entryTitle} title={entry.title || undefined}>
+                        {entry.category && (
+                          <button className={styles.entryCategory} style={categoryStyle(entry.category)} title={byCategory ? `Only the ones filed under ${categoryLabel(entry.category)} (Ctrl+click: everything filed under it)` : `Everything filed under ${categoryLabel(entry.category)}`} onClick={(e) => (byCategory && !(e.ctrlKey || e.metaKey) ? setTabQuery(tabKey, { ...base, category: entry.category! }) : openQuery({ category: entry.category! }, { newTab: e.ctrlKey || e.metaKey }))}>
+                            {categoryLabel(entry.category)}
+                          </button>
+                        )}
+                        {entry.source ? (
+                          <SourceTitle source={entry.source}>{entry.title ? mark(entry.title, q) : entry.source.url}</SourceTitle>
+                        ) : entry.title ? (
+                          mark(entry.title, q)
+                        ) : (
+                          <span className={styles.muted}>untitled</span>
+                        )}
+                      </div>
+                      {entry.source && <SourceLine source={entry.source} createdAt={entry.createdAt} />}
+                      <div className={styles.entryTags}>
+                        {entry.tags.map((t) => (
+                          <TagChip key={t} tag={t} />
+                        ))}
+                      </div>
                     </div>
-                    <div className={styles.entryTags}>
-                      {entry.category && (
-                        <button className={styles.entryCategory} title={`Everything filed under ${entry.category}`} onClick={(e) => openQuery({ category: entry.category! }, { newTab: e.ctrlKey || e.metaKey })}>
-                          {entry.category}
-                        </button>
-                      )}
-                      {entry.tags.map((t) => (
-                        <TagChip key={t} tag={t} />
-                      ))}
-                    </div>
+                    {thumb && <MediaThumb item={thumb} className={styles.thumb} />}
                   </div>
-                  {thumb && <MediaThumb item={thumb} className={styles.thumb} />}
-                </div>
-                <ul className={styles.nodeList}>
-                  {entry.nodes.map((n) => (
-                    <li
-                      key={n.id}
-                      className={`${styles.node} ${sel.has(`n:${n.id}`) ? styles.selected : ''} ${n.archived ? styles.archived : ''}`}
-                      onClick={(e) => click(e, `n:${n.id}`, () => revealIn(entry, n.id))}
-                      onDoubleClick={(e) => (e.stopPropagation(), revealIn(entry, n.id))}
-                    >
-                      {n.content && <Markdown source={n.content} highlight={q} />}
-                      {n.images.length > 0 && <ImageGallery images={n.images} activeId={n.activeImageId} compact />}
-                    </li>
-                  ))}
-                </ul>
-              </article>
-            )
-          })}
-        </section>
-      ))}
+                  <ul className={styles.nodeList}>
+                    {entry.nodes.map((n) => (
+                      <li
+                        key={n.id}
+                        className={`${styles.node} ${sel.has(`n:${n.id}`) ? styles.selected : ''} ${n.archived ? styles.archived : ''}`}
+                        onClick={(e) => click(e, `n:${n.id}`, () => revealIn(entry, n.id))}
+                        onDoubleClick={(e) => (e.stopPropagation(), revealIn(entry, n.id))}
+                      >
+                        {n.content && <Markdown source={n.content} highlight={q} />}
+                        {n.images.length > 0 && <ImageGallery images={n.images} activeId={n.activeImageId} compact />}
+                      </li>
+                    ))}
+                  </ul>
+                </article>
+              )
+            })}
+          </section>
+        ))}
     </div>
   )
 }
 
-/** A query's facets, each removable (the tab shows the query without it). */
-function Facets({ tabKey, query }: { tabKey: string; query: Query }) {
+/**
+ * A tag query's categories, with how many of its entries each has: picks the one shown (the tab's query gets it), a
+ * second click or All shows them all again. Hidden when there's only one group to pick.
+ */
+function CategoryBar({ tabKey, query, entries }: { tabKey: string; query: Query; entries: EntryDTO[] }) {
+  const categories = useCategories()
+  const groups = useMemo(() => {
+    const m = new Map<string | null, number>()
+    for (const e of entries) m.set(e.category, (m.get(e.category) ?? 0) + 1)
+    const order = categoryOrder(categories)
+    return [...m].sort(([a], [b]) => order(a) - order(b))
+  }, [entries, categories])
+  const filtered = !!query.category || !!query.uncategorized
+  if (groups.length < 2 && !filtered) return null
+  const base: Query = { ...query, category: undefined, uncategorized: undefined }
+  const pick = (c: string | null) => {
+    const on = c === null ? query.uncategorized : query.category === c
+    setTabQuery(tabKey, on ? base : c === null ? { ...base, uncategorized: true } : { ...base, category: c })
+  }
+  return (
+    <nav className={styles.categoryBar} aria-label="Filter by category">
+      <button className={filtered ? '' : styles.categoryOn} onClick={() => setTabQuery(tabKey, base)}>
+        All <span className={styles.count}>{entries.length}</span>
+      </button>
+      {groups.map(([c, n]) => (
+        <button
+          key={c ?? '_uncategorized'}
+          className={(c === null ? query.uncategorized : query.category === c) ? styles.categoryOn : ''}
+          style={categoryStyle(c)}
+          onClick={() => pick(c)}
+          title={c ? `Only the ones filed under ${categoryLabel(c)}` : 'Only the ones without a category'}
+        >
+          {c ? categoryLabel(c) : 'uncategorized'} <span className={styles.count}>{n}</span>
+        </button>
+      ))}
+    </nav>
+  )
+}
+
+/** A query's facets, each removable (the tab shows the query without it); a tag query's category is in its bar. */
+function Facets({ tabKey, query, withoutCategory }: { tabKey: string; query: Query; withoutCategory: boolean }) {
   const facets: { label: string; without: Query }[] = [
-    ...(query.types ?? []).map((t) => ({ label: queryLabel({ types: [t] }), without: { ...query, types: query.types!.filter((x) => x !== t) } })),
-    ...(query.category ? [{ label: query.category, without: { ...query, category: undefined } }] : []),
-    ...(query.uncategorized ? [{ label: 'uncategorized', without: { ...query, uncategorized: undefined } }] : []),
-    ...(query.site ? [{ label: query.site, without: { ...query, site: undefined } }] : []),
+    ...(query.category && !withoutCategory ? [{ label: categoryLabel(query.category), without: { ...query, category: undefined } }] : []),
+    ...(query.uncategorized && !withoutCategory ? [{ label: 'uncategorized', without: { ...query, uncategorized: undefined } }] : []),
     ...(query.tags ?? []).map((t) => ({ label: `#${t}`, without: { ...query, tags: query.tags!.filter((x) => x !== t) } })),
     ...(query.untagged ? [{ label: 'untagged', without: { ...query, untagged: undefined } }] : []),
   ]
@@ -286,4 +336,18 @@ function Facets({ tabKey, query }: { tabKey: string; query: Query }) {
       ))}
     </h2>
   )
+}
+
+/** Image mode: under each day, the images of its entries. */
+function ImageDays({ byDate }: { byDate: [string, EntryDTO[]][] }) {
+  const days = byDate.map(([date, list]) => [date, gridItems(list)] as const).filter(([, items]) => items.length)
+  if (!days.length) return <p className={styles.muted}>No images among these entries.</p>
+  return days.map(([date, items]) => (
+    <section key={date} className={styles.card}>
+      <button className={styles.stamp} title="Open in journal (ctrl+click: new tab)" onClick={(e) => openDate(date, { newTab: e.ctrlKey || e.metaKey, focus: true })}>
+        {formatJournalDate(date)}
+      </button>
+      <ImageGrid items={items} />
+    </section>
+  ))
 }

@@ -1,8 +1,7 @@
 import { newEntryAtCursor, newEntryWithDialog } from './actions.ts'
-import { toggleFollowJournal } from './state/canvasDay.ts'
 import { runCommand } from './state/commands.ts'
 import { closeAllTabs, closeTab, cycleTab, focusPane, goHistory, journalActiveOf, openLoc, panesStore, PRIMARY, stepDay, togglePane, type PaneId } from './state/panes.ts'
-import { openFind, openSettings, openSpotlight, prefsStore, toggleAppKeys, toggleHelp, uiStore } from './state/ui.ts'
+import { openFind, openSettings, openSpotlight, prefsStore, toggleAppKeys, toggleHelp, toggleImageMode, uiStore } from './state/ui.ts'
 
 // Single source for keyboard shortcuts: drives both the global handler and the help overlay.
 // Browsers reserve ctrl+w / ctrl+n / ctrl+t / ctrl+1… and friends, so the web build also binds alt+ variants;
@@ -52,7 +51,6 @@ export const BINDINGS: Binding[] = [
   { keys: ['mod+1', 'alt+1'], label: 'Focus canvas pane', group: 'Navigation', run: focusOn('canvas'), inInputs: true, about: 'canvas' },
   { keys: ['mod+2', 'alt+2'], label: 'Focus tags pane', group: 'Navigation', run: focusOn('tags'), inInputs: true, about: 'tags' },
   { keys: ['mod+t', 'alt+t'], label: 'Show / hide tags pane', group: 'Navigation', run: toggle('tags'), inInputs: true, about: 'tags' },
-  { keys: ['mod+l'], label: 'Canvas follows the journal’s day (on / off)', group: 'Navigation', run: () => toggleFollowJournal(), inInputs: true, about: 'canvas' },
   { keys: ['mod+h'], label: 'Home tab (Today / the tags pane’s preview)', group: 'Navigation', run: (p) => openLoc(p, PRIMARY[p]), inInputs: true },
   // The canvas steps through the days opened (the day tab registers canvas.back/forward); the tags pane through a type
   // view's own history (the view registers tags.back/forward), else through the queries it showed.
@@ -65,6 +63,7 @@ export const BINDINGS: Binding[] = [
   { keys: ['mod+.'], label: 'Fold / unfold all entries', group: 'Journal', when: onJournal, run: () => runCommand('journal.toggleFoldAll'), inInputs: true, about: 'journal' },
   { keys: ['delete'], label: 'Archive / unarchive selection', group: 'Tags', pane: 'tags', run: () => runCommand('tags.archive') },
   { keys: ['shift+delete'], label: 'Delete selection', group: 'Tags', pane: 'tags', run: () => runCommand('tags.delete') },
+  { keys: ['mod+i'], label: 'Image mode (on / off)', group: 'General', run: () => toggleImageMode(), inInputs: true },
   { keys: ['mod+,'], label: 'Settings', group: 'General', run: () => openSettings(uiStore.get().settings ? null : 'general'), inInputs: true },
   { keys: ['mod+/'], label: 'Keyboard shortcuts', group: 'General', run: () => toggleHelp(), inInputs: true },
   { keys: ['shift+?'], label: 'Keyboard shortcuts', group: 'General', run: () => toggleHelp() },

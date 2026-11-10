@@ -1,13 +1,68 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
 import { isVideo, type ImageDTO } from '../../../shared/types.ts'
 import styles from './ImageGallery.module.css'
 
-/** A small still of a gallery item: the image, or a video's first frame. */
+/** A small still of a gallery item: the image (its thumbnail, if it has one), or a video's poster or first frame. */
 export function MediaThumb({ item, className }: { item: ImageDTO; className?: string }) {
   return isVideo(item) ? (
-    <video className={className} src={item.url} preload="metadata" muted playsInline draggable={false} />
+    <video className={className} src={item.url} poster={item.thumbUrl ?? undefined} preload="metadata" muted playsInline draggable={false} />
   ) : (
-    <img className={className} src={item.url} alt="" loading="lazy" draggable={false} />
+    <img className={className} src={item.thumbUrl ?? item.url} alt="" loading="lazy" draggable={false} />
+  )
+}
+
+/** Plays a muted video (a gif, stored as mp4) while it is on screen, and pauses it off screen. */
+export function usePlayInView(ref: RefObject<HTMLVideoElement | null>) {
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const io = new IntersectionObserver(([e]) => {
+      if (e?.isIntersecting) void el.play().catch(() => {})
+      else el.pause()
+    })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [ref])
+}
+
+/**
+ * An image or video over the whole window. With more than one, the arrow keys (or the arrows) step through them;
+ * Escape or a click outside closes it. `actions` sit in its corner.
+ */
+export function Lightbox({ items, index, onIndex, onClose, actions }: { items: ImageDTO[]; index: number; onIndex?: (i: number) => void; onClose: () => void; actions?: ReactNode }) {
+  const item = items[index]
+  const step = (dir: number) => onIndex?.((index + dir + items.length) % items.length)
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+      else if (items.length > 1 && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) step(e.key === 'ArrowLeft' ? -1 : 1)
+      else return
+      e.preventDefault()
+      e.stopPropagation()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  })
+  if (!item) return null
+  return (
+    <div className={styles.lightbox} onClick={onClose}>
+      {isVideo(item) ? <video key={item.id} src={item.url} autoPlay muted loop playsInline controls onClick={(e) => e.stopPropagation()} /> : <img key={item.id} src={item.url} alt="" />}
+      {items.length > 1 && onIndex && (
+        <>
+          <button className={`${styles.lightboxNav} ${styles.prev}`} aria-label="Previous" onClick={(e) => (e.stopPropagation(), step(-1))}>
+            ‹
+          </button>
+          <button className={`${styles.lightboxNav} ${styles.next}`} aria-label="Next" onClick={(e) => (e.stopPropagation(), step(1))}>
+            ›
+          </button>
+        </>
+      )}
+      {actions && (
+        <div className={styles.lightboxActions} onClick={(e) => e.stopPropagation()}>
+          {actions}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -28,16 +83,7 @@ interface Props {
 function LargeVideo({ url }: { url: string }) {
   const ref = useRef<HTMLVideoElement>(null)
   const [hover, setHover] = useState(false)
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const io = new IntersectionObserver(([e]) => {
-      if (e?.isIntersecting) void el.play().catch(() => {})
-      else el.pause()
-    })
-    io.observe(el)
-    return () => io.disconnect()
-  }, [])
+  usePlayInView(ref)
   return (
     <video
       ref={ref}
@@ -64,13 +110,6 @@ export function ImageGallery({ images, activeId, onActivate, onDelete, onReorder
   const [overId, setOverId] = useState<string | null>(null)
   const root = useRef<HTMLDivElement>(null)
   const active = images.find((i) => i.id === activeId) ?? images[0]
-
-  useEffect(() => {
-    if (!zoom) return
-    const onKey = (e: globalThis.KeyboardEvent) => e.key === 'Escape' && setZoom(false)
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [zoom])
 
   if (!active) return null
 
@@ -166,11 +205,7 @@ export function ImageGallery({ images, activeId, onActivate, onDelete, onReorder
           ))}
         </div>
       )}
-      {zoom && !isVideo(active) && (
-        <div className={styles.lightbox} onClick={() => setZoom(false)}>
-          <img src={active.url} alt="" />
-        </div>
-      )}
+      {zoom && !isVideo(active) && <Lightbox items={[active]} index={0} onClose={() => setZoom(false)} />}
     </div>
   )
 }

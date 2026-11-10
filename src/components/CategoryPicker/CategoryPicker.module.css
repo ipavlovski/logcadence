@@ -1,30 +1,88 @@
-.picker {
+.root {
+  position: relative;
+  display: inline-block;
+}
+
+/* Six characters (the longest category, "Design"); longer ones are cut short, with the whole name on hover. */
+.chip {
+  box-sizing: content-box;
+  text-transform: uppercase;
+  width: 6ch;
   font-family: var(--font-mono);
   font-size: 12.5px;
   line-height: 20px;
-  height: 22px;
+  height: 20px;
   padding: 0 4px;
-  color: var(--date);
-  background: color-mix(in srgb, var(--date) 8%, transparent);
-  border: 1px solid color-mix(in srgb, var(--date) 50%, transparent);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* --cat: the category's own color (categoryStyle), if it has one. */
+  color: var(--cat, var(--date));
+  background: color-mix(in srgb, var(--cat, var(--date)) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cat, var(--date)) 50%, transparent);
   border-radius: 4px;
   cursor: pointer;
 }
 
-.picker:hover,
-.picker:focus-visible {
-  border-color: var(--date);
+.chip:hover,
+.chip:focus-visible,
+.chip[aria-expanded='true'] {
+  border-color: var(--cat, var(--date));
   outline: none;
 }
 
 .none {
   color: var(--text-faint);
+  text-align: center;
   background: none;
   border-color: var(--border);
   border-style: dashed;
 }
 
-.picker option {
-  color: var(--text);
+.menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  min-width: 140px;
+  padding: 4px;
   background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.option {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  font-size: 12.5px;
+  line-height: 20px;
+  text-align: left;
+  padding: 2px 8px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--cat, var(--text));
+  cursor: pointer;
+}
+
+.option:hover,
+.option:focus-visible {
+  background: var(--selection);
+  outline: none;
+}
+
+.current {
+  font-weight: 600;
+}
+
+.noneOption {
+  text-transform: none;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 4px 4px;
+  margin-top: 2px;
 }

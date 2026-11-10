@@ -22,6 +22,16 @@ export function cleanTags(paths: string[]): string[] {
   return [...new Set(paths.map(normalizeTag).filter(Boolean))]
 }
 
+/**
+ * An entry's tags without its category: filed under `dev`, it drops a `dev` tag and `dev/react` becomes `react` (the
+ * category says that much already). Normalized and de-duplicated, as cleanTags.
+ */
+export function withoutCategory(paths: string[], category: string | null | undefined): string[] {
+  const clean = cleanTags(paths)
+  if (!category) return clean
+  return [...new Set(clean.flatMap((p) => (p === category ? [] : p.startsWith(category + TAG_SEP) ? [p.slice(category.length + 1)] : [p])))]
+}
+
 export function tagName(path: string): string {
   return path.slice(path.lastIndexOf(TAG_SEP) + 1)
 }

@@ -1,6 +1,5 @@
 import { isIsoDate, shiftDate, today } from '../../shared/dates.ts'
-import type { EntryType } from '../../shared/entryTypes.ts'
-import { isEmptyQuery, normalizeQuery, parseQuery, queryToString, typeView, type Query } from '../../shared/query.ts'
+import { isEmptyQuery, normalizeQuery, parseQuery, queryToString, type Query } from '../../shared/query.ts'
 import { isUnder, normalizeTag } from '../../shared/tags.ts'
 import { persistedStore } from './store.ts'
 
@@ -109,8 +108,9 @@ function validKey(pane: PaneId, key: string): boolean {
 }
 
 // Tabs saved under a former name or of a tab that's gone: the canvas's plugin tabs (YouTube, Bookmarks, Images, AI,
-// and the dashboard and its like before them) became types shown in the tags pane; the tag tree became the
-// preview's browser; a tag tab, a query for the tag ('/' paths since 0015_tag_slash).
+// and the dashboard and its like before them) are gone, and so are the queries of a type (0018_entries_only: they
+// read as the browser); the tag tree became the preview's browser; a tag tab, a query for the tag ('/' paths since
+// 0015_tag_slash).
 const renamed = (k: unknown) => {
   if (typeof k !== 'string') return k
   if (k.startsWith('plugin:') || k === 'dashboard') return PRIMARY.canvas
@@ -405,11 +405,12 @@ export function openQuery(q: Query | string, opts: { newTab?: boolean; focus?: b
   const query = typeof q === 'string' ? normalizeQuery(q) : queryToString(q)
   const key = query ? queryKey(query) : PRIMARY.tags
   const { tabs } = panesStore.get().panes.tags
-  const inPreview = !tabs.includes(key) && !(opts.newTab && query)
+  // No query is the browser, which the preview tab shows (it's always among the tabs).
+  const inPreview = !query || (!tabs.includes(key) && !opts.newTab)
   panesStore.set((s) => ({ ...s, open: { ...s.open, tags: true }, focus: opts.focus ? 'tags' : s.focus, ...(inPreview && { previewQuery: query }) }))
   update('tags', (p) => {
-    if (p.tabs.includes(key)) return pushHistory({ ...p, active: key })
     if (inPreview) return pushHistory({ ...p, active: PRIMARY.tags }, previewAt(query))
+    if (p.tabs.includes(key)) return pushHistory({ ...p, active: key })
     const next = [...p.tabs]
     next.splice(p.tabs.indexOf(p.active) + 1, 0, key)
     return pushHistory({ ...p, tabs: next, active: key })
@@ -440,17 +441,6 @@ export function pinPreviewQuery() {
   const key = queryKey(query)
   panesStore.set((s) => ({ ...s, previewQuery: '' }))
   update('tags', (p) => pushHistory({ ...p, tabs: p.tabs.includes(key) ? p.tabs : [PRIMARY.tags, key, ...p.tabs.slice(1)], active: key }))
-}
-
-/** The type whose own view the tags pane shows (the bookmarks grid…), while the pane is open; null otherwise. */
-export function activeTypeView(s = panesStore.get()): EntryType | null {
-  return s.open.tags ? typeView(parseQuery(tabQuery(s, s.panes.tags.active))) : null
-}
-
-/** Brings up a type's view (to show an item in it): the tags pane's when it shows that type, else the preview's. */
-export function showTypeView(type: EntryType) {
-  if (activeTypeView() === type) return focusPane('tags', true)
-  openQuery({ types: [type] })
 }
 
 /** Rewrites the tags of every query the tags pane shows or remembers; `fn` gives a tag's new path, or null to drop it. */

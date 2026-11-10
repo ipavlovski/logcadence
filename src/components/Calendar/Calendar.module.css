@@ -1,0 +1,107 @@
+.calendar {
+  position: fixed;
+  z-index: 200;
+  width: 252px;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  font-size: 12px;
+  user-select: none;
+}
+
+.calendar button {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  border-radius: var(--radius);
+  font: inherit;
+}
+
+.calendar button:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.head button {
+  width: 26px;
+  height: 24px;
+  font-size: 15px;
+}
+
+.month {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.weekday {
+  text-align: center;
+  font-size: 10.5px;
+  color: var(--text-faint);
+  padding: 2px 0 4px;
+}
+
+.calendar .day {
+  position: relative;
+  height: 28px;
+  padding: 0;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.calendar .outside {
+  color: var(--text-faint);
+}
+
+/* A dot under the days that have entries. */
+.hasEntries::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 3px;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.calendar .today {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.calendar .selected,
+.calendar .selected:hover {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.selected.hasEntries::after {
+  background: var(--bg);
+}
+
+.foot {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.foot button {
+  padding: 3px 8px;
+}

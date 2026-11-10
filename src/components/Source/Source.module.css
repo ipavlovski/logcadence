@@ -1,0 +1,36 @@
+.title {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+  text-underline-offset: 3px;
+}
+
+.title:hover {
+  color: var(--accent);
+  text-decoration-color: currentColor;
+}
+
+.line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.icon {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  object-fit: contain;
+}
+
+.host {
+  color: var(--text-muted);
+}
+
+.meta::before {
+  content: '·';
+  margin-right: 8px;
+}

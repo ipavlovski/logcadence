@@ -141,7 +141,56 @@ video.large {
   cursor: zoom-out;
 }
 
-.lightbox img {
+.lightbox img,
+.lightbox video {
   max-width: 95vw;
   max-height: 95vh;
+}
+
+.lightboxNav {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: rgb(0 0 0 / 0.4);
+  color: #fff;
+  font-size: 32px;
+  line-height: 1;
+  padding: 12px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.lightboxNav:hover {
+  background: rgb(0 0 0 / 0.7);
+}
+
+.prev {
+  left: 16px;
+}
+
+.next {
+  right: 16px;
+}
+
+.lightboxActions {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  gap: 8px;
+  cursor: default;
+}
+
+.lightboxActions button {
+  border: 1px solid rgb(255 255 255 / 0.3);
+  background: rgb(0 0 0 / 0.5);
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.lightboxActions button:hover {
+  background: rgb(0 0 0 / 0.8);
 }

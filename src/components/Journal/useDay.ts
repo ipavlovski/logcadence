@@ -1,10 +1,11 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { between, newId } from '../../../shared/id.ts'
-import { cleanTags } from '../../../shared/tags.ts'
+import { withoutCategory } from '../../../shared/tags.ts'
 import type { EntryDTO, NodeDTO, UpdateEntryBody, UpdateNodeBody } from '../../../shared/types.ts'
 import { api, unwrap } from '../../api.ts'
 import { emitChange, useRevision } from '../../state/bus.ts'
 import { notify } from '../../state/ui.ts'
+import { uploadForm } from '../../thumbs.ts'
 
 export interface DayActions {
   updateEntry(id: string, patch: UpdateEntryBody): void
@@ -67,7 +68,8 @@ export function useDay(date: string) {
 
     return {
       updateEntry(id, patch) {
-        mutate((es) => es.map((e) => (e.id === id ? { ...e, ...patch, tags: patch.tags ? cleanTags(patch.tags) : e.tags } : e)))
+        // As the server stores them: the tags without the category (a tag naming it goes when it's picked).
+        mutate((es) => es.map((e) => (e.id === id ? { ...e, ...patch, tags: withoutCategory(patch.tags ?? e.tags, patch.category !== undefined ? patch.category : e.category) } : e)))
         send(unwrap(api.entries[':id'].$patch({ param: { id }, json: patch })))
       },
       deleteEntry(id) {
@@ -108,7 +110,9 @@ export function useDay(date: string) {
         void (async () => {
           for (const file of files) {
             try {
-              const r = await unwrap(api.nodes[':id'].images.$post({ param: { id: nodeId }, form: { file } }))
+              // The form's optional fields (a thumbnail, the size) are left out when unknown.
+              const form = (await uploadForm(file)) as Parameters<(typeof api.nodes)[':id']['images']['$post']>[0]['form']
+              const r = await unwrap(api.nodes[':id'].images.$post({ param: { id: nodeId }, form }))
               mapNode(nodeId, (n) => ({ ...n, images: [...n.images, r.image], activeImageId: r.activeImageId }))
               emitChange(origin)
             } catch (err) {

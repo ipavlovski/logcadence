@@ -127,6 +127,27 @@
       "when": 1794231036408,
       "tag": "0017_split_ai_youtube",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1794313617892,
+      "tag": "0018_entries_only",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1794313618892,
+      "tag": "0019_fab_category",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1794320256227,
+      "tag": "0020_category_tags",
+      "breakpoints": true
     }
   ]
 }

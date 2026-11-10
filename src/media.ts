@@ -1,6 +1,6 @@
 import type { ClipboardEvent } from 'react'
 
-// Pasting and dropping images, gifs and videos into a gallery (journal nodes, bookmark notes).
+// Pasting and dropping images, gifs and videos into a node's gallery.
 
 export const mediaFiles = (list: FileList | null | undefined) => [...(list ?? [])].filter((f) => /^(image|video)\//.test(f.type))
 
@@ -8,7 +8,8 @@ export const mediaFiles = (list: FileList | null | undefined) => [...(list ?? []
 const MEDIA_PATH = /^[^\n]+\.(png|jpe?g|gif|webp|mp4|webm|mov|mkv)"?$/i
 
 /** Hands pasted media to `onFiles`; any other paste goes on as usual. */
-export function pasteMedia(e: ClipboardEvent, onFiles: (files: File[]) => void) {
+export function pasteMedia(e: Pick<ClipboardEvent, 'clipboardData' | 'preventDefault'> | globalThis.ClipboardEvent, onFiles: (files: File[]) => void) {
+  if (!e.clipboardData) return
   const files = mediaFiles(e.clipboardData.files)
   if (files.length) {
     e.preventDefault()

@@ -17,7 +17,7 @@ let app: typeof import('../server/app.ts').app
 beforeAll(async () => {
   app = (await import('../server/app.ts')).app
   const post = (body: object) => app.request('/api/entries', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
-  await post({ date: '2026-10-01', title: 'Drilling', tags: ['build/well/drilling'], category: 'build' })
+  await post({ date: '2026-10-01', title: 'Drilling', tags: ['build/well/drilling'], category: 'dev' })
   await post({ date: '2026-10-02', title: 'Casing', tags: ['build/well/casing', 'build/well/drilling'] })
 
   const api = new LogcadenceApi('http://logcadence/api', async (url, init) => app.request(url.replace('http://logcadence', ''), init))
@@ -49,8 +49,8 @@ describe('mcp server', () => {
       { path: 'build/well/casing', entries: 1 },
       { path: 'build/well/drilling', entries: 2 },
     ])
-    expect((await call<{ name: string }[]>('list_categories')).map((c) => c.name)).toEqual(['design', 'build', 'fabrication', 'dev', 'notes'])
-    expect(await call('list_categories')).toContainEqual({ name: 'build', entries: 1 })
+    expect((await call<{ name: string }[]>('list_categories')).map((c) => c.name)).toEqual(['design', 'build', 'fab', 'dev', 'notes'])
+    expect(await call('list_categories')).toContainEqual({ name: 'dev', entries: 1 })
   })
 
   it('renames a tag on every entry, merging', async () => {

@@ -1,16 +1,13 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { formatJournalDate, formatTabDate, today } from '../../../shared/dates.ts'
-import { parseQuery, queryLabel, typeView } from '../../../shared/query.ts'
-import { LINK_ICON, pluginIcon, UNLINK_ICON } from '../../canvas/icons.tsx'
-import { TYPE_VIEWS } from '../../canvas/plugins.ts'
-import { toggleFollowJournal } from '../../state/canvasDay.ts'
+import { parseQuery, queryLabel } from '../../../shared/query.ts'
 import {
   activateTab,
-  activeTypeView,
   closeTab,
   dayOfTab,
-  journalActiveOf,
+  isDayKey,
   openQuery,
+  journalActiveOf,
   paneTabs,
   panesStore,
   parseKey,
@@ -23,12 +20,12 @@ import {
   type PaneId,
 } from '../../state/panes.ts'
 import { useStore } from '../../state/store.ts'
-import { prefsStore, setFind, uiStore } from '../../state/ui.ts'
+import { setFind, uiStore } from '../../state/ui.ts'
+import { Calendar } from '../Calendar/Calendar.tsx'
 import { JournalDay } from '../Journal/JournalDay.tsx'
 import { useJournalHistory } from '../Journal/useJournalHistory.ts'
 import { MetaBrowser } from '../Tags/MetaBrowser.tsx'
 import { QueryView } from '../Tags/QueryView.tsx'
-import { TypeView } from '../Tags/TypeView.tsx'
 import styles from './Pane.module.css'
 
 const PANE_LABEL: Record<PaneId, string> = { canvas: 'Canvas', tags: 'Tags' }
@@ -48,19 +45,31 @@ function tabLabel(key: string): string {
   }
 }
 
+/** What a tab shows: its label, or for the tags pane's browser (no query), a "#". */
+function TabLabel({ tabKey }: { tabKey: string }) {
+  const browser = parseKey(tabKey).kind === 'preview' && !panesStore.get().previewQuery
+  return browser ? (
+    <span className={styles.hash} aria-label="Browse">
+      #
+    </span>
+  ) : (
+    <span className={styles.tabLabel}>{tabLabel(tabKey)}</span>
+  )
+}
+
 /** A tab's tooltip: what it shows, and for a preview, how it's kept. */
 function tabTitle(key: string): string {
   const s = panesStore.get()
   const loc = parseKey(key)
   switch (loc.kind) {
     case 'journal':
-      return `Today: ${formatJournalDate(today())} (Ctrl+H)`
+      return `Today: ${formatJournalDate(today())} (Ctrl+H) · click again for the calendar`
     case 'day':
-      return formatJournalDate(loc.date)
+      return `${formatJournalDate(loc.date)} · click again for the calendar`
     case 'preview-day':
-      return `${formatJournalDate(dayOfTab(s, key))} · the day opened last: double-click to keep its tab`
+      return `${formatJournalDate(dayOfTab(s, key))} · the day opened last: double-click to keep its tab, click again for the calendar`
     case 'preview':
-      return s.previewQuery ? `${tabLabel(key)} · what you clicked last: double-click to keep it in a tab (Ctrl+H)` : 'Every type, category and tag (Ctrl+H)'
+      return s.previewQuery ? `${tabLabel(key)} · what you clicked last: double-click to keep it in a tab (Ctrl+H)` : 'Every tag (Ctrl+H)'
     case 'query':
       return tabLabel(key)
   }
@@ -82,6 +91,18 @@ export function Pane({ id }: { id: PaneId }) {
     return (kind === 'preview-day') || (kind === 'preview' && !!previewQuery)
   }
   const pin = id === 'canvas' ? pinPreviewDay : pinPreviewQuery
+  // The day tab whose calendar is open, and the tab it hangs under.
+  const [calendar, setCalendar] = useState<{ key: string; anchor: HTMLElement } | null>(null)
+  // A click on the active day tab opens its calendar; on another tab, shows it.
+  const clickTab = (key: string) => (e: MouseEvent<HTMLElement>) => {
+    if (isDayKey(key) && key === pane.active) {
+      const anchor = e.currentTarget
+      setCalendar((c) => (c?.key === key ? null : { key, anchor }))
+    } else {
+      setCalendar(null)
+      activateTab(id, key)
+    }
+  }
 
   if (!open)
     return (
@@ -93,6 +114,7 @@ export function Pane({ id }: { id: PaneId }) {
               role="tab"
               aria-selected={key === pane.active}
               className={`${styles.vTab} ${key === primary ? styles.vPinned : ''} ${key === pane.active ? styles.vActive : ''}`}
+              aria-label={tabLabel(key)}
               title={`${tabLabel(key)} · click to restore the pane`}
               onClick={() => {
                 activateTab(id, key)
@@ -100,7 +122,7 @@ export function Pane({ id }: { id: PaneId }) {
                 setFocus(id)
               }}
             >
-              {tabLabel(key)}
+              {key === primary && id === 'tags' && !previewQuery ? '#' : tabLabel(key)}
             </button>
           ))}
         </div>
@@ -119,12 +141,26 @@ export function Pane({ id }: { id: PaneId }) {
         <div
           role="tab"
           aria-selected={primary === pane.active}
-          className={`${styles.pinned} ${primary === pane.active ? styles.pinnedActive : ''} ${previewKind(primary) ? styles.preview : ''}`}
-          onClick={() => activateTab(id, primary)}
+          className={`${styles.tab} ${styles.pinned} ${primary === pane.active ? styles.active : ''} ${previewKind(primary) ? styles.preview : ''}`}
+          onClick={clickTab(primary)}
           onDoubleClick={id === 'tags' ? pinPreviewQuery : undefined}
           title={tabTitle(primary)}
         >
-          <span className={styles.tabLabel}>{tabLabel(primary)}</span>
+          <TabLabel tabKey={primary} />
+          {id === 'tags' && previewQuery && (
+            <button
+              className={styles.close}
+              aria-label="Back to all tags"
+              title="Back to all tags"
+              onClick={(e) => {
+                e.stopPropagation()
+                setCalendar(null)
+                openQuery('')
+              }}
+            >
+              ×
+            </button>
+          )}
         </div>
         <div className={styles.tabs}>
           {tabs
@@ -137,12 +173,12 @@ export function Pane({ id }: { id: PaneId }) {
                   role="tab"
                   aria-selected={key === pane.active}
                   className={`${styles.tab} ${key === pane.active ? styles.active : ''} ${preview ? styles.preview : ''}`}
-                  onClick={() => activateTab(id, key)}
+                  onClick={clickTab(key)}
                   onDoubleClick={preview ? pin : undefined}
                   onAuxClick={(e) => e.button === 1 && closeTab(id, key)}
                   title={tabTitle(key)}
                 >
-                  <span className={styles.tabLabel}>{tabLabel(key)}</span>
+                  <TabLabel tabKey={key} />
                   <button
                     className={styles.close}
                     aria-label="Close tab"
@@ -157,51 +193,13 @@ export function Pane({ id }: { id: PaneId }) {
               )
             })}
         </div>
-        {id === 'tags' && <TypeViewButtons />}
-        {id === 'tags' && <FollowButton />}
       </div>
+      {calendar && calendar.key === pane.active && <Calendar date={dayOfTab(panesStore.get(), calendar.key)} anchor={calendar.anchor} onClose={() => setCalendar(null)} />}
       {find !== undefined && <FindBar pane={id} query={find} />}
       <div className={styles.body}>
         <PaneContent tabKey={pane.active} find={find ?? ''} />
       </div>
     </section>
-  )
-}
-
-/** The tags pane's tab bar, right end: a type's view (Bookmarks, Media) in the preview; ctrl+click, in a tab of its own. */
-function TypeViewButtons() {
-  const active = useStore(panesStore, (s) => activeTypeView(s))
-  return (
-    <>
-      {TYPE_VIEWS.map((v) => (
-        <button
-          key={v.type}
-          className={`${styles.iconTab} ${active === v.type ? styles.active : ''}`}
-          aria-label={v.title}
-          aria-pressed={active === v.type}
-          title={`${v.title} (Ctrl+click: in a tab of its own)`}
-          onClick={(e) => openQuery({ types: [v.type] }, { newTab: e.ctrlKey || e.metaKey })}
-        >
-          {pluginIcon(v.icon)}
-        </button>
-      ))}
-    </>
-  )
-}
-
-/** End of the tags pane's tab bar: whether the type views follow the journal's day (ctrl+l). */
-function FollowButton() {
-  const follows = useStore(prefsStore, (s) => s.canvasFollowsJournal)
-  return (
-    <button
-      className={`${styles.follow} ${follows ? styles.following : ''}`}
-      onClick={toggleFollowJournal}
-      aria-pressed={follows}
-      aria-label="Follow the journal’s day"
-      title={follows ? 'The views follow the journal’s day (Ctrl+L to browse days separately)' : 'The views browse days separately from the journal (Ctrl+L to follow it)'}
-    >
-      {follows ? LINK_ICON : UNLINK_ICON}
-    </button>
   )
 }
 
@@ -216,10 +214,7 @@ function PaneContent({ tabKey, find }: { tabKey: string; find: string }) {
     case 'preview':
     case 'query': {
       if (!query) return <MetaBrowser find={find} />
-      const q = parseQuery(query)
-      const type = typeView(q)
-      // Keyed by the view, so a narrower query in the same view keeps its place (and its own filter syncs).
-      return type ? <TypeView key={`${tabKey}|${type}`} type={type} tabKey={tabKey} query={q} /> : <QueryView key={`${tabKey}|${query}`} tabKey={tabKey} query={q} find={find} />
+      return <QueryView key={tabKey} tabKey={tabKey} query={parseQuery(query)} find={find} />
     }
   }
 }

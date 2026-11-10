@@ -1,14 +1,13 @@
-import type { EntryDTO } from '../shared/types.ts'
 import { api, unwrap } from './api.ts'
-import { bookmarksNav } from './state/captures.ts'
 import { emitChange } from './state/bus.ts'
 import { journalStore, requestReveal } from './state/journal.ts'
 import { parseQuery } from '../shared/query.ts'
-import { activeJournalDate, openDate, panesStore, showTypeView, tabQuery } from './state/panes.ts'
+import { activeJournalDate, openDate, panesStore, tabQuery } from './state/panes.ts'
 import { notify, openNewEntry, type NewEntryDefaults } from './state/ui.ts'
+import { uploadForm } from './thumbs.ts'
 
 /** Creates an entry on the server, then opens its day and puts the caret in it. */
-export async function createEntry(opts: NewEntryDefaults & { title?: string; content?: string; focus?: 'title' | 'node' }) {
+export async function createEntry(opts: NewEntryDefaults & { title?: string; content?: string; focus?: 'title' | 'node' | 'flash' }) {
   try {
     const entry = await unwrap(
       api.entries.$post({
@@ -55,13 +54,17 @@ export function newEntryWithDialog() {
   openNewEntry(newEntryDefaults())
 }
 
-/**
- * Opens an entry that has a view of its own, in the tags pane: a bookmark or a media item in theirs. False for a
- * journal entry, which shows in its day.
- */
-export function openItem(entry: EntryDTO): boolean {
-  const d = entry.detail
-  if (d?.kind === 'bookmark') bookmarksNav.open(d.id)
-  else if (d?.kind === 'media') showTypeView('media')
-  return !!d
+/** Images pasted with nothing being edited: a new entry at the cursor (as ctrl+n's), its first node holding them. */
+export async function pasteAsEntry(files: File[]) {
+  const entry = await createEntry({ ...newEntryDefaults(), focus: 'flash' })
+  const node = entry?.nodes[0]
+  if (!node) return
+  for (const file of files)
+    try {
+      const form = (await uploadForm(file)) as Parameters<(typeof api.nodes)[':id']['images']['$post']>[0]['form']
+      await unwrap(api.nodes[':id'].images.$post({ param: { id: node.id }, form }))
+      emitChange()
+    } catch (err) {
+      notify((err as Error).message)
+    }
 }

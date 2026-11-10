@@ -4,11 +4,8 @@ import { clashes, comboId, formatCombo, parseCombo, parseShortcuts, shortcutApps
 
 const entry = (id: string, tags: string[], nodes: string[]): EntryDTO => ({
   id,
-  type: 'journal',
-  subtype: null,
   category: null,
-  detail: null,
-  dates: { created: 0, updated: 0 },
+  source: null,
   date: '2026-09-30',
   title: `title ${id}`,
   position: 1,

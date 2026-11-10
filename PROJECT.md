@@ -2,8 +2,8 @@
 
 - purpose: knowledge base, similar to logseq
 - 2-pane workflow journaling app: canvas (days) / tags (queries)
-- structure: every item is an entry (journal entry, bookmark, media), with a type/subtype,
-  one category and any number of tags; the canvas shows days, the tags pane shows entries by their metadata
+- structure: every item is an entry: a title, one category, any number of tags, a day, and child nodes that hold
+  its content (text, images, gifs, videos); the canvas shows days, the tags pane shows entries by their metadata
 - activity tracking (maps, activity, progress, dashboard, checklists, ...) lives in a separate app: logtracker (../logtracker)
 - YouTube videos live in youtube-lib (../youtube-lib, yt.localhost); AI chats in ai-lib (../ai-lib, ai.localhost)
 
@@ -12,12 +12,11 @@
 - each pane can have multiple tabs; each has a primary tab that can't be closed
   - canvas: Today (always today), pinned days, and a preview day tab
     - opening a day shows it in the preview tab (replaced by the next day opened); double-click (or ctrl+click a date) pins it
-    - tabs read "2026-11-08 Sun"; a day lists every type of entry under its categories; chips filter the types shown
+    - tabs read "2026-11-08 Sun"; a day lists its entries under their categories
   - tags: the preview tab, then queries pinned in tabs of their own
-    - any click on an entry's metadata (tag, category, type, site) retargets the preview; double-click (or ctrl+click) pins it
-    - an empty preview is the browser: types, categories and the tag tree, with counts
-    - a query of one type shows in that type's view (bookmarks, media board); others as a list of entries
-    - icons at the end of the tab bar open the type views
+    - any click on an entry's metadata (tag, category) retargets the preview; double-click (or ctrl+click) pins it
+    - an empty preview is the browser: categories and the tag tree, with counts
+    - a query shows as a list of entries, by day
 
 
 ## SHORTCUTS
@@ -87,8 +86,9 @@
 - journal entries are 2-level: entry (title, category, tags) and children nodes
 - a day groups its entries by category
 - depending on the location of active cursor/button -> inherit properties (e.g. tags)
-- image handling -> nodes can have images
-  pasting an image creates a large preview of an image
+- image handling -> images only live in nodes
+  pasting an image into a node creates a large preview of an image
+  pasting with nothing being edited creates a new entry (at the cursor) whose node holds it
   pasting more images keeps large preview 
   there is always an 'active' image
   first image in the gallery acts as the 'thumbnail' image
@@ -112,11 +112,17 @@
   historical view is when 'show achived' option is toggled
 
 
-### TYPES
-- journal; bookmark (page, reddit, marketplace: the handlers); media (image, video)
-- bookmarks and media each have a view of their own in the tags pane
+### ENTRIES AND SOURCES
+- there are no entry types: a bookmark, a pasted image, a note are all entries with nodes
+- bookmarking a page with the browser extension (extension/) creates an entry of today:
+  its title links to the page, its first node holds the screenshot, and its source line shows the site
+  and what the site's handler read (shared/handlers.ts: Reddit's author and score, a listing's price and seller)
+  - Reddit posts are tagged reddit/<subreddit>, Marketplace listings marketplace
+  - capturing the same page again adds the new screenshot as a new node of the same entry
+  - "add as comment" (Reddit) adds what's on screen as a new node too
 - videos and AI chats moved out to youtube-lib and ai-lib (migration 0017_split_ai_youtube)
 - the rest of the old canvas (map, activity, progress, dashboard, checklists) moved to logtracker
+- bookmarks and the image board became entries in migration 0018_entries_only
 
 #### SHORTCUTS
 - entry type: tagged shortcuts/<app>

@@ -1,7 +1,5 @@
-import { Fragment, useEffect, type MouseEvent } from 'react'
-import { shiftDate } from '../shared/dates.ts'
+import { Fragment, useEffect } from 'react'
 import { versionLabel } from '../shared/versions.ts'
-import { newEntryWithDialog } from './actions.ts'
 import { Modal } from './components/Modal/Modal.tsx'
 import { NewEntryDialog } from './components/NewEntryDialog/NewEntryDialog.tsx'
 import { Pane } from './components/Pane/Pane.tsx'
@@ -12,11 +10,9 @@ import { Spotlight } from './components/Spotlight/Spotlight.tsx'
 import { TagOpDialog } from './components/Tags/TagOpDialog.tsx'
 import { Updates } from './components/Updates/Updates.tsx'
 import { BINDINGS, EDITOR_KEYS, formatCombo, handleGlobalKey } from './shortcuts.ts'
-import { runCommand } from './state/commands.ts'
-import { dayFoldStore } from './state/fold.ts'
-import { journalDateOf, openDate, panesStore, PANES } from './state/panes.ts'
+import { panesStore, PANES } from './state/panes.ts'
 import { useStore } from './state/store.ts'
-import { openSettings, openSpotlight, prefsStore, toggleHelp, uiStore } from './state/ui.ts'
+import { openSettings, openSpotlight, prefsStore, toggleHelp, toggleImageMode, uiStore } from './state/ui.ts'
 import { updatesStore } from './state/updates.ts'
 import styles from './App.module.css'
 
@@ -41,20 +37,9 @@ export function App() {
     <div className={styles.app}>
       {/* In the desktop app this is also the window's title bar: drag it to move the window, double-click to maximize. */}
       <header className={styles.topBar}>
-        {window.desktop && <MenuButton />}
-        <span className={styles.brand}>logcadence</span>
+        <SearchBox />
         <div className={styles.actions}>
-          <DayNav />
-          <FoldButton />
-          <button onClick={() => openSpotlight('search')} title="Search everything (Ctrl+Shift+F)">
-            search
-          </button>
-          <button onClick={() => openSpotlight('tags')} title="Tag spotlight (Ctrl+K)">
-            #tags
-          </button>
-          <button onClick={newEntryWithDialog} title="New entry (Ctrl+Shift+N / Alt+Shift+N)">
-            + entry
-          </button>
+          <ImageModeButton />
           <SettingsButton />
         </div>
       </header>
@@ -82,36 +67,37 @@ export function App() {
   )
 }
 
-/** Folds or unfolds all entries of the open journal day; the chevron points right when they're all folded. */
-function FoldButton() {
-  const allFolded = useStore(dayFoldStore, (s) => s.allFolded)
+/** Looks like a search field; opens the search spotlight, where the typing happens. */
+function SearchBox() {
   return (
-    <button
-      className={styles.foldButton}
-      disabled={allFolded === null}
-      onClick={() => runCommand('journal.toggleFoldAll')}
-      title={allFolded ? 'Unfold all entries (Ctrl+.)' : 'Fold all entries (Ctrl+.); Shift+click a title folds one'}
-    >
-      <i className={allFolded ? styles.chevron : `${styles.chevron} ${styles.chevronOpen}`} />
-      fold
+    <button className={styles.search} onClick={() => openSpotlight('search')} title="Search everything (Ctrl+Shift+F)">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+        <circle cx="11" cy="11" r="7" />
+        <path d="m20 20-3.5-3.5" />
+      </svg>
+      <span className={styles.searchText}>Search entries and notes…</span>
+      <kbd>{formatCombo('mod+shift+f')}</kbd>
     </button>
   )
 }
 
-/** Journal day picker: steps the journal tab's day (and shows the journal tab). */
-function DayNav() {
-  const date = useStore(panesStore, journalDateOf)
-  const nav = (_: MouseEvent, d: string) => openDate(d)
+/** Image mode (ctrl+i): the panes show only images, under their categories and days. */
+function ImageModeButton() {
+  const on = useStore(prefsStore, (s) => s.imageMode)
   return (
-    <nav className={styles.dayNav}>
-      <button title="Previous day (Ctrl+[)" onClick={(e) => nav(e, shiftDate(date, -1))}>
-        ‹
-      </button>
-      <input type="date" value={date} onChange={(e) => e.target.value && openDate(e.target.value)} aria-label="Journal date" />
-      <button title="Next day (Ctrl+])" onClick={(e) => nav(e, shiftDate(date, 1))}>
-        ›
-      </button>
-    </nav>
+    <button
+      className={`${styles.iconButton} ${on ? styles.toggleOn : ''}`}
+      aria-pressed={on}
+      aria-label="Image mode"
+      onClick={() => toggleImageMode()}
+      title={on ? 'Back to entries (Ctrl+I)' : 'Image mode: only the images (Ctrl+I)'}
+    >
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <rect x="3" y="4" width="18" height="16" rx="2" />
+        <circle cx="9" cy="10" r="1.6" />
+        <path d="m21 16-5-5-9 9" />
+      </svg>
+    </button>
   )
 }
 
@@ -161,27 +147,6 @@ function SettingsButton() {
         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
       </svg>
       {pending && <i className={styles.badge} />}
-    </button>
-  )
-}
-
-/** Desktop app only: the window menu (File, View, Help), which has no menu bar of its own. */
-function MenuButton() {
-  return (
-    <button
-      className={styles.iconButton}
-      title="Menu"
-      aria-label="Menu"
-      onClick={(e) => {
-        const r = e.currentTarget.getBoundingClientRect()
-        void window.desktop!.showMenu(r.left, r.bottom + 2)
-      }}
-    >
-      <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden>
-        <circle cx="5" cy="12" r="1.8" />
-        <circle cx="12" cy="12" r="1.8" />
-        <circle cx="19" cy="12" r="1.8" />
-      </svg>
     </button>
   )
 }

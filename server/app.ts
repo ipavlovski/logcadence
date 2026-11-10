@@ -4,7 +4,6 @@ import { HTTPException } from 'hono/http-exception'
 import { logger } from 'hono/logger'
 import path from 'node:path'
 import { ASSETS_DIR } from './db/client.ts'
-import { boardRoutes } from './routes/board.ts'
 import { captureRoutes } from './routes/captures.ts'
 import { entryRoutes } from './routes/entries.ts'
 import { journalRoutes } from './routes/journal.ts'
@@ -22,7 +21,7 @@ app.onError((err, c) => {
   return c.json({ error: 'internal error' }, 500)
 })
 
-const routes = app.route('/api', journalRoutes).route('/api', entryRoutes).route('/api', nodeRoutes).route('/api', tagRoutes).route('/api', searchRoutes).route('/api', transferRoutes).route('/api', captureRoutes).route('/api', boardRoutes)
+const routes = app.route('/api', journalRoutes).route('/api', entryRoutes).route('/api', nodeRoutes).route('/api', tagRoutes).route('/api', searchRoutes).route('/api', transferRoutes).route('/api', captureRoutes)
 export type AppType = typeof routes
 
 // Asset file names are server-generated uuids and never change, so cache them forever.

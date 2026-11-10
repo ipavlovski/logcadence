@@ -4,60 +4,64 @@
   min-width: 0;
   min-height: 0;
   height: 100%;
-  background: var(--bg);
+  /* The body's color, which the active tab shares so it opens into it. */
+  --pane-bg: var(--bg);
+  /* The tab bar's bottom line and the active tab's outline: one line, the accent while the pane has focus. */
+  --tab-line: color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: var(--pane-bg);
+}
+
+.pane.focused {
+  --tab-line: var(--accent);
 }
 
 .pane[data-pane='tags'] {
-  background: color-mix(in srgb, var(--bg) 80%, var(--bg-2));
+  --pane-bg: color-mix(in srgb, var(--bg) 80%, var(--bg-2));
 }
 
 .tabBar {
   display: flex;
-  align-items: stretch;
+  align-items: flex-end;
   height: var(--tabbar-h);
   flex: none;
+  padding-left: 4px;
+  /* The line is painted under the tabs (not a border), so the active tab, even in the scrolling strip that clips
+     anything hanging below it, covers it and opens into the body. */
   background: var(--bg-2);
-  border-bottom: 1px solid var(--border);
+  box-shadow: inset 0 -1px 0 var(--tab-line);
 }
 
-/* Pinned primary tab: fixed at the left, outside the scrolling strip; doubles as the pane's focus indicator. */
-.pinned {
-  display: flex;
-  align-items: center;
-  flex: none;
+/* The pane's first tab (Today, the tags browser): fixed at the left, outside the scrolling strip; shaped like the
+   others, with the tab line's border even when it isn't the active one. */
+.tab.pinned {
   padding: 0 12px;
-  font-size: 10.5px;
+  margin-right: 4px;
+  border-color: var(--tab-line);
+}
+
+.tab.pinned.active {
+  border-bottom-color: transparent;
+}
+
+.tab.pinned:not(.active) {
+  background: color-mix(in srgb, var(--pane-bg) 40%, transparent);
+}
+
+/* The tags browser's tab: just a "#". */
+.hash {
+  font-size: 14px;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-  border-right: 1px solid var(--border);
-  border-bottom: 2px solid transparent;
-  cursor: pointer;
-  user-select: none;
-}
-
-.pinned:hover {
-  color: var(--text);
-}
-
-.pinnedActive {
-  background: var(--bg);
-  color: var(--text);
-}
-
-.focused .pinned {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
+  line-height: 1;
 }
 
 .tabs {
   display: flex;
   align-items: flex-end;
+  align-self: stretch;
   gap: 2px;
   overflow-x: auto;
   scrollbar-width: none;
-  padding: 0 4px;
+  padding: 0 4px 0 0;
   flex: 1;
   min-width: 0;
 }
@@ -65,31 +69,32 @@
 .tab {
   display: flex;
   align-items: center;
-  gap: 4px;
-  max-width: 200px;
-  height: 28px;
-  padding: 0 6px 0 10px;
+  gap: 6px;
+  max-width: 220px;
+  height: 30px;
+  padding: 0 6px 0 12px;
   border: 1px solid transparent;
-  border-bottom: none;
   border-radius: 6px 6px 0 0;
-  font-size: 12px;
-  color: var(--text-muted);
+  /* Inactive tabs leave the bar's line showing under them; the active one paints over it. */
+  background-clip: padding-box;
+  font-size: 12.5px;
+  color: color-mix(in srgb, var(--text) 70%, var(--text-muted));
   cursor: pointer;
   user-select: none;
   flex: none;
 }
 
-.tab:hover {
+.tab:not(.active):hover {
   color: var(--text);
   background: color-mix(in srgb, var(--bg) 50%, transparent);
 }
 
 .active {
-  background: var(--bg);
-  border-color: var(--border);
+  background: var(--pane-bg);
+  border-color: var(--tab-line);
+  border-bottom-color: transparent;
+  background-clip: border-box;
   color: var(--text);
-  margin-bottom: -1px;
-  height: 29px;
 }
 
 .tabLabel {
@@ -157,12 +162,7 @@
 }
 
 .vPinned {
-  padding: 12px 0;
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  border-bottom: 1px solid var(--border);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
 .findBar {
@@ -198,55 +198,6 @@
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-}
-
-/* The tags pane's type view buttons: just the view's icon (its name on hover). */
-.iconTab {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 32px;
-  height: 28px;
-  padding: 0;
-  border: 1px solid transparent;
-  border-bottom: none;
-  border-radius: 6px 6px 0 0;
-  background: none;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.iconTab:hover {
-  color: var(--text);
-  background: color-mix(in srgb, var(--bg) 50%, transparent);
-}
-
-.iconTab.active {
-  background: var(--bg);
-  border-color: var(--border);
-  color: var(--accent);
-  margin-bottom: -1px;
-  height: 29px;
-}
-
-/* Tags pane tab bar, right end: the type views following the journal's day or not (ctrl+l). */
-.follow {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 32px;
-  border: none;
-  border-left: 1px solid var(--border);
-  background: none;
-  color: var(--text-faint);
-}
-
-.follow:hover {
-  color: var(--text);
-}
-
-.following {
-  color: var(--accent);
 }
 
 /* The preview tabs (a day, a query): replaced by the next one opened, until double-clicked. */

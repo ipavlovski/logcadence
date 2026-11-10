@@ -31,7 +31,7 @@ export const journalRoutes = new Hono()
     const days: DayCount[] = db
       .select({ date: entries.date, count: sql<number>`count(*)` })
       .from(entries)
-      .where(and(eq(entries.archived, false), eq(entries.type, 'journal'), gte(entries.date, from)))
+      .where(and(eq(entries.archived, false), gte(entries.date, from)))
       .groupBy(entries.date)
       .all()
     return c.json({ days })

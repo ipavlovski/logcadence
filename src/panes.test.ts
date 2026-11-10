@@ -3,7 +3,6 @@ import { today } from '../shared/dates.ts'
 import {
   activateTab,
   activeJournalDate,
-  activeTypeView,
   closeAllTabs,
   closeTab,
   closeTagTabs,
@@ -120,22 +119,30 @@ describe('tags pane', () => {
   it('shows what was clicked in the preview, and a query of its own in a tab (ctrl+click or double-click)', () => {
     openTag('dev/react')
     expect([tags(), tagsActive(), preview()]).toEqual([['preview'], 'preview', 'tag=dev%2Freact'])
-    openQuery({ types: ['bookmark'], site: 'reddit.com' })
-    expect(preview()).toBe('type=bookmark&site=reddit.com')
-    expect(activeTypeView()).toBe('bookmark')
+    openQuery({ tags: ['reddit'], uncategorized: true })
+    expect(preview()).toBe('uncategorized=1&tag=reddit')
     openQuery({ category: 'build' }, { newTab: true })
     expect([tags(), tagsActive()]).toEqual([['preview', 'q:category=build'], 'q:category=build'])
     // The same query again goes to its tab.
     openQuery({ category: 'build' })
-    expect(preview()).toBe('type=bookmark&site=reddit.com')
+    expect(preview()).toBe('uncategorized=1&tag=reddit')
     activateTab('tags', 'preview')
     pinPreviewQuery()
-    expect([tags(), tagsActive(), preview()]).toEqual([['preview', 'q:type=bookmark&site=reddit.com', 'q:category=build'], 'q:type=bookmark&site=reddit.com', ''])
-    // A view's own filter (or a removed facet) retargets the tab it shows in.
-    setTabQuery('q:type=bookmark&site=reddit.com', { types: ['bookmark'] })
-    expect(tags()).toEqual(['preview', 'q:type=bookmark', 'q:category=build'])
-    closeTab('tags', 'q:type=bookmark')
+    expect([tags(), tagsActive(), preview()]).toEqual([['preview', 'q:uncategorized=1&tag=reddit', 'q:category=build'], 'q:uncategorized=1&tag=reddit', ''])
+    // A removed facet retargets the tab it shows in.
+    setTabQuery('q:uncategorized=1&tag=reddit', { tags: ['reddit'] })
+    expect(tags()).toEqual(['preview', 'q:tag=reddit', 'q:category=build'])
+    closeTab('tags', 'q:tag=reddit')
     expect(tags()).toEqual(['preview', 'q:category=build'])
+  })
+
+  it('goes back to the browser on an empty query (the preview tab’s ×), from any tab', () => {
+    openTag('blueberry')
+    openQuery({ category: 'build' }, { newTab: true })
+    openQuery('')
+    expect([tags(), tagsActive(), preview()]).toEqual([['preview', 'q:category=build'], 'preview', ''])
+    goHistory('tags', -1)
+    expect([tagsActive()]).toEqual(['q:category=build'])
   })
 
   it('steps back through the queries shown, the preview included', () => {
@@ -167,9 +174,12 @@ describe('tags pane', () => {
     })
     expect(s.panes.canvas.active).toBe('journal')
     expect(s.panes.tags).toEqual({ tabs: ['preview', 'q:tag=dev%2Freact'], active: 'preview', history: ['preview', 'q:tag=dev%2Freact'], hIndex: 1 })
-    // Tabs of the types that moved out (videos, AI chats) give way to the preview.
-    const moved = revivePanes({ panes: { tags: { tabs: ['preview', 'q:type=video&channel=WOT', 'q:type=ai'], active: 'q:type=ai', history: ['q:type=ai'], hIndex: 0 } } })
-    expect(moved.panes.tags.tabs).toEqual(['preview'])
+    // Tabs of the types that moved out (videos, AI chats) or went (bookmarks, media) give way to the preview; those
+    // of a type that became a tag, to the tag's.
+    const moved = revivePanes({
+      panes: { tags: { tabs: ['preview', 'q:type=video&channel=WOT', 'q:type=ai', 'q:type=bookmark&site=x.com', 'q:type=media', 'q:type=bookmark%2Freddit'], active: 'q:type=ai', history: ['q:type=ai'], hIndex: 0 } },
+    })
+    expect(moved.panes.tags.tabs).toEqual(['preview', 'q:tag=reddit'])
     expect(moved.panes.tags.active).toBe('preview')
   })
 })

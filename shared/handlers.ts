@@ -1,9 +1,10 @@
-import type { CaptureFields, CaptureSection, HandlerId } from './types.ts'
+import type { CaptureFields, HandlerId } from './types.ts'
 
-// Handlers: what's special about captures from some sites. A page captured with the Chrome extension goes to the
-// Bookmarks tab; the first handler whose url matches decides what makes two captures the same page, what is read
-// from it (fields), and how it is shown. A page no handler claims is a plain web page. The extension has its own
-// list (extension/common.js: how to screenshot and read each one); this one decides, on the server.
+// Handlers: what's special about captures from some sites. A page captured with the Chrome extension becomes an
+// entry of today's journal; the first handler whose url matches decides what makes two captures the same page,
+// what is read from it (fields), which tags it gets, and how its source line reads. A page no handler claims is a
+// plain web page. The extension has its own list (extension/common.js: how to screenshot and read each one); this
+// one decides, on the server.
 
 export interface HandlerField {
   key: string
@@ -15,11 +16,11 @@ export interface HandlerField {
   strip?: RegExp
 }
 
-/** What a handler formats: a capture's fields and dates. */
+/** What a handler formats: a captured entry's fields and dates. */
 interface Shown {
   fields: CaptureFields
   publishedAt: number | null
-  capturedAt: number
+  createdAt: number
 }
 
 export interface CaptureHandler {
@@ -28,7 +29,7 @@ export interface CaptureHandler {
   /** "post" / "posts", "listing" / "listings". */
   one: string
   many: string
-  /** Shown in the Handlers view. */
+  /** Shown in Settings. */
   domains: string[]
   about: string
   /** How the extension captures these pages. */
@@ -39,23 +40,14 @@ export interface CaptureHandler {
   title?(t: string): string
   /** The url kept for a capture: without what doesn't change the page. */
   canonical(u: URL, key: string): string
-  /** What a capture is grouped under: a host, a subreddit, a listing's location. `given` is what the page said. */
-  site(u: URL, given: string | undefined, fields: CaptureFields): string
-  /** Where the site's own page is, if it has one. */
-  siteLink(site: string, url: string): string | null
-  /** "site", "subreddit", "location". */
-  siteLabel: string
-  /** "Posted", "Listed": the label of `publishedAt`; null when the handler doesn't read one. */
-  published: string | null
+  /** The tags a capture gets (a Reddit post's reddit/<subreddit>). `given` is what the page said it belongs to. */
+  tags(u: URL, given: string | undefined): string[]
   fields: HandlerField[]
-  /** Notes always; Reddit posts also keep comments. */
-  sections: CaptureSection[]
-  /** The grid's thumbnails, width / height. */
-  thumbRatio: number
-  openLabel: string
-  /** After the site, on a card: "u/alice", a seller. */
+  /** "Add as comment" in the extension adds a screenshot to a page captured before (Reddit posts). */
+  comments: boolean
+  /** After the host, on the source line: "u/alice", a seller. */
   byline(c: Shown): string
-  /** A card's second line: "412 points • 87 comments • 3 days ago". */
+  /** Then: "412 points • 87 comments • 3 days ago". */
   meta(c: Shown): string
 }
 
@@ -79,7 +71,14 @@ export function ago(at: number, now = Date.now()): string {
 const count = (x: string | number | undefined, one: string) => (typeof x !== 'number' ? null : `${x.toLocaleString()} ${one}${x === 1 ? '' : 's'}`)
 const text = (x: string | number | undefined) => (x === undefined || x === '' ? null : String(x))
 const join = (parts: (string | null | false | undefined)[]) => parts.filter(Boolean).join(' • ')
-const host = (u: URL) => u.hostname.replace(/^www\./, '')
+/** "example.com": a url's host without www. */
+export const hostOf = (url: string) => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return ''
+  }
+}
 
 // ── Reddit ─────────────────────────────────────────────────────────────────
 
@@ -97,30 +96,25 @@ const reddit: CaptureHandler = {
   many: 'posts',
   domains: ['reddit.com', 'old.reddit.com', 'redd.it'],
   about:
-    'A Reddit post is kept once, however it was opened (new or old Reddit, a comment’s link, redd.it): capturing it again replaces its screenshot and numbers and keeps your notes, comments and tags. Posts are grouped by subreddit.',
+    'A Reddit post is one entry, however it was opened (new or old Reddit, a comment’s link, redd.it): capturing it again adds the new screenshot to it and updates its numbers. It is tagged reddit/<subreddit>.',
   capture:
-    'The whole post, scrolled through and stitched into one screenshot, with its subreddit and icon, author, score, comment count and when it was posted. “Add as comment” in the extension adds what’s on screen to the post’s comments.',
+    'The whole post, scrolled through and stitched into one screenshot, with its subreddit and icon, author, score, comment count and when it was posted. “Add as comment” in the extension adds what’s on screen to the post’s entry.',
   match: redditPostId,
   canonical(u, key) {
     // The post's link as Reddit gives it, without the query, the comment and the old/np/m host.
     const m = u.pathname.match(/^(\/r\/[^/]+)?\/comments\/[a-z0-9]+(\/[^/]+)?/i)
     return `https://www.reddit.com${m ? m[0] : `/comments/${key}`}/`
   },
-  site(u, given) {
+  tags(u, given) {
     const name = (given ?? '').trim().replace(/^\/?r\//i, '') || u.pathname.match(/^\/r\/([^/]+)/)?.[1] || ''
-    return name ? `r/${name}` : ''
+    return name ? [`reddit/${name}`] : []
   },
-  siteLink: (site) => (site ? `https://www.reddit.com/${site}/` : null),
-  siteLabel: 'subreddit',
-  published: 'Posted',
   fields: [
     { key: 'author', label: 'Author', type: 'text', person: true, strip: /^\/?u\// },
     { key: 'score', label: 'Score', type: 'number' },
     { key: 'commentCount', label: 'Comments', type: 'number' },
   ],
-  sections: ['notes', 'comments'],
-  thumbRatio: 4 / 3,
-  openLabel: 'Open on Reddit',
+  comments: true,
   byline: (c) => (c.fields.author ? `u/${c.fields.author}` : ''),
   meta: (c) => join([count(c.fields.score, 'point'), count(c.fields.commentCount, 'comment'), c.publishedAt != null && ago(c.publishedAt)]),
 }
@@ -134,27 +128,22 @@ const marketplace: CaptureHandler = {
   many: 'listings',
   domains: ['facebook.com/marketplace/item/…'],
   about:
-    'A listing is kept once by its id, wherever it was opened from: capturing it again replaces its screenshot and what it says (a new price, say) and keeps your notes and tags. Listings are grouped by location. Tag them to keep track (e.g. marketplace/desk, contacted). Facebook’s page changes often, so a field it couldn’t read can be filled in on the listing’s page here.',
+    'A listing is one entry, by its id, wherever it was opened from: capturing it again adds the new screenshot to it and updates what it says (a new price, say). It is tagged marketplace.',
   capture: 'What’s on screen, with the price, condition, location, seller and when it was listed, read from the listing’s text.',
   match: (u) => (/(^|\.)facebook\.com$/.test(u.hostname) ? (u.pathname.match(/^\/marketplace\/(?:[^/]+\/)?item\/(\d+)/)?.[1] ?? null) : null),
   canonical: (_u, key) => `https://www.facebook.com/marketplace/item/${key}/`,
   // "(3) Marketplace – Steel helmet | Facebook": the unread count, and Facebook's.
   title: (t) => t.replace(/^\(\d+\)\s*/, '').replace(/^Marketplace\s*[–-]\s*/, '').replace(/\s*\|\s*Facebook$/, ''),
-  site: (_u, _given, fields) => text(fields.location) ?? 'Marketplace',
-  siteLink: () => 'https://www.facebook.com/marketplace/',
-  siteLabel: 'location',
-  published: 'Listed',
+  tags: () => ['marketplace'],
   fields: [
     { key: 'price', label: 'Price', type: 'text' },
     { key: 'condition', label: 'Condition', type: 'text' },
     { key: 'location', label: 'Location', type: 'text' },
     { key: 'seller', label: 'Seller', type: 'text', person: true },
   ],
-  sections: ['notes'],
-  thumbRatio: 4 / 3,
-  openLabel: 'Open on Facebook',
+  comments: false,
   byline: (c) => text(c.fields.seller) ?? '',
-  meta: (c) => join([text(c.fields.price), text(c.fields.condition), c.publishedAt != null && `listed ${ago(c.publishedAt)}`]),
+  meta: (c) => join([text(c.fields.price), text(c.fields.condition), text(c.fields.location), c.publishedAt != null && `listed ${ago(c.publishedAt)}`]),
 }
 
 // ── any other page ─────────────────────────────────────────────────────────
@@ -165,7 +154,7 @@ const page: CaptureHandler = {
   one: 'page',
   many: 'pages',
   domains: ['any other site'],
-  about: 'Any page no other handler claims. Its url without the #fragment makes it the same page; pages are grouped by site.',
+  about: 'Any page no other handler claims. Its url without the #fragment makes it the same page.',
   capture: 'What’s on screen, with the page’s title and favicon.',
   match(u) {
     const v = new URL(u.href)
@@ -173,16 +162,11 @@ const page: CaptureHandler = {
     return v.href
   },
   canonical: (_u, key) => key,
-  site: (u) => host(u),
-  siteLink: (_site, url) => new URL(url).origin,
-  siteLabel: 'site',
-  published: null,
+  tags: () => [],
   fields: [],
-  sections: ['notes'],
-  thumbRatio: 16 / 9,
-  openLabel: 'Open page',
+  comments: false,
   byline: () => '',
-  meta: (c) => new Date(c.capturedAt).toLocaleTimeString([], { timeStyle: 'short' }),
+  meta: () => '',
 }
 
 /** Tried in order; `page` takes the rest. */

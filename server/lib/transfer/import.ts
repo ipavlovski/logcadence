@@ -4,9 +4,9 @@ import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from
 import path from 'node:path'
 import type { SQLiteTable } from 'drizzle-orm/sqlite-core'
 import { openContentDb, openEventsDb } from '../../db/open.ts'
+import { dropCategoryTagsIn } from '../categoryTags.ts'
 import { withZip, type ZipMember } from '../zip.ts'
-import { captureEntryId, mediaEntryId, mediaSubtype } from '../../../shared/entryTypes.ts'
-import { CONTENT_TABLES, EVENTS_TABLES, FORMAT, FORMAT_VERSION, LEGACY_FORMATS, V3_CONTENT_TABLES, V4_MOVED_TABLES, type FileSet, type Manifest, type Progress } from './format.ts'
+import { CONTENT_TABLES, EVENTS_TABLES, FORMAT, FORMAT_VERSION, LEGACY_FORMATS, V3_CONTENT_TABLES, V4_MOVED_TABLES, V5_ITEM_TABLES, type FileSet, type Manifest, type Progress } from './format.ts'
 
 export interface ImportOptions {
   /** The library folder to import into; it must be empty (no entries, events or assets). */
@@ -41,7 +41,7 @@ export function importFrom(zipFile: string, { dataDir, onProgress }: ImportOptio
     mkdirSync(path.join(staging, 'assets'))
     try {
       const all = { ...CONTENT_TABLES, ...EVENTS_TABLES }
-      const known = new Set([...Object.keys(all), ...(manifest.formatVersion < 4 ? V3_CONTENT_TABLES : []), ...(manifest.formatVersion < 5 ? V4_MOVED_TABLES : [])])
+      const known = new Set([...Object.keys(all), ...(manifest.formatVersion < 4 ? V3_CONTENT_TABLES : []), ...(manifest.formatVersion < 5 ? V4_MOVED_TABLES : []), ...(manifest.formatVersion < 6 ? V5_ITEM_TABLES : [])])
       for (const name of Object.keys(manifest.tables)) if (!known.has(name)) warnings.push(`skipped unknown table "${name}"`)
       const total = Object.keys(all).length
       let done = 0
@@ -54,6 +54,8 @@ export function importFrom(zipFile: string, { dataDir, onProgress }: ImportOptio
           // A fresh library has the default categories (0016_unified_entries); the export's replace them.
           tx.delete(CONTENT_TABLES.categories).run()
           for (const [name, table] of Object.entries(CONTENT_TABLES)) insertRows(tx, table, tables[name] ?? []), progress()
+          // An export from before 0020_category_tags: its entries' tags without their category, as the migration did.
+          dropCategoryTagsIn(tx)
         })
       } finally {
         content.$client.close()
@@ -139,11 +141,23 @@ type Row = Record<string, unknown>
 
 /** Every content table's rows, brought from the export's format up to FORMAT_VERSION. */
 function upgradeTables(fromVersion: number, read: (name: string) => Row[]): Record<string, Row[]> {
-  if (fromVersion >= 5) return Object.fromEntries(Object.keys(CONTENT_TABLES).map((name) => [name, read(name)]))
-  if (fromVersion === 4) return toV5(Object.fromEntries(Object.keys(CONTENT_TABLES).map((name) => [name, read(name)])))
+  const readAll = (names: string[]) => Object.fromEntries(names.map((name) => [name, read(name)]))
+  if (fromVersion >= 7) return readAll(Object.keys(CONTENT_TABLES))
+  if (fromVersion === 6) return toV7(readAll(Object.keys(CONTENT_TABLES)))
+  const v5Tables = [...Object.keys(CONTENT_TABLES), ...V5_ITEM_TABLES]
+  if (fromVersion === 5) return toV7(toV6(readAll(v5Tables)))
+  if (fromVersion === 4) return toV7(toV6(toV5(readAll(v5Tables))))
   // Formats 1–3 upgrade table by table, in their insert order (a step can depend on an earlier table's).
   const upgrade = upgrader(fromVersion)
-  return toV5(toV4(Object.fromEntries(V3_CONTENT_TABLES.map((name) => [name, upgrade(name, read(name))]))))
+  return toV7(toV6(toV5(toV4(Object.fromEntries(V3_CONTENT_TABLES.map((name) => [name, upgrade(name, read(name))]))))))
+}
+
+// v6 → 7: the fabrication category is called fab (as migration 0019_fab_category), unless there is a fab already.
+export function toV7(t: Record<string, Row[]>): Record<string, Row[]> {
+  const cats = t.categories ?? []
+  if (!cats.some((c) => c.name === 'fabrication') || cats.some((c) => c.name === 'fab')) return t
+  const fab = (v: unknown) => (v === 'fabrication' ? 'fab' : v)
+  return { ...t, categories: cats.map((c) => ({ ...c, name: fab(c.name) })), entries: (t.entries ?? []).map((e) => ({ ...e, category: fab(e.category) })) }
 }
 
 /** Brings a table's rows from format `fromVersion` (1–3) up to 3. */
@@ -215,6 +229,10 @@ const V4_CATEGORIES = ['design', 'build', 'fabrication', 'dev', 'notes']
 const CHAT_SUBTYPE: Record<string, string> = { claude: 'claude-chat', 'claude-code': 'claude-code', gemini: 'gemini-chat', antigravity: 'gemini-code' }
 const CHAT_SOURCE_TAGS = new Set(Object.keys(CHAT_SUBTYPE).map((s) => `ai/${s}`))
 const videoEntryId = (videoId: string) => `yt:${videoId}`
+// Format 4 and 5's ids of a capture's and a board item's entries.
+const captureEntryId = (captureId: string) => `cap:${captureId}`
+const mediaEntryId = (itemId: string) => `media:${itemId}`
+const mediaSubtype = (mime: string) => (mime.startsWith('video/') ? 'video' : 'image')
 
 export function toV4(t: Record<string, Row[]>): Record<string, Row[]> {
   const get = (name: string) => t[name] ?? []
@@ -324,7 +342,103 @@ export function toV5(t: Record<string, Row[]>): Record<string, Row[]> {
     entry_tags: entryTags,
     tags: get('tags').filter((r) => used.has(r.id)),
   }
-  return Object.fromEntries(Object.keys(CONTENT_TABLES).map((name) => [name, out[name] ?? []]))
+  return Object.fromEntries([...Object.keys(CONTENT_TABLES), ...V5_ITEM_TABLES].map((name) => [name, out[name] ?? []]))
+}
+
+// v5 → 6: bookmarks and the image board became plain entries, and entry types went (as migration
+// 0018_entries_only, which see): a capture's page goes on its entry, its screenshot and notes into a first node,
+// its comments into a second; Reddit posts get reddit/<subreddit>, listings marketplace. Each board day becomes an
+// entry with a node per row. Entries that were ordered by time go after their day's journal entries.
+export function toV6(t: Record<string, Row[]>): Record<string, Row[]> {
+  const get = (name: string) => t[name] ?? []
+  const num = (v: unknown) => Number(v)
+  const entries = get('entries').map((e) => ({ ...e }))
+  const entryById = new Map(entries.map((e) => [e.id, e]))
+  const nodes = get('nodes').map((n) => ({ ...n }))
+  const images: Row[] = get('images').map((i) => ({ width: null, height: null, thumb: null, ...i }))
+  const entryTags = get('entry_tags').map((l) => ({ ...l }))
+  const tags = get('tags').map((r) => ({ ...r }))
+  const byPath = new Map(tags.map((r) => [String(r.path), r]))
+  let nextTagId = Math.max(0, ...tags.map((r) => num(r.id))) + 1
+  const now = Date.now()
+  const tag = (entryId: unknown, path: string) => {
+    let r = byPath.get(path)
+    if (!r) {
+      r = { id: nextTagId++, path, createdAt: now }
+      tags.push(r)
+      byPath.set(path, r)
+    }
+    const own = entryTags.filter((l) => l.entryId === entryId)
+    if (!own.some((l) => l.tagId === r.id)) entryTags.push({ entryId, tagId: r.id, position: Math.max(-1, ...own.map((l) => num(l.position))) + 1 })
+  }
+  const lastNodePosition = (entryId: unknown) => Math.max(0, ...nodes.filter((n) => n.entryId === entryId).map((n) => num(n.position)))
+  const mimeOf = (file: string) => (/\.png$/i.test(file) ? 'image/png' : /\.webp$/i.test(file) ? 'image/webp' : 'image/jpeg')
+
+  const captureImages = get('capture_images')
+  for (const c of get('captures')) {
+    const e = entryById.get(c.entryId ?? captureEntryId(String(c.id)))
+    if (!e) continue
+    Object.assign(e, { url: c.url, linkKey: `${c.handler}:${c.key}`, icon: c.icon ?? null, fields: c.fields ?? {}, publishedAt: c.publishedAt ?? null })
+    const shotId = `shot-${c.id}`
+    const position = lastNodePosition(e.id) + 1
+    nodes.push({ id: c.id, entryId: e.id, content: c.notes ?? '', position, archived: false, activeImageId: c.activeImageId ?? shotId, createdAt: c.capturedAt, updatedAt: c.updatedAt })
+    images.push({ id: shotId, nodeId: c.id, file: c.screenshot, mime: mimeOf(String(c.screenshot)), width: c.screenshotWidth ?? null, height: c.screenshotHeight ?? null, thumb: c.thumb ?? null, position: 0, createdAt: c.capturedAt })
+    const own = captureImages.filter((i) => i.captureId === c.id)
+    const asImage = (i: Row, nodeId: unknown) => ({ id: i.id, nodeId, file: i.file, mime: i.mime, width: null, height: null, thumb: null, position: i.position, createdAt: i.createdAt })
+    for (const i of own.filter((i) => i.section === 'notes')) images.push(asImage(i, c.id))
+    const comments = own.filter((i) => i.section === 'comments').sort((a, b) => num(a.position) - num(b.position))
+    if (String(c.comments ?? '').trim() || comments.length) {
+      const nodeId = `${c.id}-comments`
+      nodes.push({ id: nodeId, entryId: e.id, content: c.comments ?? '', position: position + 1, archived: false, activeImageId: c.commentsActiveImageId ?? comments[0]?.id ?? null, createdAt: c.capturedAt, updatedAt: c.updatedAt })
+      for (const i of comments) images.push(asImage(i, nodeId))
+    }
+    const site = String(c.site ?? '')
+    if (c.handler === 'reddit' && /^r\/./.test(site)) tag(e.id, `reddit/${site.slice(2).trim().toLowerCase()}`)
+    if (c.handler === 'marketplace') tag(e.id, 'marketplace')
+  }
+
+  // The image board: an entry per day, a node per row.
+  const days = new Map<string, Row[]>()
+  for (const b of get('board_items')) days.set(String(b.date), [...(days.get(String(b.date)) ?? []), b])
+  for (const [date, items] of days) {
+    const id = `board:${date}`
+    const created = items.map((b) => num(b.createdAt))
+    entries.push({ id, type: 'media', category: null, date, title: '', position: 0, archived: false, fields: {}, createdAt: Math.min(...created), updatedAt: Math.max(...created) })
+    const rows = [...new Set(items.map((b) => num(b.row)))].sort((a, b) => a - b)
+    rows.forEach((row, i) => {
+      const inRow = items.filter((b) => num(b.row) === row).sort((a, b) => num(a.position) - num(b.position))
+      const nodeId = `${id}:${i + 1}`
+      const times = inRow.map((b) => num(b.createdAt))
+      nodes.push({ id: nodeId, entryId: id, content: '', position: i + 1, archived: false, activeImageId: inRow[0]!.id, createdAt: Math.min(...times), updatedAt: Math.max(...times) })
+      for (const b of inRow) images.push({ id: b.id, nodeId, file: b.file, mime: b.mime, width: b.width, height: b.height, thumb: b.thumb ?? null, position: b.position, createdAt: b.createdAt })
+    })
+    for (const b of items) for (const l of get('entry_tags').filter((l) => l.entryId === (b.entryId ?? mediaEntryId(String(b.id))))) {
+      const path = tags.find((r) => r.id === l.tagId)?.path
+      if (path !== undefined) tag(id, String(path))
+    }
+  }
+  const kept = entries.filter((e) => !(e.type === 'media' && !String(e.id).startsWith('board:')))
+
+  // Entries ordered by time: after their day's journal entries, oldest first.
+  const timed = kept.filter((e) => e.type !== 'journal').sort((a, b) => num(a.createdAt) - num(b.createdAt) || String(a.id).localeCompare(String(b.id)))
+  const next = new Map<unknown, number>()
+  for (const e of timed) {
+    const base = next.get(e.date) ?? Math.max(0, ...kept.filter((j) => j.date === e.date && j.type === 'journal').map((j) => num(j.position)))
+    e.position = base + 1
+    next.set(e.date, base + 1)
+  }
+
+  const keptIds = new Set(kept.map((e) => e.id))
+  const links = entryTags.filter((l) => keptIds.has(l.entryId))
+  const used = new Set(links.map((l) => l.tagId))
+  return {
+    ...Object.fromEntries(Object.keys(CONTENT_TABLES).map((name) => [name, get(name)])),
+    entries: kept.map(({ type: _type, subtype: _subtype, ...e }) => e),
+    nodes,
+    images,
+    entry_tags: links,
+    tags: tags.filter((r) => used.has(r.id)),
+  }
 }
 
 // Keeps each statement well under SQLite's bound-parameter limit.

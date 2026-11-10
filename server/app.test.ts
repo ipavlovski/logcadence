@@ -169,3 +169,22 @@ describe('images', () => {
     expect(video).toMatchObject({ mime: 'video/mp4', url: expect.stringMatching(/\.mp4$/) })
   })
 })
+
+describe('categories and tags', () => {
+  it("stores an entry's tags without its category, however they get there", async () => {
+    const D = '2026-07-01'
+    const e = await req<EntryDTO>('POST', '/api/entries', { date: D, title: 'Filed', category: 'dev', tags: ['dev', 'dev/react', 'shop'] })
+    expect(e.tags).toEqual(['react', 'shop'])
+    // Tags typed later, and a category picked later.
+    expect((await req<EntryDTO>('PATCH', `/api/entries/${e.id}`, { tags: ['react', '#Dev', 'notes'] })).tags).toEqual(['react', 'notes'])
+    expect((await req<EntryDTO>('PATCH', `/api/entries/${e.id}`, { category: 'notes' })).tags).toEqual(['react'])
+    // Both at once: the new category's tag goes, the old one's stays.
+    expect((await req<EntryDTO>('PATCH', `/api/entries/${e.id}`, { category: 'build', tags: ['build/well', 'notes'] })).tags).toEqual(['well', 'notes'])
+    // A tag renamed onto the category.
+    await req('POST', '/api/tags/rename', { from: 'well', to: 'build/well' })
+    expect((await day(D)).find((x) => x.id === e.id)!.tags).toEqual(['well', 'notes'])
+    await req('POST', '/api/tags/rename', { from: 'notes', to: 'build' })
+    expect((await day(D)).find((x) => x.id === e.id)!.tags).toEqual(['well'])
+  })
+})
+

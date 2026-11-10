@@ -40,10 +40,9 @@ const counts = { active: sql<number>`coalesce(sum(${entries.archived} = 0), 0)`,
 
 export const tagRoutes = new Hono()
   .get('/tags', (c) => c.json({ tags: tagInfos() }))
-  // Everything entries can be told apart by, with counts: types and subtypes, categories, tags.
+  // Everything entries can be told apart by, with counts: categories, tags.
   .get('/meta', (c) => {
     const meta: MetaDTO = {
-      types: db.select({ type: entries.type, subtype: entries.subtype, ...counts }).from(entries).groupBy(entries.type, entries.subtype).orderBy(asc(entries.type), asc(entries.subtype)).all(),
       categories: listCategories(),
       uncategorized: db.select(counts).from(entries).where(isNull(entries.category)).get() ?? { active: 0, archived: 0 },
       tags: tagInfos(),

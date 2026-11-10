@@ -15,6 +15,12 @@
   --date: #d19a66;
   --tag: #c678dd;
   --danger: #e06c75;
+  /* The default categories' colors (state/categories.ts categoryStyle); others take --date. */
+  --cat-design: #e06c75;
+  --cat-build: #d19a66;
+  --cat-fab: #e5c07b;
+  --cat-dev: #56b6c2;
+  --cat-notes: #98c379;
   --selection: rgb(97 175 239 / 0.14);
   --flash: rgb(229 192 123 / 0.22);
   --code-bg: #16181d;
@@ -37,6 +43,11 @@
   --date: #2f7a78;
   --tag: #2f7a78;
   --danger: #c0502f;
+  --cat-design: #b5485d;
+  --cat-build: #a8601e;
+  --cat-fab: #8c6d0b;
+  --cat-dev: #1f6f9a;
+  --cat-notes: #4f7f2a;
   --selection: rgb(44 127 145 / 0.12);
   --flash: rgb(230 180 60 / 0.3);
   --code-bg: #eeeee8;

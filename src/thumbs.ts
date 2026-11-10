@@ -1,19 +1,21 @@
-// Thumbnails for the image board, made in the app before upload: a smaller still, or a video's poster.
-// Gifs keep no thumbnail so they animate on the board (the server stores an animated one as an mp4, which the
-// board then plays like the gif).
+// What the app works out about a pasted or dropped image or video before uploading it into a node: its size, and a
+// smaller still (or a video's poster) for image mode's grid. Gifs keep no thumbnail so they animate (the server
+// stores an animated one as an mp4, which plays like the gif).
 
 /** Twice the default row height, so tiles stay sharp when zoomed in a little and on high-dpi screens. */
 const THUMB_H = 400
 
 export interface Prepared {
-  width: number
-  height: number
+  /** Unknown for a video the browser can't decode. */
+  width?: number
+  height?: number
   thumb?: Blob
 }
 
 export async function prepare(file: File): Promise<Prepared> {
   if (file.type.startsWith('video/')) return videoPoster(file)
-  const bmp = await createImageBitmap(file)
+  const bmp = await createImageBitmap(file).catch(() => null)
+  if (!bmp) return {}
   try {
     const { width, height } = bmp
     // Small enough to show as is.
@@ -32,7 +34,7 @@ function encode(src: CanvasImageSource, w: number, h: number): Promise<Blob> {
   return canvas.convertToBlob({ type: 'image/webp', quality: 0.85 })
 }
 
-/** A frame near the start. A video the browser can't decode still goes on the board, as a 16:9 tile without a poster. */
+/** A frame near the start. A video the browser can't decode is uploaded without a size or a poster. */
 async function videoPoster(file: File): Promise<Prepared> {
   const url = URL.createObjectURL(file)
   const v = document.createElement('video')
@@ -44,11 +46,11 @@ async function videoPoster(file: File): Promise<Prepared> {
     v.currentTime = Math.min(0.1, (v.duration || 0) / 2)
     await once(v, 'seeked')
     const { videoWidth: width, videoHeight: height } = v
-    if (!width || !height) return { width: 16, height: 9 }
+    if (!width || !height) return {}
     const h = Math.min(THUMB_H, height)
     return { width, height, thumb: await encode(v, Math.max(1, Math.round((width * h) / height)), h) }
   } catch {
-    return { width: 16, height: 9 }
+    return {}
   } finally {
     v.removeAttribute('src')
     v.load()
@@ -61,4 +63,14 @@ function once(el: HTMLVideoElement, event: string): Promise<void> {
     el.addEventListener(event, () => resolve(), { once: true })
     el.addEventListener('error', () => reject(new Error('unreadable video')), { once: true })
   })
+}
+
+/** The upload form of a node image: the file, with its size and thumbnail when they could be worked out. */
+export async function uploadForm(file: File): Promise<{ file: File; thumb?: File; width?: string; height?: string }> {
+  const p = await prepare(file).catch((): Prepared => ({}))
+  return {
+    file,
+    ...(p.thumb && { thumb: new File([p.thumb], 'thumb.webp', { type: p.thumb.type || 'image/webp' }) }),
+    ...(p.width && p.height && { width: String(p.width), height: String(p.height) }),
+  }
 }

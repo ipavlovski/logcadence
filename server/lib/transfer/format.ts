@@ -20,7 +20,9 @@ export const LEGACY_FORMATS = ['logseq-rewrite-export']
 // 3: tag paths are separated by '/' instead of ':'.
 // 4: every item is an entry with a type, a subtype and a category; one tag set (0016_unified_entries).
 // 5: videos and AI chats moved out to youtube-lib and ai-lib (0017_split_ai_youtube).
-export const FORMAT_VERSION = 5
+// 6: bookmarks and the image board became plain entries with nodes; no entry types (0018_entries_only).
+// 7: the fabrication category is called fab (0019_fab_category).
+export const FORMAT_VERSION = 7
 
 // Insert order: parents before the rows that reference them.
 export const CONTENT_TABLES = {
@@ -30,9 +32,6 @@ export const CONTENT_TABLES = {
   nodes: content.nodes,
   entry_tags: content.entryTags,
   images: content.images,
-  captures: content.captures,
-  capture_images: content.captureImages,
-  board_items: content.boardItems,
 }
 /** The content tables of formats 1–3, in their insert order (upgrades run in it). */
 export const V3_CONTENT_TABLES = [
@@ -55,6 +54,8 @@ export const V3_CONTENT_TABLES = [
 ]
 /** Format 4's tables that are gone in 5 (videos and AI chats). */
 export const V4_MOVED_TABLES = ['chats', 'yt_playlists', 'yt_videos', 'yt_images']
+/** Format 5's tables that are gone in 6 (their rows became entries, nodes and images). */
+export const V5_ITEM_TABLES = ['captures', 'capture_images', 'board_items']
 export const EVENTS_TABLES = { events: events.events }
 
 export interface FileSet {

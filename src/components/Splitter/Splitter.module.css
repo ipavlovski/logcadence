@@ -11,12 +11,25 @@
 .splitter::after {
   content: '';
   position: absolute;
-  inset: 0 2px;
+  /* The line starts under the tab bars, which run on as one band with the top bar. */
+  inset: var(--tabbar-h) 2px 0;
   background: var(--border);
 }
 
 .splitter:hover::after,
 .splitter:active::after {
-  inset: 0 1px;
+  inset: var(--tabbar-h) 1px 0;
   background: var(--accent);
+}
+
+/* Its one column through the tab band: the band's color, and the tab line running on across it. */
+.splitter::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 2px;
+  right: 2px;
+  height: var(--tabbar-h);
+  background: var(--bg-2);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--accent) 35%, var(--border));
 }

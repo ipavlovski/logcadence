@@ -4,6 +4,7 @@ import { allTagPaths } from '../../../shared/tags.ts'
 import type { SearchHit } from '../../../shared/types.ts'
 import { api, unwrap } from '../../api.ts'
 import { useDebounced, useFetch } from '../../hooks/useFetch.ts'
+import { categoryLabel } from '../../state/categories.ts'
 import { requestReveal } from '../../state/journal.ts'
 import { openDate, openTag } from '../../state/panes.ts'
 import { useStore } from '../../state/store.ts'
@@ -12,7 +13,6 @@ import { openSpotlight, uiStore, type SpotlightMode } from '../../state/ui.ts'
 import { rankTags } from '../../tagSearch.ts'
 import { mark } from '../Markdown/Markdown.tsx'
 import { Modal } from '../Modal/Modal.tsx'
-import { typeLabel } from '../../entryView.ts'
 import styles from './Spotlight.module.css'
 
 export function Spotlight() {
@@ -108,8 +108,7 @@ function SpotlightDialog({ mode }: { mode: SpotlightMode }) {
                 <div className={styles.hitHead}>
                   <span className={styles.date}>{formatJournalDate(item.hit.date)}</span>
                   <span className={styles.hitTitle}>{mark(item.hit.title || 'untitled', q)}</span>
-                  {item.hit.type !== 'journal' && <span className={styles.meta}>{typeLabel(item.hit)}</span>}
-                  {item.hit.category && <span className={styles.category}>{item.hit.category}</span>}
+                  {item.hit.category && <span className={styles.category}>{categoryLabel(item.hit.category)}</span>}
                   {item.hit.tags.slice(0, 2).map((t) => (
                     <span key={t} className={styles.tag}>
                       #{t}

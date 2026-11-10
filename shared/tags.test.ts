@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ancestors, buildTagTree, isUnder, normalizeTag } from './tags.ts'
+import { ancestors, buildTagTree, isUnder, normalizeTag, withoutCategory } from './tags.ts'
 
 describe('tags', () => {
   it('normalizes', () => {
@@ -21,5 +21,10 @@ describe('tags', () => {
     ])
     expect(root).toMatchObject({ path: 'tidewater', active: 0, totalActive: 3, totalArchived: 1 })
     expect(root!.children[0]!.children.map((c) => c.name)).toEqual(['a', 'b'])
+  })
+
+  it('leaves out the category: its own tag goes, a tag under it loses that part', () => {
+    expect(withoutCategory(['#Dev', 'dev/react', 'react', 'devops', 'notes'], 'dev')).toEqual(['react', 'devops', 'notes'])
+    expect(withoutCategory(['Dev', 'x'], null)).toEqual(['dev', 'x'])
   })
 })

@@ -3,6 +3,7 @@ import type { EntryDTO } from '../../../shared/types.ts'
 import { AutoTextarea } from '../AutoTextarea/AutoTextarea.tsx'
 import { CategoryPicker } from '../CategoryPicker/CategoryPicker.tsx'
 import { mark } from '../Markdown/Markdown.tsx'
+import { SourceLine, SourceTitle } from '../Source/Source.tsx'
 import { TagInput } from '../TagInput/TagInput.tsx'
 import { useDayApi, type FocusTarget } from './dayContext.ts'
 import { NodeBlock } from './NodeBlock.tsx'
@@ -37,9 +38,12 @@ export const EntryCard = memo(function EntryCard({ entry, focus, find, flashId, 
     >
       <header className={styles.entryHead}>
         <div className={styles.entryHeadMain}>
-          <EntryTitle entry={entry} focus={titleFocus} find={find} isEmpty={isEmpty} toggleFold={toggleFold} />
+          <div className={styles.titleRow}>
+            <CategoryPicker className={styles.titleCategory} value={entry.category} onChange={(category) => day.updateEntry(entry.id, { category })} />
+            <EntryTitle entry={entry} focus={titleFocus} find={find} isEmpty={isEmpty} toggleFold={toggleFold} />
+          </div>
+          {entry.source && <SourceLine source={entry.source} createdAt={entry.createdAt} />}
           <div className={styles.entryMeta}>
-            <CategoryPicker value={entry.category} onChange={(category) => day.updateEntry(entry.id, { category })} />
             <TagInput
               className={styles.entryTags}
               value={entry.tags}
@@ -151,13 +155,21 @@ function EntryTitle({
   if (!editing)
     return (
       <div
-        className={`${styles.title} ${entry.title ? '' : styles.placeholder}`}
+        className={`${styles.title} ${entry.title || entry.source ? '' : styles.placeholder}`}
+        title={entry.title || undefined}
         tabIndex={0}
         onMouseDown={(e) => foldOnShiftClick(e, toggleFold)}
         onClick={(e) => !e.shiftKey && day.focusTo({ kind: 'title', entryId: entry.id, caret: 'end' })}
         onFocus={() => setEditing(true)}
       >
-        {entry.title ? mark(entry.title, find) : 'Untitled entry'}
+        {entry.source ? (
+          // A captured page's title links to it; a click beside it edits the title.
+          <SourceTitle source={entry.source}>{entry.title ? mark(entry.title, find) : entry.source.url}</SourceTitle>
+        ) : entry.title ? (
+          mark(entry.title, find)
+        ) : (
+          'Untitled entry'
+        )}
       </div>
     )
 
@@ -167,6 +179,8 @@ function EntryTitle({
       className={`${styles.title} ${styles.titleInput}`}
       value={draft}
       placeholder="Untitled entry"
+      // One line, as the title shows: a long one scrolls sideways while it is edited.
+      wrap="off"
       spellCheck={false}
       autoFocus={!focus}
       onChange={(e) => setDraft(e.target.value)}

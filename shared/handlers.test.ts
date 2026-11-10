@@ -35,3 +35,17 @@ describe('handlers', () => {
     expect(cleanFields(handlerById('reddit'), 'junk')).toEqual({})
   })
 })
+
+describe('handler tags', () => {
+  const tagsOf = (url: string, given?: string) => {
+    const u = new URL(url)
+    return handlerFor(u).handler.tags(u, given)
+  }
+  it('tags a Reddit post with its subreddit, a listing with marketplace, a page with nothing', () => {
+    expect(tagsOf('https://www.reddit.com/r/ClaudeAI/comments/1kq2x3v/x/', 'r/ClaudeAI')).toEqual(['reddit/ClaudeAI'])
+    expect(tagsOf('https://www.reddit.com/r/selfhosted/comments/1kq2x3v/x/')).toEqual(['reddit/selfhosted'])
+    expect(tagsOf('https://redd.it/1kq2x3v')).toEqual([])
+    expect(tagsOf('https://www.facebook.com/marketplace/item/1234567890/')).toEqual(['marketplace'])
+    expect(tagsOf('https://example.com/')).toEqual([])
+  })
+})

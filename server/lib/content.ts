@@ -1,13 +1,15 @@
 import path from 'node:path'
 import { and, asc, eq, inArray, sql, type SQL } from 'drizzle-orm'
-import { NOTE_TYPES, type EntryType } from '../../shared/entryTypes.ts'
-import type { CategoryInfo, EntryDates, EntryDetail, EntryDTO, ImageDTO, NodeDTO } from '../../shared/types.ts'
-import { cleanTags, isUnder, normalizeTag, TAG_SEP } from '../../shared/tags.ts'
+import { handlerFor, hostOf } from '../../shared/handlers.ts'
+import type { CategoryInfo, EntryDTO, EntrySource, ImageDTO, NodeDTO } from '../../shared/types.ts'
+import { isUnder, normalizeTag, TAG_SEP, withoutCategory } from '../../shared/tags.ts'
 import { db } from '../db/client.ts'
-import { boardItems, captures, categories, entries, entryTags, images, nodes, tags } from '../db/content-schema.ts'
+import { categories, entries, entryTags, images, nodes, tags } from '../db/content-schema.ts'
+import { dropCategoryTagsIn } from './categoryTags.ts'
 import { logEvent } from './events.ts'
 import { bad, notFound } from './validate.ts'
 
+type EntryRow = typeof entries.$inferSelect
 type NodeRow = typeof nodes.$inferSelect
 type ImageRow = typeof images.$inferSelect
 
@@ -20,7 +22,7 @@ export function extension(file: File): string {
   return ext || 'bin'
 }
 
-const toImage = (r: ImageRow): ImageDTO => ({ id: r.id, url: imageUrl(r.file), mime: r.mime })
+export const toImage = (r: ImageRow): ImageDTO => ({ id: r.id, url: imageUrl(r.file), mime: r.mime, width: r.width, height: r.height, thumbUrl: r.thumb ? imageUrl(r.thumb) : null })
 
 function toNode(r: NodeRow, imgs: ImageDTO[]): NodeDTO {
   return {
@@ -62,14 +64,25 @@ export function tagsFor(entryIds: string[]): Map<string, string[]> {
   return map
 }
 
-/** Full entries (tags, nodes, images, the type's details) in the order of `ids`. */
+/** The page a captured entry came from. */
+function sourceOf(e: EntryRow): EntrySource | null {
+  if (!e.url) return null
+  let handler: EntrySource['handler'] = 'page'
+  try {
+    handler = handlerFor(new URL(e.url)).handler.id
+  } catch {
+    // not a url any more: shown as a plain page
+  }
+  return { url: e.url, handler, host: hostOf(e.url), iconUrl: e.icon ? imageUrl(e.icon) : null, fields: e.fields, publishedAt: e.publishedAt }
+}
+
+/** Full entries (tags, nodes, images, source) in the order of `ids`. */
 export function loadEntries(ids: string[]): EntryDTO[] {
   if (!ids.length) return []
   const entryRows = db.select().from(entries).where(inArray(entries.id, ids)).all()
   const nodeRows = db.select().from(nodes).where(inArray(nodes.entryId, ids)).orderBy(asc(nodes.position)).all()
   const imgs = imagesByNode(inArray(nodes.entryId, ids))
   const tagMap = tagsFor(ids)
-  const details = detailsFor(entryRows)
 
   const nodesByEntry = new Map<string, NodeDTO[]>()
   for (const n of nodeRows) {
@@ -81,39 +94,22 @@ export function loadEntries(ids: string[]): EntryDTO[] {
   return ids.flatMap((id) => {
     const e = byId.get(id)
     if (!e) return []
-    const d = details.get(id)
-    const dates: EntryDates = { created: e.createdAt, updated: e.updatedAt, ...d?.dates }
     return [
       {
-        ...e,
+        id: e.id,
+        category: e.category,
+        date: e.date,
+        title: e.title,
+        position: e.position,
+        archived: e.archived,
         tags: tagMap.get(id) ?? [],
         nodes: nodesByEntry.get(id) ?? [],
-        detail: d?.detail ?? null,
-        dates,
+        source: sourceOf(e),
+        createdAt: e.createdAt,
+        updatedAt: e.updatedAt,
       },
     ]
   })
-}
-
-/** The details of bookmark and media entries: what their cards show, and their own dates. */
-function detailsFor(rows: { id: string; type: EntryType }[]): Map<string, { detail: EntryDetail; dates: Partial<EntryDates> }> {
-  const out = new Map<string, { detail: EntryDetail; dates: Partial<EntryDates> }>()
-  const of = (type: EntryType) => rows.filter((r) => r.type === type).map((r) => r.id)
-  const captureIds = of('bookmark')
-  if (captureIds.length)
-    for (const c of db.select().from(captures).where(inArray(captures.entryId, captureIds)).all())
-      out.set(c.entryId!, {
-        detail: { kind: 'bookmark', id: c.id, handler: c.handler, url: c.url, site: c.site, iconUrl: c.icon ? imageUrl(c.icon) : null, thumbUrl: c.thumb ? imageUrl(c.thumb) : null },
-        dates: { captured: c.capturedAt, published: c.publishedAt ?? undefined },
-      })
-  const mediaIds = of('media')
-  if (mediaIds.length)
-    for (const m of db.select().from(boardItems).where(inArray(boardItems.entryId, mediaIds)).all())
-      out.set(m.entryId!, {
-        detail: { kind: 'media', id: m.id, url: imageUrl(m.file), thumbUrl: m.thumb ? imageUrl(m.thumb) : null, mime: m.mime, width: m.width, height: m.height },
-        dates: {},
-      })
-  return out
 }
 
 export function loadNode(id: string): NodeDTO | undefined {
@@ -121,21 +117,13 @@ export function loadNode(id: string): NodeDTO | undefined {
   return row && toNode(row, imagesByNode(eq(nodes.id, id)).get(id) ?? [])
 }
 
-/** Journal entries: the entries with nodes, ordered by hand. */
-export const noteTypes = () => inArray(entries.type, [...NOTE_TYPES])
-
-/** A day's entries (of every type, or only the note types), hand-ordered ones first, then the rest by time. */
-export function entriesForDate(date: string, only?: 'notes'): EntryDTO[] {
-  const ids = db
-    .select({ id: entries.id })
-    .from(entries)
-    .where(and(eq(entries.date, date), only ? noteTypes() : undefined))
-    .orderBy(asc(entries.position))
-    .all()
+/** A day's entries, in their order. */
+export function entriesForDate(date: string): EntryDTO[] {
+  const ids = db.select({ id: entries.id }).from(entries).where(eq(entries.date, date)).orderBy(asc(entries.position)).all()
   return loadEntries(ids.map((r) => r.id))
 }
 
-/** Position for a new journal entry: right after `afterId` (between it and its successor), else at the end of the day. */
+/** Position for a new entry: right after `afterId` (between it and its successor), else at the end of the day. */
 export function entryPositionAfter(date: string, afterId: string | undefined): number {
   if (afterId) {
     const after = db.select().from(entries).where(eq(entries.id, afterId)).get()
@@ -143,7 +131,7 @@ export function entryPositionAfter(date: string, afterId: string | undefined): n
       const next = db
         .select({ p: sql<number | null>`min(${entries.position})` })
         .from(entries)
-        .where(and(eq(entries.date, date), noteTypes(), sql`${entries.position} > ${after.position}`))
+        .where(and(eq(entries.date, date), sql`${entries.position} > ${after.position}`))
         .get()?.p
       return next == null ? after.position + 1 : (after.position + next) / 2
     }
@@ -151,17 +139,9 @@ export function entryPositionAfter(date: string, afterId: string | undefined): n
   const max = db
     .select({ p: sql<number | null>`max(${entries.position})` })
     .from(entries)
-    .where(and(eq(entries.date, date), noteTypes()))
+    .where(eq(entries.date, date))
     .get()?.p
   return (max ?? 0) + 1
-}
-
-/** The entry of a video, capture or board item: created with it, then kept in step with its title and day. */
-export function upsertItemEntry(id: string, v: { type: EntryType; subtype: string; date: string; title: string; position: number; createdAt: number; updatedAt: number }) {
-  db.insert(entries)
-    .values({ id, ...v })
-    .onConflictDoUpdate({ target: entries.id, set: { subtype: v.subtype, date: v.date, title: v.title, updatedAt: v.updatedAt } })
-    .run()
 }
 
 // ── categories ─────────────────────────────────────────────────────────────
@@ -189,12 +169,14 @@ export function categoryName(raw: string): string {
 
 const categoryExists = (name: string) => !!db.select({ name: categories.name }).from(categories).where(eq(categories.name, name)).get()
 
-/** Files an entry under a category (null: none). Returns the entry's date. */
+/** Files an entry under a category (null: none); a tag naming the category goes (withoutCategory). Returns the entry's date. */
 export function setEntryCategory(entryId: string, category: string | null): string {
   const e = db.select({ date: entries.date }).from(entries).where(eq(entries.id, entryId)).get() ?? notFound('entry')
   if (category !== null && !categoryExists(category)) bad(`no category ${category}`)
   db.update(entries).set({ category, updatedAt: Date.now() }).where(eq(entries.id, entryId)).run()
-  logEvent('entry', entryId, 'edit', { category })
+  const before = tagsFor([entryId]).get(entryId) ?? []
+  const after = category ? setEntryTags(entryId, before) : before
+  logEvent('entry', entryId, 'edit', { category, ...(after.join() !== before.join() && { tags: after }) })
   return e.date
 }
 
@@ -216,7 +198,8 @@ export function renameCategory(from: string, raw: string): string[] {
   const dates = datesForCategory(from)
   db.update(categories).set({ name: to }).where(eq(categories.name, from)).run()
   logEvent('category', from, 'edit', { renameTo: to })
-  return dates
+  // Its entries may carry a tag named as it is now.
+  return [...new Set([...dates, ...dropCategoryTags()])]
 }
 
 /** Deletes a category; its entries become uncategorized. Returns the days affected. */
@@ -252,9 +235,10 @@ export function ensureTag(path: string): number {
   return db.select({ id: tags.id }).from(tags).where(eq(tags.path, path)).get()!.id
 }
 
-/** Replaces an entry's tags; returns the stored (normalized) list. */
+/** Replaces an entry's tags; returns the stored list: normalized, without the entry's category (withoutCategory). */
 export function setEntryTags(entryId: string, paths: string[]): string[] {
-  const clean = cleanTags(paths)
+  const category = db.select({ category: entries.category }).from(entries).where(eq(entries.id, entryId)).get()?.category
+  const clean = withoutCategory(paths, category)
   db.delete(entryTags).where(eq(entryTags.entryId, entryId)).run()
   clean.forEach((p, position) =>
     db
@@ -265,6 +249,9 @@ export function setEntryTags(entryId: string, paths: string[]): string[] {
   pruneTags()
   return clean
 }
+
+/** Every entry's tags without its category, over the whole library (categoryTags.ts). Returns the days changed. */
+export const dropCategoryTags = () => dropCategoryTagsIn(db)
 
 /** Drops tags no entry uses any more (typos, removed tags). */
 export function pruneTags() {
@@ -318,6 +305,8 @@ export function moveTag(from: string, to: string): string[] {
     db.update(entryTags).set({ tagId: existing.id }).where(eq(entryTags.tagId, row.id)).run()
     db.delete(tags).where(eq(tags.id, row.id)).run()
   }
+  // Moved onto (or under) an entry's category: that part goes.
+  dropCategoryTags()
   return affectedDates
 }
 
@@ -357,6 +346,8 @@ export function branchTag(from: string, to: string, entryIds: string[]): string[
     if (has.has(r.entryId)) db.delete(entryTags).where(where).run()
     else db.update(entryTags).set({ tagId: targetId }).where(where).run()
   }
+  // Branched under an entry's category: that part goes.
+  dropCategoryTags()
   pruneTags()
   const ids = rows.map((r) => r.entryId)
   return ids.length

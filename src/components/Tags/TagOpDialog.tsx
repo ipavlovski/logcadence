@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { isUnder, normalizeTag, TAG_SEP } from '../../../shared/tags.ts'
 import { api, unwrap } from '../../api.ts'
 import { emitChange } from '../../state/bus.ts'
-import { bookmarksNav } from '../../state/captures.ts'
 import { closeTagTabs, renameTagTabs } from '../../state/panes.ts'
 import { useStore } from '../../state/store.ts'
 import { notify } from '../../state/ui.ts'
@@ -45,9 +44,7 @@ function Dialog({ op }: { op: TagOp }) {
         await unwrap((op.op === 'merge' ? api.tags.merge : api.tags.rename).$post({ json: { from: op.tag, to } }))
         renameTagTabs(op.tag, to)
       }
-      // Every type carries the tag set: the journal, and the views that keep their own change counters.
       emitChange()
-      bookmarksNav.bump()
       close()
     } catch (err) {
       notify((err as Error).message)

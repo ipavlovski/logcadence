@@ -17,7 +17,7 @@ const handler = handlerOf(tab?.url)
 const app = appFor(tab?.url)
 $('app').textContent = app.name
 $('comment').hidden = !handler?.comments
-if (handler) $('bookmark').textContent = `Capture ${handler.one} → Bookmarks (${handler.name})`
+if (handler) $('bookmark').textContent = `Capture ${handler.one} → journal (${handler.name})`
 if (isVideoSite(tab?.url)) $('bookmark').textContent = 'Bookmark video → SEO Dashboard'
 if (!web) {
   for (const b of document.querySelectorAll('.actions button')) b.disabled = true

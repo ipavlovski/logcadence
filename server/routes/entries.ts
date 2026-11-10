@@ -1,13 +1,12 @@
 import { randomUUID } from 'node:crypto'
-import { and, asc, desc, eq, inArray, isNull, or, sql, type SQL } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNull, sql, type SQL } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { validator } from 'hono/validator'
 import { isIsoDate } from '../../shared/dates.ts'
-import { parseTypeRef } from '../../shared/entryTypes.ts'
 import { normalizeTag, TAG_SEP } from '../../shared/tags.ts'
 import type { CreateEntryBody, EntryQuery, SelectionBody, UpdateEntryBody } from '../../shared/types.ts'
 import { db } from '../db/client.ts'
-import { captures, entries, entryTags, nodes, tags } from '../db/content-schema.ts'
+import { entries, entryTags, nodes, tags } from '../db/content-schema.ts'
 import { datesOf, entryPositionAfter, loadEntries, pruneTags, setEntryCategory, setEntryTags } from '../lib/content.ts'
 import { logEvent } from '../lib/events.ts'
 import { touchDates } from '../lib/journalFiles.ts'
@@ -54,17 +53,14 @@ function parseSelection(v: unknown): Required<SelectionBody> {
 
 const list = (v: string | string[] | undefined) => (v === undefined ? [] : Array.isArray(v) ? v : [v])
 
-/** GET /entries' query string: repeated `type` and `tag`; flags are "1". */
+/** GET /entries' query string: `tag` repeats; flags are "1". */
 function parseQuery(v: Record<string, string | string[]>): EntryQuery & { limit: number } {
   const one = (k: string) => list(v[k])[0]
   const date = one('date')
   if (date !== undefined && !isIsoDate(date)) bad('date must be YYYY-MM-DD')
-  const types = list(v.type)
-  for (const t of types) if (!parseTypeRef(t)) bad(`unknown type ${t}`)
   const limit = Number(one('limit') ?? 1000)
   if (!Number.isInteger(limit) || limit < 1) bad('limit must be a positive integer')
   return defined({
-    types: types.length ? types : undefined,
     category: one('category'),
     uncategorized: one('uncategorized') === '1' || undefined,
     tags: list(v.tag).map(normalizeTag).filter(Boolean),
@@ -72,22 +68,12 @@ function parseQuery(v: Record<string, string | string[]>): EntryQuery & { limit:
     exact: one('exact') === '1' || undefined,
     archived: one('archived') === '1' || undefined,
     date,
-    site: one('site'),
     limit: Math.min(limit, 5000),
   })
 }
 
 function queryWhere(q: EntryQuery): SQL | undefined {
   const conds: (SQL | undefined)[] = []
-  if (q.types?.length)
-    conds.push(
-      or(
-        ...q.types.map((ref) => {
-          const t = parseTypeRef(ref)!
-          return t.subtype ? and(eq(entries.type, t.type), eq(entries.subtype, t.subtype)) : eq(entries.type, t.type)
-        }),
-      ),
-    )
   if (q.category) conds.push(eq(entries.category, q.category))
   if (q.uncategorized) conds.push(isNull(entries.category))
   for (const tag of q.tags ?? []) {
@@ -97,12 +83,11 @@ function queryWhere(q: EntryQuery): SQL | undefined {
   if (q.untagged) conds.push(sql`not exists (select 1 from ${entryTags} where ${entryTags.entryId} = ${entries.id})`)
   if (!q.archived) conds.push(eq(entries.archived, false))
   if (q.date) conds.push(eq(entries.date, q.date))
-  if (q.site) conds.push(sql`exists (select 1 from ${captures} where ${captures.entryId} = ${entries.id} and ${captures.site} = ${q.site})`)
   return and(...conds)
 }
 
 export const entryRoutes = new Hono()
-  // Entries of every type matching a query (types, category, tags, a site…), newest day first.
+  // Entries matching a query (category, tags…), newest day first.
   .get(
     '/entries',
     validator('query', (v) => parseQuery(v)),
@@ -151,14 +136,13 @@ export const entryRoutes = new Hono()
     const payload: Record<string, unknown> = { ...b }
     db.transaction(() => {
       const { tags: tagList, category, ...cols } = b
-      // A capture's or board item's day and title are its item's.
-      if (before.type !== 'journal' && (cols.date !== undefined || cols.title !== undefined)) bad(`a ${before.type} entry's day and title come from the item`)
       db.update(entries)
         .set({ ...cols, updatedAt: Date.now() })
         .where(eq(entries.id, id))
         .run()
-      if (tagList) payload.tags = setEntryTags(id, tagList)
+      // The category first: the tags are stored without it (withoutCategory).
       if (category !== undefined) setEntryCategory(id, category)
+      if (tagList) payload.tags = setEntryTags(id, tagList)
     })
     const onlyArchive = Object.keys(b).length === 1 && b.archived !== undefined
     logEvent('entry', id, onlyArchive ? (b.archived ? 'archive' : 'unarchive') : 'edit', payload)

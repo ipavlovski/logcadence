@@ -129,7 +129,7 @@ describe('data export / import', () => {
     expect(readdirSync(target)).not.toContain('gps')
   })
 
-  it('imports Reddit and Bookmarks captures from a format 1 export as handlers and entries, their tags of / paths under bookmark/', async () => {
+  it('imports Reddit and Bookmarks captures from a format 1 export as entries with their pages, their tags of / paths under bookmark/', async () => {
     const { ZipWriter, withZip } = await import('./lib/zip.ts')
     const ndjson = (rows: object[]) => Buffer.from(rows.map((r) => JSON.stringify(r) + '\n').join(''))
     const row = { url: '', title: 'T', site: '', icon: null, screenshot: 's.jpg', screenshotWidth: null, screenshotHeight: null, thumb: null, capturedAt: 1, capturedDate: '2026-09-20', notes: '', activeImageId: null, comments: '', commentsActiveImageId: null, updatedAt: 1 }
@@ -175,13 +175,9 @@ describe('data export / import', () => {
     const Database = (await import('better-sqlite3')).default
     const sqlite = new Database(path.join(target, 'db', 'content.db'), { readonly: true })
     try {
-      expect(sqlite.prepare('SELECT id, handler, fields, published_at AS publishedAt FROM captures ORDER BY id').all()).toEqual([
-        { id: 'mark', handler: 'page', fields: '{}', publishedAt: null },
-        { id: 'post', handler: 'reddit', fields: JSON.stringify({ author: 'alice', score: 5 }), publishedAt: 7 },
-      ])
-      expect(sqlite.prepare(`SELECT id, type, subtype, date, title FROM entries WHERE type = 'bookmark' ORDER BY id`).all()).toEqual([
-        { id: 'cap:mark', type: 'bookmark', subtype: 'page', date: '2026-09-20', title: 'T' },
-        { id: 'cap:post', type: 'bookmark', subtype: 'reddit', date: '2026-09-20', title: 'T' },
+      expect(sqlite.prepare(`SELECT id, link_key AS linkKey, fields, published_at AS publishedAt, date, title FROM entries WHERE link_key IS NOT NULL ORDER BY id`).all()).toEqual([
+        { id: 'cap:mark', linkKey: 'page:https://example.com/', fields: '{}', publishedAt: null, date: '2026-09-20', title: 'T' },
+        { id: 'cap:post', linkKey: 'reddit:abc', fields: JSON.stringify({ author: 'alice', score: 5 }), publishedAt: 7, date: '2026-09-20', title: 'T' },
       ])
       expect(sqlite.prepare(`SELECT entry_id AS id, path FROM entry_tags JOIN tags ON tags.id = tag_id WHERE entry_id LIKE 'cap:%' ORDER BY entry_id, position`).all()).toEqual([
         { id: 'cap:mark', path: 'bookmark/homelab' },
@@ -189,7 +185,11 @@ describe('data export / import', () => {
         { id: 'cap:post', path: 'bookmark/homelab' },
         { id: 'cap:post', path: 'bookmark/nas/disk' },
       ])
-      expect(sqlite.prepare(`SELECT entry_id FROM captures ORDER BY id`).all()).toEqual([{ entry_id: 'cap:mark' }, { entry_id: 'cap:post' }])
+      // The screenshot: each capture's first node (format 6).
+      expect(sqlite.prepare(`SELECT n.entry_id AS entryId, i.file FROM images i JOIN nodes n ON n.id = i.node_id WHERE n.entry_id LIKE 'cap:%' ORDER BY n.entry_id`).all()).toEqual([
+        { entryId: 'cap:mark', file: 's.jpg' },
+        { entryId: 'cap:post', file: 's.jpg' },
+      ])
       expect(sqlite.prepare('PRAGMA foreign_key_check').all()).toEqual([])
     } finally {
       sqlite.close()
@@ -281,5 +281,78 @@ describe('data export / import', () => {
     expect(t.board_items).toEqual([{ id: 'b', entryId: 'media:b' }])
     expect(Object.keys(t)).not.toContain('yt_videos')
     expect(Object.keys(t)).not.toContain('chats')
+  })
+
+  it('upgrades format 5 rows as migration 0018 does: captures and board days become entries with nodes, types go', () => {
+    const t = transfer.toV6({
+      categories: [{ name: 'build', position: 1, createdAt: 0 }],
+      tags: [{ id: 1, path: 'build/well', createdAt: 1 }],
+      entries: [
+        { id: 'j', type: 'journal', subtype: null, date: '2026-10-03', position: 2, createdAt: 1 },
+        { id: 'cap:c', type: 'bookmark', subtype: 'reddit', date: '2026-10-03', position: 9000, createdAt: 9000 },
+        { id: 'media:b1', type: 'media', subtype: 'image', date: '2026-10-03', position: 8000, createdAt: 8000 },
+        { id: 'media:b2', type: 'media', subtype: 'video', date: '2026-10-03', position: 8001, createdAt: 8001 },
+      ],
+      nodes: [{ id: 'jn', entryId: 'j', position: 1 }],
+      images: [{ id: 'ji', nodeId: 'jn', file: 'j.png', mime: 'image/png', position: 1 }],
+      entry_tags: [
+        { entryId: 'j', tagId: 1, position: 0 },
+        { entryId: 'cap:c', tagId: 1, position: 0 },
+      ],
+      captures: [
+        {
+          id: 'c',
+          entryId: 'cap:c',
+          handler: 'reddit',
+          key: 'k1',
+          url: 'https://www.reddit.com/r/x/comments/k1/',
+          site: 'r/SelfHosted',
+          icon: 'icon-1.png',
+          screenshot: 's.webp',
+          screenshotWidth: 700,
+          screenshotHeight: 2000,
+          thumb: 't.jpg',
+          fields: { score: 3 },
+          publishedAt: 5,
+          capturedAt: 9000,
+          notes: 'my notes',
+          activeImageId: null,
+          comments: '',
+          commentsActiveImageId: null,
+          updatedAt: 9100,
+        },
+      ],
+      capture_images: [{ id: 'cm', captureId: 'c', section: 'comments', file: 'cm.jpg', mime: 'image/jpeg', position: 1, createdAt: 9200 }],
+      board_items: [
+        { id: 'b1', entryId: 'media:b1', date: '2026-10-03', row: 1, position: 2, file: 'b1.png', thumb: null, mime: 'image/png', width: 10, height: 20, createdAt: 8000 },
+        { id: 'b2', entryId: 'media:b2', date: '2026-10-03', row: 1, position: 1, file: 'b2.mp4', thumb: 'b2.jpg', mime: 'video/mp4', width: 30, height: 40, createdAt: 8001 },
+      ],
+    })
+    expect(Object.keys(t).sort()).toEqual(['categories', 'entries', 'entry_tags', 'images', 'nodes', 'tags'])
+    expect(t.entries!.map((e) => [e.id, e.position])).toEqual([
+      ['j', 2],
+      ['cap:c', 4],
+      ['board:2026-10-03', 3],
+    ])
+    expect(t.entries!.every((e) => !('type' in e) && !('subtype' in e))).toBe(true)
+    expect(t.entries![1]).toMatchObject({ url: 'https://www.reddit.com/r/x/comments/k1/', linkKey: 'reddit:k1', icon: 'icon-1.png', fields: { score: 3 }, publishedAt: 5 })
+    expect(t.nodes!.map((n) => [n.id, n.entryId, n.content ?? '', n.activeImageId ?? null])).toEqual([
+      ['jn', 'j', '', null],
+      ['c', 'cap:c', 'my notes', 'shot-c'],
+      ['c-comments', 'cap:c', '', 'cm'],
+      ['board:2026-10-03:1', 'board:2026-10-03', '', 'b2'],
+    ])
+    expect(t.images!.map((i) => [i.id, i.nodeId, i.mime, i.width, i.thumb])).toEqual([
+      ['ji', 'jn', 'image/png', null, null],
+      ['shot-c', 'c', 'image/webp', 700, 't.jpg'],
+      ['cm', 'c-comments', 'image/jpeg', null, null],
+      ['b2', 'board:2026-10-03:1', 'video/mp4', 30, 'b2.jpg'],
+      ['b1', 'board:2026-10-03:1', 'image/png', 10, null],
+    ])
+    expect(t.tags!.map((r) => r.path)).toEqual(['build/well', 'reddit/selfhosted'])
+    expect(t.entry_tags!.filter((l) => l.entryId === 'cap:c').map((l) => [l.tagId, l.position])).toEqual([
+      [1, 0],
+      [2, 1],
+    ])
   })
 })
